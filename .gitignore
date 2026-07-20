@@ -152,7 +152,7 @@ downloaded_files/
 ./downloaded_files/
 
 google_creds.json
-
+api_keys.json
 google_key.json
 
 # QoE / Stats-for-Nerds logs (generated at runtime)
