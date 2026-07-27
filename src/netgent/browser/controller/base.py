@@ -229,6 +229,11 @@ class BaseController(ABC, metaclass=ActionTriggerMeta):
         const done = arguments[arguments.length - 1];
         (async () => {
             const resources = performance.getEntriesByType("resource");
+            const byInitiatorType = {};
+            for (const resource of resources) {
+                const type = resource.initiatorType || "other";
+                byInitiatorType[type] = (byInitiatorType[type] || 0) + 1;
+            }
             const aggregate = {
                 connection_count: 0,
                 bytes_received: 0,
@@ -271,6 +276,7 @@ class BaseController(ABC, metaclass=ActionTriggerMeta):
                     decoded_body_bytes: resources.reduce(
                         (total, item) => total + Number(item.decodedBodySize || 0), 0
                     ),
+                    by_initiator_type: byInitiatorType,
                 },
                 webrtc: aggregate,
             });

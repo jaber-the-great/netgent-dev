@@ -23,3 +23,6 @@ netgent -e \
 Success requires the waiting-room text to disappear and the joiner-side
 `Meeting details` button to appear. Metrics are written to
 `/out/google_meet_two_person_metrics.json`.
+
+Proof from a successful 30-second, two-participant run is checked in at
+[`results/google-meet-two-person_metrics.json`](results/google-meet-two-person_metrics.json).
