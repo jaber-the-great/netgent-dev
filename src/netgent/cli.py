@@ -216,9 +216,11 @@ def execution_mode(args):
 
         # Initialize agent with LLM disabled (execution mode)
         # Pass cache directory to browser session if available
-        agent = NetGent(llm=None, llm_enabled=False, user_data_dir=cache_file)
+        backend = getattr(args, 'backend', 'pyautogui')
+        agent = NetGent(llm=None, llm_enabled=False, user_data_dir=cache_file, backend=backend)
 
         print(f"Loaded {len(executable_code)} executable states")
+        print(f"Backend: {backend}")
         if cache_file:
             print(f"Using browser cache: {cache_file}")
         else:
@@ -282,7 +284,9 @@ def generation_mode(args):
 
         # Initialize agent with LLM enabled (generation mode)
         # Pass cache directory to browser session if available
-        agent = NetGent(llm=llm, llm_enabled=True, user_data_dir=cache_file)
+        # (backend is validated in main() before we get here -- generation
+        # mode + --backend playwright is rejected up front)
+        agent = NetGent(llm=llm, llm_enabled=True, user_data_dir=cache_file, backend=getattr(args, 'backend', 'pyautogui'))
 
         print(f"Loaded {len(prompts)} state prompts")
         if cache_file:
@@ -366,6 +370,14 @@ Examples:
         help='Browser user data directory (overrides credentials.browser_cache_file)'
     )
     parser.add_argument(
+        '--backend',
+        choices=['pyautogui', 'playwright'],
+        default='pyautogui',
+        help="Browser automation backend to use (default: pyautogui). "
+             "'playwright' is only supported in code execution mode (-e); "
+             "code generation mode (-g) requires 'pyautogui'. Ignored with --desktop."
+    )
+    parser.add_argument(
         '--desktop',
         action='store_true',
         help='Drive native macOS desktop apps via the host bridge instead of a browser'
@@ -421,7 +433,16 @@ Examples:
         if not getattr(args, 'output', None):
             print("Error: Output file is required for generation mode. Use -o/--output <FILE>.")
             sys.exit(1)
-    
+        if getattr(args, 'backend', 'pyautogui') == 'playwright' and not getattr(args, 'desktop', False):
+            print(
+                "Error: --backend playwright is not yet supported in code generation mode (-g). "
+                "PlaywrightController doesn't implement the DOM-perception layer "
+                "(snapshot/build_trigger_candidates) that the LLM-driven state synthesis agent "
+                "requires yet. Use --backend pyautogui (the default) for -g, or use "
+                "--backend playwright only with -e (code execution mode)."
+            )
+            sys.exit(1)
+
     # Print mode and screen status
     mode = "Code Execution" if args.execute else "Code Generation"
     screen_status = "with VNC enabled" if args.screen else "without VNC"
