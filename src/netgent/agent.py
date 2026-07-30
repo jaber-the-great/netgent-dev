@@ -4,7 +4,7 @@ from seleniumbase import Driver
 from netgent.components.program_controller.controller import ProgramController
 from netgent.components.state_executor.executor import StateExecutor
 from netgent.browser.session import BrowserSession
-from netgent.browser.controller import PyAutoGUIController, BaseController, DesktopController
+from netgent.browser.controller import PyAutoGUIController, PlaywrightController, BaseController, DesktopController
 from typing import Any, Optional, TypedDict
 from langchain_core.language_models.chat_models import BaseChatModel
 from netgent.components.state_synthesis import StateSynthesis
@@ -28,7 +28,7 @@ class NetGentState(TypedDict):
     executed_states: Optional[list[dict[str, Any]]]
 
 class NetGent():
-    def __init__(self, driver: Driver = None, controller: BaseController = None, llm: BaseChatModel = None, config: Optional[dict] = None, llm_enabled: bool = True, user_data_dir: Optional[str] = None, desktop: bool = False, hostbridge_url: Optional[str] = None, target_app: Optional[str] = None):
+    def __init__(self, driver: Driver = None, controller: BaseController = None, llm: BaseChatModel = None, config: Optional[dict] = None, llm_enabled: bool = True, user_data_dir: Optional[str] = None, desktop: bool = False, hostbridge_url: Optional[str] = None, target_app: Optional[str] = None, backend: str = "pyautogui"):
         self.llm = llm
         self.llm_enabled = llm_enabled
         self.controller = controller
@@ -39,11 +39,31 @@ class NetGent():
                 # machine while this orchestrator runs (e.g. inside Docker).
                 self.controller = DesktopController(bridge_url=hostbridge_url, target_app=target_app)
                 self.driver = None
-            else:
+            elif backend == "playwright":
+                # PlaywrightController doesn't yet implement the DOM-perception
+                # layer (snapshot/build_trigger_candidates) that the LLM-driven
+                # state synthesis agent needs -- fail loudly here rather than
+                # let generation mode hit an AttributeError deep inside
+                # web_agent/state_synthesis. Code execution (llm_enabled=False,
+                # replaying an existing JSON workflow) is fully supported.
+                if llm_enabled:
+                    raise NotImplementedError(
+                        "backend='playwright' does not yet support llm_enabled=True "
+                        "(code generation mode): PlaywrightController has no "
+                        "perception layer for state synthesis yet. Use "
+                        "backend='pyautogui' (the default) for code generation, or "
+                        "use backend='playwright' with llm_enabled=False to replay "
+                        "an existing JSON workflow."
+                    )
+                self.controller = PlaywrightController(user_data_dir=user_data_dir)
+                self.driver = None
+            elif backend == "pyautogui":
                 self.driver = driver
                 if self.driver is None:
                     self.driver = BrowserSession(user_data_dir=user_data_dir).driver
                 self.controller = PyAutoGUIController(self.driver)
+            else:
+                raise ValueError(f"Unknown backend: {backend!r} (expected 'pyautogui' or 'playwright')")
         else:
             self.driver = getattr(self.controller, "driver", driver)
 
