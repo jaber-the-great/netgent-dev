@@ -102,6 +102,12 @@ Note: With `-s` enabled, you can view the browser automation at http://localhost
 - Use `--user-data-dir` to specify a browser profile directory.
 - See all options with `netgent --help`.
 
+### Added workflows
+
+**Hulu and Twitch:** The streaming examples add generated prompts, replayable workflow JSON, and Docker smoke scripts; Hulu reads login and profile values from environment variables, while Twitch records playback QoE metrics without storing credentials in the workflow.
+
+**Google Meet:** The video-conferencing example uses two browser tabs and signed-in accounts to create a meeting, request entry, admit the joiner, verify both participants, wait 30 seconds, and save WebRTC traffic metrics.
+
 ### Smoke workflow scripts
 
 The repository includes smoke scripts under [`scripts/`](scripts/) that build the Docker image and run a workflow with noVNC enabled:
