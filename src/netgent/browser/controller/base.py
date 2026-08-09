@@ -11,6 +11,8 @@ from seleniumbase import Driver
 
 from ..registry import ActionTriggerMeta, action, trigger
 from ..stats_logger import VideoStatsLogger
+from ..packet_capture import PacketCapture
+from ..traffic_shaper import TrafficShaper
 
 
 def _xpath_literal(value: str) -> str:
@@ -41,6 +43,8 @@ class BaseController(ABC, metaclass=ActionTriggerMeta):
     def __init__(self, driver: Driver):
         self.driver = driver
         self.stats_logger = VideoStatsLogger(driver)
+        self.packet_capture = PacketCapture()
+        self.traffic_shaper = TrafficShaper()
         self._tabs: dict[str, str] = {}
         self._variables: dict[str, str] = {}
         self._webrtc_tracking_source: str | None = None
@@ -322,6 +326,67 @@ class BaseController(ABC, metaclass=ActionTriggerMeta):
         self.stats_logger.stop()
 
     @action()
+    def start_capture(
+        self,
+        out_path: str = "capture.pcap",
+        interface: str = "any",
+        filter_expr: str = "",
+        snaplen: int = 0,
+    ):
+        """Start a background tcpdump packet capture to a PCAP file.
+
+        Works for any application (Zoom, Google Meet, YouTube, etc.) regardless
+        of whether the app exposes browser-visible video stats.
+
+        Args:
+            out_path: PCAP file to write to
+            interface: Network interface to capture on (default: all)
+            filter_expr: Optional BPF filter (e.g. "tcp port 443")
+            snaplen: Snap length in bytes (0 = full packet)
+        """
+        self.packet_capture.configure(
+            out_path=out_path,
+            interface=interface,
+            filter_expr=filter_expr,
+            snaplen=snaplen,
+        )
+        self.packet_capture.start()
+        return out_path
+
+    @action()
+    def stop_capture(self):
+        """Stop the background packet capture and flush the PCAP file."""
+        return self.packet_capture.stop()
+
+    @action()
+    def start_throttle(
+        self,
+        rate_mbps: float,
+        delay_ms: float = 0,
+        loss_pct: float = 0,
+        interface: str = "",
+    ):
+        """Apply bandwidth cap and optional latency/loss via tc/netem.
+
+        Args:
+            rate_mbps: Bandwidth cap in Mbps (e.g. 5.0)
+            delay_ms: Added one-way latency in ms (RTT impact is 2x)
+            loss_pct: Random packet loss percentage (0-100)
+            interface: Network interface (auto-detected if empty)
+        """
+        self.traffic_shaper.apply(
+            rate_mbps=rate_mbps,
+            delay_ms=delay_ms,
+            loss_pct=loss_pct,
+            interface=interface or None,
+        )
+
+    @action()
+    def stop_throttle(self):
+        """Remove all traffic shaping rules."""
+        self.traffic_shaper.remove()
+
+    @action()
     def wait(self, seconds: float):
         """Wait for a specified number of seconds"""
         time.sleep(seconds)
@@ -334,6 +399,10 @@ class BaseController(ABC, metaclass=ActionTriggerMeta):
     
     def quit(self):
         """Quit the browser (not an action - used for cleanup)"""
+        if self.traffic_shaper and self.traffic_shaper.active:
+            self.traffic_shaper.remove()
+        if self.packet_capture and self.packet_capture.is_running():
+            self.packet_capture.stop()
         if self.stats_logger:
             self.stats_logger.stop()
         if self.driver:

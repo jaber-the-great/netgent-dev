@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl wget unzip git xauth \
     xvfb x11vnc fluxbox \
     openssh-server \
+    tcpdump iproute2 \
     libnss3 libxss1 libasound2 libatk-bridge2.0-0 libgtk-3-0 libgbm1 fonts-liberation \
     python3-xlib python3-tk scrot \
   && rm -rf /var/lib/apt/lists/*
