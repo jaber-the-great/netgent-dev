@@ -1,0 +1,125 @@
+"""Core model invariants: JSON/YAML equivalence, graph validation, locator whitelist."""
+
+import pytest
+from pydantic import ValidationError
+
+from netgent.core.actions import DEFAULT_TIMEOUT_MS, ClickAction, GotoAction, LocatorStep, NoopAction
+from netgent.core.workflow import State, Transition, Workflow, dump_workflow, load_workflow
+from netgent.executor.engine import ControlSequenceError, Executor
+
+
+def make_workflow(**overrides) -> Workflow:
+    data = dict(
+        name="demo",
+        start_state="home",
+        states=[
+            State(id="home", conditions=[{"type": "url_matches", "pattern": "example\\.com"}]),
+            State(id="done", conditions=[{"type": "selector_visible", "selector": "#result"}]),
+        ],
+        transitions=[
+            Transition(
+                id="t1",
+                source="home",
+                target="done",
+                action=ClickAction(locator=[LocatorStep(fn="get_by_role", args=["button"], kwargs={"name": "Go"})]),
+            )
+        ],
+    )
+    data.update(overrides)
+    return Workflow(**data)
+
+
+def test_json_and_yaml_load_identically(tmp_path):
+    wf = make_workflow()
+    json_path, yaml_path = tmp_path / "wf.json", tmp_path / "wf.yaml"
+    dump_workflow(wf, json_path)
+    dump_workflow(wf, yaml_path)
+    assert load_workflow(json_path) == load_workflow(yaml_path) == wf
+
+
+def test_unsupported_extension_rejected(tmp_path):
+    path = tmp_path / "wf.toml"
+    path.write_text("")
+    with pytest.raises(ValueError, match="unsupported workflow format"):
+        load_workflow(path)
+
+
+def test_unknown_state_reference_rejected():
+    with pytest.raises(ValidationError, match="unknown target state"):
+        make_workflow(
+            transitions=[Transition(id="t1", source="home", target="nowhere", action=NoopAction())]
+        )
+
+
+def test_unknown_start_state_rejected():
+    with pytest.raises(ValidationError, match="start_state"):
+        make_workflow(start_state="nowhere")
+
+
+def test_duplicate_state_ids_rejected():
+    with pytest.raises(ValidationError, match="duplicate state ids"):
+        make_workflow(states=[State(id="home"), State(id="home"), State(id="done")])
+
+
+def test_control_sequence_must_reference_known_transitions():
+    with pytest.raises(ValidationError, match="unknown transitions"):
+        make_workflow(control_sequence=["t1", "missing"])
+
+
+def test_locator_fn_whitelist_enforced():
+    with pytest.raises(ValidationError, match="not in the replay whitelist"):
+        LocatorStep(fn="evaluate", args=["alert(1)"])
+
+
+def test_action_timeout_zero_becomes_default():
+    assert GotoAction(url="https://example.com", timeout_ms=0).timeout_ms == DEFAULT_TIMEOUT_MS
+
+
+def test_action_union_round_trips_through_dict():
+    wf = make_workflow()
+    reloaded = Workflow.model_validate(wf.model_dump(mode="json"))
+    action = reloaded.transitions[0].action
+    assert isinstance(action, ClickAction)
+    assert action.locator[0].fn == "get_by_role"
+
+
+def test_executor_rejects_non_walkable_sequence():
+    # t1 goes home->done; a sequence firing it twice is not walkable from `done`.
+    import asyncio
+
+    wf = make_workflow(control_sequence=["t1", "t1"])
+
+    class FakeSession:
+        async def dispatch(self, action):
+            pass
+
+        async def wait_for_state(self, state):
+            return 0.0
+
+        class page:
+            url = "https://example.com"
+
+    executor = Executor(FakeSession(), wf)
+    with pytest.raises(ControlSequenceError, match="current state is 'done'"):
+        asyncio.run(executor.run())
+
+
+def test_executor_walks_sequence_with_fake_session():
+    import asyncio
+
+    wf = make_workflow()
+
+    class FakeSession:
+        async def dispatch(self, action):
+            pass
+
+        async def wait_for_state(self, state):
+            return 1.5
+
+        class page:
+            url = "https://example.com/done"
+
+    record = asyncio.run(Executor(FakeSession(), wf).run())
+    assert record.success
+    assert [e.outcome for e in record.edges] == ["ok"]
+    assert record.edges[0].url_after == "https://example.com/done"
