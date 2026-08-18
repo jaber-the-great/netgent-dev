@@ -18,16 +18,31 @@ from netgent.schema.actions import (
     PressAction,
     ScrollAction,
     SelectAction,
+    SetCheckedAction,
 )
 
 
-def format_observation(snapshot: DomSnapshot, limit: int = 80) -> str:
+def format_observation(snapshot: DomSnapshot, limit: int = 80, text_limit: int = 30) -> str:
     lines = [f"URL: {snapshot.url}", f"TITLE: {snapshot.title}", "INTERACTIVE ELEMENTS:"]
     for i, el in enumerate(snapshot.interactive()[:limit]):
-        role = el.role or el.tag
+        kind = el.tag
+        if el.type:  # input[date], input[file], input[email] — the agent needs the type
+            kind += f"[{el.type}]"
+        elif el.role and el.role != el.tag:
+            kind += f" ({el.role})"
         val = f' value="{el.value}"' if el.value else ""
         name = f' "{el.name}"' if el.name else ""
-        lines.append(f"  [{i}] {el.tag}{name} ({role}){val}")
+        state = ""
+        if el.checked is not None:
+            state += " [checked]" if el.checked else " [unchecked]"
+        if el.disabled:
+            state += " [disabled]"
+        lines.append(f"  [{i}] {kind}{name}{val}{state}")
+    if snapshot.texts:
+        lines.append("VISIBLE TEXT:")
+        for t in snapshot.texts[:text_limit]:
+            prefix = "  !ALERT " if t.alert else "  "
+            lines.append(f"{prefix}{t.text}")
     return "\n".join(lines)
 
 
@@ -69,6 +84,10 @@ def to_action(decision: AgentDecision, snapshot: DomSnapshot) -> Action:
             return FillAction(locator=_locator_for(element()), text=decision.text or "")
         case "select":
             return SelectAction(locator=_locator_for(element()), value=decision.value or "")
+        case "check":
+            return SetCheckedAction(locator=_locator_for(element()), checked=True)
+        case "uncheck":
+            return SetCheckedAction(locator=_locator_for(element()), checked=False)
         case "hover":
             return HoverAction(locator=_locator_for(element()))
         case "press":

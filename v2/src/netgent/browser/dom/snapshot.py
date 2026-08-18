@@ -58,10 +58,16 @@ DOM_SNAPSHOT_JS = r"""
     }
     return parts.join(' > ');
   };
-  const ROLE_FOR_TAG = {A:'link', BUTTON:'button', INPUT:'textbox', SELECT:'combobox', TEXTAREA:'textbox'};
+  const INPUT_ROLE = {checkbox:'checkbox', radio:'radio', button:'button', submit:'button', reset:'button',
+                      range:'slider', search:'searchbox', email:'textbox', tel:'textbox', url:'textbox',
+                      number:'spinbutton'};
+  const TAG_ROLE = {A:'link', BUTTON:'button', SELECT:'combobox', TEXTAREA:'textbox'};
+  const roleOf = (el) => el.getAttribute('role') ||
+    (el.tagName === 'INPUT' ? (INPUT_ROLE[(el.getAttribute('type') || 'text').toLowerCase()] || 'textbox')
+                            : TAG_ROLE[el.tagName]);
   const candidates = (el) => {
     const out = [];
-    const role = el.getAttribute('role') || ROLE_FOR_TAG[el.tagName];
+    const role = roleOf(el);
     const name = accName(el);
     if (role && name) out.push({ kind: 'role', role, name });
     const tid = el.getAttribute('data-testid') || el.getAttribute('data-test-id');
@@ -72,29 +78,49 @@ DOM_SNAPSHOT_JS = r"""
   };
 
   const results = [];
+  const texts = [];
+  const seenText = new Set();
+  const directText = (el) => {
+    let t = '';
+    for (const n of el.childNodes) if (n.nodeType === 3) t += n.textContent;
+    return clean(t);
+  };
   const walk = (root, framePath) => {
     let nodes;
     try { nodes = root.querySelectorAll('*'); } catch (e) { return; }
     for (const el of nodes) {
       try {
         if (el.shadowRoot) walk(el.shadowRoot, framePath);
-        if (!isInteractive(el) || !visible(el)) continue;
-        const r = el.getBoundingClientRect();
-        results.push({
-          tag: el.tagName.toLowerCase(),
-          role: el.getAttribute('role') || null,
-          name: accName(el),
-          type: el.getAttribute('type') || null,
-          value: (el.value !== undefined ? String(el.value).slice(0, 200) : null),
-          framePath,
-          bbox: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
-          candidates: candidates(el),
-        });
+        if (isInteractive(el)) {
+          if (!visible(el)) continue;
+          const r = el.getBoundingClientRect();
+          results.push({
+            tag: el.tagName.toLowerCase(),
+            role: el.getAttribute('role') || null,
+            name: accName(el),
+            type: el.getAttribute('type') || null,
+            checked: (el.type === 'checkbox' || el.type === 'radio') ? !!el.checked : null,
+            disabled: !!el.disabled,
+            value: (el.value !== undefined ? String(el.value).slice(0, 200) : null),
+            framePath,
+            bbox: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
+            candidates: candidates(el),
+          });
+        } else if (visible(el)) {
+          // Salient visible text (headings, messages, labels) so the agent can read
+          // confirmations and status — not just interactive elements.
+          const t = directText(el);
+          if (t && t.length > 1 && !seenText.has(t)) {
+            const alert = el.getAttribute('role') === 'alert' || el.getAttribute('role') === 'status';
+            seenText.add(t);
+            texts.push({ text: t.slice(0, 200), alert });
+          }
+        }
       } catch (e) { /* skip pathological node */ }
     }
   };
   walk(document, []);
-  return results;
+  return { elements: results, texts };
 }
 """
 
@@ -118,6 +144,8 @@ class DomElement(BaseModel):
     role: str | None = None
     name: str = ""
     type: str | None = None
+    checked: bool | None = None  # checkbox/radio state
+    disabled: bool = False
     value: str | None = None
     frame_path: list[str] = Field(default_factory=list, alias="framePath")
     bbox: BBox
@@ -126,10 +154,16 @@ class DomElement(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class TextBlock(BaseModel):
+    text: str
+    alert: bool = False  # role=alert/status — a confirmation/error message
+
+
 class DomSnapshot(BaseModel):
     url: str
     title: str
     elements: list[DomElement] = Field(default_factory=list)
+    texts: list[TextBlock] = Field(default_factory=list)
 
     def interactive(self) -> list[DomElement]:
         return self.elements

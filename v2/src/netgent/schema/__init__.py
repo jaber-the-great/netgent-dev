@@ -22,6 +22,7 @@ from netgent.schema.actions import (
     PressAction,
     ScrollAction,
     SelectAction,
+    SetCheckedAction,
 )
 from netgent.schema.control import (
     Branch,
@@ -63,6 +64,7 @@ __all__ = [
     "RunRecord",
     "ScrollAction",
     "SelectAction",
+    "SetCheckedAction",
     "SelectorHidden",
     "SelectorVisible",
     "State",

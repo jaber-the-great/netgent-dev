@@ -120,7 +120,7 @@ def test_all_action_types_round_trip():
 
     union_members = get_args(get_args(Action)[0])
     assert GoBackAction in union_members and HoverAction in union_members
-    assert len(union_members) == 9
+    assert len(union_members) == 10
 
     for action in (
         GoBackAction(),

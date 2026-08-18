@@ -19,6 +19,13 @@ Guidance for long, multi-step tasks:
 - When the task is clearly complete, return kind="done" with success=true.
 - If you are stuck, blocked, or the same state persists, return kind="stop".
 
+Input types (shown as tag[type], e.g. input[date]):
+- input[date] → fill with YYYY-MM-DD; input[time] → HH:MM; input[month] → YYYY-MM.
+- input[file] cannot be typed into — skip it if you can, or stop if it is required.
+- Radio/checkbox show [checked]/[unchecked]. Use kind="check" (or "uncheck") on them —
+  it is reliable for custom/hidden controls where a plain click does nothing. Never
+  re-check one already [checked].
+
 Hard rules:
 - If a CAPTCHA, "verify you are human", or similar anti-bot challenge appears, do NOT attempt
   to solve it. Return kind="stop" with success=false and say a CAPTCHA blocked the task.

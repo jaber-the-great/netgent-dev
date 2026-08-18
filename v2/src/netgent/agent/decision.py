@@ -9,7 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 AgentActionKind = Literal[
-    "click", "fill", "select", "hover", "press", "goto", "scroll", "go_back", "done", "stop"
+    "click", "fill", "select", "check", "uncheck", "hover", "press", "goto", "scroll", "go_back", "done", "stop"
 ]
 
 

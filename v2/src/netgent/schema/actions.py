@@ -92,6 +92,14 @@ class ScrollAction(_ActionBase):
     delta_y: int
 
 
+class SetCheckedAction(_ActionBase):
+    """Set a checkbox/radio to a state (Playwright .set_checked: label-aware, idempotent)."""
+
+    type: Literal["set_checked"] = "set_checked"
+    locator: Locator
+    checked: bool = True
+
+
 class GoBackAction(_ActionBase):
     """Navigate back in browser history."""
 
@@ -119,6 +127,7 @@ Action = Annotated[
         PressAction,
         SelectAction,
         ScrollAction,
+        SetCheckedAction,
         GoBackAction,
         HoverAction,
         NoopAction,

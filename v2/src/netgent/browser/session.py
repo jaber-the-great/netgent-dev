@@ -12,7 +12,7 @@ from pathlib import Path
 
 from playwright.async_api import Browser, BrowserContext, Locator, Page, Playwright, async_playwright
 
-from netgent.browser.dom.snapshot import DOM_SNAPSHOT_JS, DomElement, DomSnapshot
+from netgent.browser.dom.snapshot import DOM_SNAPSHOT_JS, DomElement, DomSnapshot, TextBlock
 from netgent.browser.dom.stealth import StealthProfile
 from netgent.core.errors import ActionDispatchError, LocatorResolutionError, TriggerTimeoutError
 from netgent.schema.actions import (
@@ -26,6 +26,7 @@ from netgent.schema.actions import (
     PressAction,
     ScrollAction,
     SelectAction,
+    SetCheckedAction,
 )
 from netgent.schema.actions import Locator as LocatorChain
 from netgent.schema.triggers import SelectorHidden, SelectorVisible, TitleContains, Trigger, UrlMatches
@@ -58,12 +59,13 @@ class BrowserSession:
         return self
 
     async def snapshot(self) -> DomSnapshot:
-        """Observe the page's interactive elements (compile-time observation)."""
+        """Observe the page's interactive elements + salient visible text."""
         raw = await self.page.evaluate(DOM_SNAPSHOT_JS)
         return DomSnapshot(
             url=self.page.url,
             title=await self.page.title(),
-            elements=[DomElement.model_validate(e) for e in raw],
+            elements=[DomElement.model_validate(e) for e in raw["elements"]],
+            texts=[TextBlock.model_validate(t) for t in raw["texts"]],
         )
 
     async def __aexit__(self, *exc_info: object) -> None:
@@ -112,6 +114,8 @@ class BrowserSession:
                     await self._resolve(action.locator).select_option(action.value, timeout=action.timeout_ms)
                 case ScrollAction():
                     await self.page.mouse.wheel(0, action.delta_y)
+                case SetCheckedAction():
+                    await self._resolve(action.locator).set_checked(action.checked, timeout=action.timeout_ms)
                 case GoBackAction():
                     await self.page.go_back(timeout=action.timeout_ms)
                 case HoverAction():
