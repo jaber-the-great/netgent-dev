@@ -50,23 +50,37 @@ def format_observation(snapshot: DomSnapshot, limit: int = 80, text_limit: int =
 
 
 def _locator_for(el: DomElement) -> list[LocatorStep]:
-    """Build a durable locator chain: frame_locator steps for any iframe path, then the element."""
-    # Prepend one frame_locator per iframe the element is nested in.
+    """Build a durable locator chain: frame_locator steps for any iframe path, then the element.
+
+    Preference order: a simple #id (precise and pierces open shadow DOM) → role WITH a real
+    accessible name → test-id → label → any css path. A role locator with no name is skipped:
+    it comes from a placeholder-only field, which Playwright's role-name matching won't match.
+    """
     chain = [LocatorStep(fn="frame_locator", args=[sel]) for sel in el.frame_path]
-    candidates = el.candidates
-    # <select> accessible names are unreliable (option dumps); prefer a stable selector.
-    if el.tag == "select":
-        candidates = [c for c in candidates if c.kind != "role"] or candidates
-    for cand in candidates:
-        if cand.kind == "role" and cand.role:
-            kwargs = {"name": cand.name} if cand.name else {}
-            return chain + [LocatorStep(fn="get_by_role", args=[cand.role], kwargs=kwargs)]
-        if cand.kind == "test_id" and cand.value:
-            return chain + [LocatorStep(fn="get_by_test_id", args=[cand.value])]
-        if cand.kind == "label" and cand.value:
-            return chain + [LocatorStep(fn="get_by_label", args=[cand.value])]
-        if cand.kind == "css" and cand.value:
-            return chain + [LocatorStep(fn="locator", args=[cand.value])]
+    cands = el.candidates
+
+    def css(value: str) -> list[LocatorStep]:
+        return chain + [LocatorStep(fn="locator", args=[value])]
+
+    # 1. simple #id — most precise, and Playwright's css engine pierces open shadow roots
+    for c in cands:
+        if c.kind == "css" and c.value and c.value.startswith("#") and " " not in c.value:
+            return css(c.value)
+    # 2. role with a genuine accessible name (skip <select>: its name is an option dump)
+    if el.tag != "select":
+        for c in cands:
+            if c.kind == "role" and c.role and c.name:
+                return chain + [LocatorStep(fn="get_by_role", args=[c.role], kwargs={"name": c.name})]
+    # 3. test-id, 4. label
+    for c in cands:
+        if c.kind == "test_id" and c.value:
+            return chain + [LocatorStep(fn="get_by_test_id", args=[c.value])]
+        if c.kind == "label" and c.value:
+            return chain + [LocatorStep(fn="get_by_label", args=[c.value])]
+    # 5. any css path
+    for c in cands:
+        if c.kind == "css" and c.value:
+            return css(c.value)
     raise ValueError(f"element {el.name!r} has no usable candidate selector")
 
 
