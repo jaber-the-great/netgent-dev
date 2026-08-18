@@ -11,6 +11,7 @@ authors = [
 dependencies = [
     "playwright>=1.50",
     "pydantic>=2.9",
+    "pydantic-settings>=2.5",
     "pyyaml>=6.0",
     "typer>=0.15",
 ]

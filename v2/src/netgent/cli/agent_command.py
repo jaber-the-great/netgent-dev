@@ -10,7 +10,7 @@ import typer
 def agent(
     task: Annotated[str, typer.Argument(help="What the agent should do, in plain language.")],
     url: Annotated[str | None, typer.Option(help="Starting URL.")] = None,
-    model: Annotated[str, typer.Option(help="LLM as provider/model.")] = "gemini/gemini-2.5-flash",
+    model: Annotated[str | None, typer.Option(help="LLM as provider/model (default: NETGENT_GENERATOR_MODEL).")] = None,
     max_steps: Annotated[int, typer.Option(help="Step budget.")] = 25,
     trajectory_dir: Annotated[
         Path | None, typer.Option("--trajectory", help="Write the agent trajectory here.")
@@ -25,8 +25,12 @@ def agent(
         typer.secho(f"the agent needs the 'generate' extra: pip install 'netgent[generate]'  ({exc})", fg="red")
         raise typer.Exit(1) from exc
 
+    from netgent.core.settings import get_settings
+
+    resolved_model = model or get_settings().generator_model
+
     async def _run():
-        llm = make_llm(model)
+        llm = make_llm(resolved_model)
         async with BrowserSession(headless=headless, stealth=True) as session:
             return await BrowserAgent(llm, max_steps=max_steps, run_dir=trajectory_dir).run(session, task, url)
 

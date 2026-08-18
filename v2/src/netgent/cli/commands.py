@@ -38,5 +38,8 @@ def _root(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Debug logging (overrides NETGENT_LOG_LEVEL)."),
 ) -> None:
     from netgent.core.logger import configure_logging
+    from netgent.core.settings import get_settings
 
-    configure_logging("debug" if verbose else None)
+    settings = get_settings()  # loads env + .env (typed)
+    settings.sync_provider_keys()  # so the agent's LLM SDK picks up keys from .env
+    configure_logging("debug" if verbose else settings.log_level)
