@@ -14,6 +14,9 @@ def run(
         Path | None,
         typer.Option("--trajectory", help="Write a trajectory bundle (record.json + per-edge screenshots) here."),
     ] = None,
+    param: Annotated[
+        list[str] | None, typer.Option("--param", "-p", help="Workflow param as name=value (repeatable).")
+    ] = None,
     headless: Annotated[bool, typer.Option("--headless/--headed", help="Run the browser headless.")] = True,
     stealth: Annotated[bool, typer.Option("--stealth/--no-stealth", help="Harden the browser fingerprint.")] = True,
 ) -> None:
@@ -23,10 +26,12 @@ def run(
 
     from netgent.browser.session import BrowserSession
     from netgent.executor.engine import Executor
-    from netgent.schema.workflow import load_workflow
+    from netgent.schema.workflow import load_workflow, resolve_params
 
     try:
         wf = load_workflow(workflow)
+        values = dict(p.split("=", 1) for p in (param or []))
+        wf = resolve_params(wf, values)
     except (ValidationError, ValueError) as exc:
         typer.secho(f"invalid workflow artifact: {exc}", fg="red", err=True)
         raise typer.Exit(1) from exc

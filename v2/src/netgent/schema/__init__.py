@@ -23,16 +23,35 @@ from netgent.schema.actions import (
     ScrollAction,
     SelectAction,
 )
+from netgent.schema.control import (
+    Branch,
+    BranchArm,
+    Call,
+    ControlNode,
+    EdgeStep,
+    Milestone,
+    Param,
+    Repeat,
+)
 from netgent.schema.export import SCHEMAS, generate, render, write_all
 from netgent.schema.records import EdgeRecord, RunRecord
 from netgent.schema.triggers import SelectorHidden, SelectorVisible, TitleContains, Trigger, UrlMatches
-from netgent.schema.workflow import State, Transition, Workflow, dump_workflow, load_workflow
+from netgent.schema.workflow import State, Transition, Workflow, dump_workflow, load_workflow, resolve_params
 
 __all__ = [
     "SCHEMAS",
     "Action",
+    "Branch",
+    "BranchArm",
+    "Call",
     "ClickAction",
+    "ControlNode",
     "EdgeRecord",
+    "EdgeStep",
+    "Milestone",
+    "Param",
+    "Repeat",
+    "resolve_params",
     "FillAction",
     "GoBackAction",
     "GotoAction",

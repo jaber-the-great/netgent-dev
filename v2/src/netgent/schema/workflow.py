@@ -12,9 +12,41 @@ import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from netgent.schema.actions import Action
+from netgent.schema.control import Branch, ControlNode, EdgeStep, Milestone, Param, Repeat
 from netgent.schema.triggers import Trigger
 
 DEFAULT_STATE_TIMEOUT_MS = 10_000
+
+
+def _edges_in(nodes: list[ControlNode]) -> set[str]:
+    """Every transition id referenced anywhere in a control program (for validation)."""
+    edges: set[str] = set()
+    for node in nodes:
+        if isinstance(node, EdgeStep):
+            edges.add(node.edge)
+        elif isinstance(node, Repeat):
+            edges |= _edges_in(node.body)
+        elif isinstance(node, Branch):
+            for arm in node.arms:
+                edges |= _edges_in(arm.then)
+            if node.else_:
+                edges |= _edges_in(node.else_)
+    return edges
+
+
+def _states_in(nodes: list[ControlNode]) -> set[str]:
+    """Every state id referenced by Branch arms in a control program (for validation)."""
+    states: set[str] = set()
+    for node in nodes:
+        if isinstance(node, Repeat):
+            states |= _states_in(node.body)
+        elif isinstance(node, Branch):
+            for arm in node.arms:
+                states.add(arm.when)
+                states |= _states_in(arm.then)
+            if node.else_:
+                states |= _states_in(node.else_)
+    return states
 
 
 class State(BaseModel):
@@ -49,8 +81,15 @@ class Workflow(BaseModel):
     start_state: str
     states: list[State]
     transitions: list[Transition]
-    # Optional explicit control sequence (transition ids). Defaults to listed order.
+    params: list[Param] = Field(default_factory=list)
+    # Legacy linear plan (transition ids); superseded by `control`. Kept one release, deprecated.
     control_sequence: list[str] | None = None
+    # The control program: a bounded regular expression over transitions (loops/branches/calls).
+    control: list[ControlNode] | None = None
+    # Success condition: replay succeeded iff an accept state's guard holds at program end.
+    # Empty = legacy behavior (success = every edge ok).
+    accept_states: list[str] = Field(default_factory=list)
+    milestones: list[Milestone] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_graph(self) -> Self:
@@ -61,6 +100,7 @@ class Workflow(BaseModel):
         if len(transition_ids) != len(set(transition_ids)):
             raise ValueError("duplicate transition ids")
         known = set(state_ids)
+        known_edges = set(transition_ids)
         if self.start_state not in known:
             raise ValueError(f"start_state {self.start_state!r} is not a declared state")
         for t in self.transitions:
@@ -69,10 +109,32 @@ class Workflow(BaseModel):
             if t.target not in known:
                 raise ValueError(f"transition {t.id!r}: unknown target state {t.target!r}")
         if self.control_sequence is not None:
-            unknown = set(self.control_sequence) - set(transition_ids)
+            unknown = set(self.control_sequence) - known_edges
             if unknown:
                 raise ValueError(f"control_sequence references unknown transitions: {sorted(unknown)}")
+        if self.control is not None:
+            if self.control_sequence is not None:
+                raise ValueError("set either control or control_sequence, not both")
+            unknown_e = _edges_in(self.control) - known_edges
+            if unknown_e:
+                raise ValueError(f"control references unknown transitions: {sorted(unknown_e)}")
+            unknown_s = _states_in(self.control) - known
+            if unknown_s:
+                raise ValueError(f"control (branch) references unknown states: {sorted(unknown_s)}")
+        for milestone in self.milestones:
+            if milestone.state not in known:
+                raise ValueError(f"milestone {milestone.id!r}: unknown state {milestone.state!r}")
+        unknown_accept = set(self.accept_states) - known
+        if unknown_accept:
+            raise ValueError(f"accept_states reference unknown states: {sorted(unknown_accept)}")
         return self
+
+    def as_control(self) -> list[ControlNode]:
+        """The control program to run: `control`, else `control_sequence`, else declared order."""
+        if self.control is not None:
+            return self.control
+        ids = self.control_sequence if self.control_sequence is not None else [t.id for t in self.transitions]
+        return [EdgeStep(edge=i) for i in ids]
 
     def state(self, state_id: str) -> State:
         for s in self.states:
@@ -85,6 +147,36 @@ class Workflow(BaseModel):
             if t.id == transition_id:
                 return t
         raise KeyError(transition_id)
+
+
+def resolve_params(workflow: Workflow, values: dict[str, str] | None = None) -> Workflow:
+    """Substitute ${name} in the workflow's string fields from params + provided values.
+
+    Missing required params raise ValueError. Returns a new, re-validated Workflow.
+    """
+    values = dict(values or {})
+    resolved: dict[str, str] = {}
+    for p in workflow.params:
+        if p.name in values:
+            resolved[p.name] = values[p.name]
+        elif p.default is not None:
+            resolved[p.name] = p.default
+        elif p.required:
+            raise ValueError(f"missing required param {p.name!r}")
+
+    def sub(node: object) -> object:
+        if isinstance(node, str):
+            for name, value in resolved.items():
+                node = node.replace("${" + name + "}", value)
+            return node
+        if isinstance(node, list):
+            return [sub(x) for x in node]
+        if isinstance(node, dict):
+            return {k: sub(v) for k, v in node.items()}
+        return node
+
+    data = sub(workflow.model_dump(mode="json"))
+    return Workflow.model_validate(data)
 
 
 def load_workflow(path: Path | str) -> Workflow:

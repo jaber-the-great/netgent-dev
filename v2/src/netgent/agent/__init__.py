@@ -1,7 +1,19 @@
-"""Compile-time LLM side (`netgent generate`): the LangGraph pipeline — Planner ->
-Discovery -> Workflow Generator -> Validation Agent — that compiles a natural-language
-workflow spec into the NFA artifact.
+"""The browser agent (compile-time LLM side): observe → decide → act loop.
 
-Import rule: the ONLY package that imports LLM SDKs (langchain/langgraph, via the
-`netgent[generate]` extra). Imports core, browser, executor.
+Imports LLM SDKs (langchain) lazily inside LangChainLLM, so importing this package does not
+require the `netgent[generate]` extra until a real model is actually used. FakeLLM needs nothing.
 """
+
+from netgent.agent.browser_agent import AgentStep, AgentTrajectory, BrowserAgent
+from netgent.agent.decision import AgentDecision
+from netgent.agent.llm import FakeLLM, LangChainLLM, make_llm
+
+__all__ = [
+    "AgentDecision",
+    "AgentStep",
+    "AgentTrajectory",
+    "BrowserAgent",
+    "FakeLLM",
+    "LangChainLLM",
+    "make_llm",
+]
