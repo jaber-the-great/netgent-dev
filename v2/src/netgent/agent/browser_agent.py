@@ -9,6 +9,7 @@ Workflow Generator will later compile into an NFA. CAPTCHA solving is out of sco
 instructs the model to stop, and nothing here attempts a challenge.
 """
 
+import tempfile
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -43,10 +44,21 @@ class AgentTrajectory(BaseModel):
 
 
 class BrowserAgent:
-    def __init__(self, llm: LLM, max_steps: int = 25, run_dir: Path | None = None):
+    def __init__(self, llm: LLM, max_steps: int = 25, run_dir: Path | None = None, upload_file: Path | None = None):
         self._llm = llm
         self._max_steps = max_steps
         self._run_dir = run_dir
+        # File the agent offers to any file input via kind="upload". A default sample is
+        # created on demand so uploads work autonomously without the caller supplying one.
+        self._upload_file = upload_file
+
+    def _upload_path(self) -> str:
+        if self._upload_file is None:
+            sample = Path(tempfile.gettempdir()) / "netgent-upload-sample.txt"
+            if not sample.exists():
+                sample.write_text("netgent sample upload\n")
+            self._upload_file = sample
+        return str(self._upload_file)
 
     async def run(self, session: BrowserSession, task: str, url: str | None = None) -> AgentTrajectory:
         traj = AgentTrajectory(task=task)
@@ -79,7 +91,8 @@ class BrowserAgent:
 
             error = None
             try:
-                action = to_action(decision, snapshot)
+                upload = self._upload_path() if decision.kind == "upload" else None
+                action = to_action(decision, snapshot, upload_path=upload)
                 await session.dispatch(action)
             except (ExecutionError, ValueError) as exc:
                 error = str(exc)

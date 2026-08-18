@@ -100,6 +100,14 @@ class SetCheckedAction(_ActionBase):
     checked: bool = True
 
 
+class UploadFileAction(_ActionBase):
+    """Set the file(s) on a file input (Playwright .set_input_files)."""
+
+    type: Literal["upload_file"] = "upload_file"
+    locator: Locator
+    paths: list[str]
+
+
 class GoBackAction(_ActionBase):
     """Navigate back in browser history."""
 
@@ -128,6 +136,7 @@ Action = Annotated[
         SelectAction,
         ScrollAction,
         SetCheckedAction,
+        UploadFileAction,
         GoBackAction,
         HoverAction,
         NoopAction,

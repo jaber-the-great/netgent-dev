@@ -19,6 +19,7 @@ from netgent.schema.actions import (
     ScrollAction,
     SelectAction,
     SetCheckedAction,
+    UploadFileAction,
 )
 
 
@@ -49,7 +50,9 @@ def format_observation(snapshot: DomSnapshot, limit: int = 80, text_limit: int =
 
 
 def _locator_for(el: DomElement) -> list[LocatorStep]:
-    """Build a durable locator chain from an element's best candidate selector."""
+    """Build a durable locator chain: frame_locator steps for any iframe path, then the element."""
+    # Prepend one frame_locator per iframe the element is nested in.
+    chain = [LocatorStep(fn="frame_locator", args=[sel]) for sel in el.frame_path]
     candidates = el.candidates
     # <select> accessible names are unreliable (option dumps); prefer a stable selector.
     if el.tag == "select":
@@ -57,17 +60,17 @@ def _locator_for(el: DomElement) -> list[LocatorStep]:
     for cand in candidates:
         if cand.kind == "role" and cand.role:
             kwargs = {"name": cand.name} if cand.name else {}
-            return [LocatorStep(fn="get_by_role", args=[cand.role], kwargs=kwargs)]
+            return chain + [LocatorStep(fn="get_by_role", args=[cand.role], kwargs=kwargs)]
         if cand.kind == "test_id" and cand.value:
-            return [LocatorStep(fn="get_by_test_id", args=[cand.value])]
+            return chain + [LocatorStep(fn="get_by_test_id", args=[cand.value])]
         if cand.kind == "label" and cand.value:
-            return [LocatorStep(fn="get_by_label", args=[cand.value])]
+            return chain + [LocatorStep(fn="get_by_label", args=[cand.value])]
         if cand.kind == "css" and cand.value:
-            return [LocatorStep(fn="locator", args=[cand.value])]
+            return chain + [LocatorStep(fn="locator", args=[cand.value])]
     raise ValueError(f"element {el.name!r} has no usable candidate selector")
 
 
-def to_action(decision: AgentDecision, snapshot: DomSnapshot) -> Action:
+def to_action(decision: AgentDecision, snapshot: DomSnapshot, upload_path: str | None = None) -> Action:
     """Map an element-indexed decision to a concrete schema Action."""
     def element() -> DomElement:
         elems = snapshot.interactive()
@@ -82,6 +85,10 @@ def to_action(decision: AgentDecision, snapshot: DomSnapshot) -> Action:
             return GotoAction(url=decision.url)
         case "click":
             return ClickAction(locator=_locator_for(element()))
+        case "upload":
+            if not upload_path:
+                raise ValueError("no upload file configured for this agent")
+            return UploadFileAction(locator=_locator_for(element()), paths=[upload_path])
         case "fill":
             return FillAction(locator=_locator_for(element()), text=decision.text or "")
         case "select":

@@ -85,12 +85,27 @@ DOM_SNAPSHOT_JS = r"""
     for (const n of el.childNodes) if (n.nodeType === 3) t += n.textContent;
     return clean(t);
   };
+  // A CSS selector locating an <iframe> within its own document, for frame_locator chains.
+  const frameSelector = (fr) => {
+    if (fr.id) return `iframe#${CSS.escape(fr.id)}`;
+    if (fr.name) return `iframe[name="${CSS.escape(fr.name)}"]`;
+    const sibs = [...fr.ownerDocument.querySelectorAll('iframe')];
+    return `iframe:nth-of-type(${sibs.indexOf(fr) + 1})`;
+  };
   const walk = (root, framePath) => {
     let nodes;
     try { nodes = root.querySelectorAll('*'); } catch (e) { return; }
     for (const el of nodes) {
       try {
         if (el.shadowRoot) walk(el.shadowRoot, framePath);
+        if (el.tagName === 'IFRAME') {
+          // Descend into same-origin iframes; cross-origin access throws and is skipped.
+          try {
+            const doc = el.contentDocument;
+            if (doc) walk(doc, framePath.concat([frameSelector(el)]));
+          } catch (e) { /* cross-origin frame, unreachable from page JS */ }
+          continue;
+        }
         if (isInteractive(el)) {
           if (!visible(el)) continue;
           const r = el.getBoundingClientRect();

@@ -27,6 +27,7 @@ from netgent.schema.actions import (
     ScrollAction,
     SelectAction,
     SetCheckedAction,
+    UploadFileAction,
 )
 from netgent.schema.actions import Locator as LocatorChain
 from netgent.schema.triggers import SelectorHidden, SelectorVisible, TitleContains, Trigger, UrlMatches
@@ -116,6 +117,8 @@ class BrowserSession:
                     await self.page.mouse.wheel(0, action.delta_y)
                 case SetCheckedAction():
                     await self._resolve(action.locator).set_checked(action.checked, timeout=action.timeout_ms)
+                case UploadFileAction():
+                    await self._resolve(action.locator).set_input_files(action.paths, timeout=action.timeout_ms)
                 case GoBackAction():
                     await self.page.go_back(timeout=action.timeout_ms)
                 case HoverAction():

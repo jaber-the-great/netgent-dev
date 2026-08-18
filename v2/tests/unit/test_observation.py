@@ -51,3 +51,29 @@ def test_check_and_uncheck_map_to_set_checked():
 def test_bad_index_raises():
     with pytest.raises(ValueError, match="valid element index"):
         to_action(AgentDecision(reasoning="x", kind="click", index=99), _snap())
+
+
+def test_iframe_element_gets_frame_locator_prefix():
+    from netgent.agent.observation import _locator_for
+
+    el = DomElement(
+        tag="input", type="text", name="Email", frame_path=["iframe#outer", "iframe:nth-of-type(1)"],
+        bbox=BBox(x=0, y=0, w=1, h=1), candidates=[SelectorCandidate(kind="css", value="#email")],
+    )
+    chain = _locator_for(el)
+    assert [s.fn for s in chain] == ["frame_locator", "frame_locator", "locator"]
+    assert chain[0].args == ["iframe#outer"]
+
+
+def test_upload_maps_to_upload_file_action():
+    from netgent.schema.actions import UploadFileAction
+
+    snap = DomSnapshot(
+        url="u", title="t",
+        elements=[DomElement(tag="input", type="file", name="doc", bbox=BBox(x=0, y=0, w=1, h=1),
+                             candidates=[SelectorCandidate(kind="css", value="#f")])],
+    )
+    act = to_action(AgentDecision(reasoning="x", kind="upload", index=0), snap, upload_path="/tmp/s.txt")
+    assert isinstance(act, UploadFileAction) and act.paths == ["/tmp/s.txt"]
+    with pytest.raises(ValueError, match="no upload file configured"):
+        to_action(AgentDecision(reasoning="x", kind="upload", index=0), snap)

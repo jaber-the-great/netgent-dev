@@ -21,7 +21,7 @@ Guidance for long, multi-step tasks:
 
 Input types (shown as tag[type], e.g. input[date]):
 - input[date] → fill with YYYY-MM-DD; input[time] → HH:MM; input[month] → YYYY-MM.
-- input[file] cannot be typed into — skip it if you can, or stop if it is required.
+- input[file] → use kind="upload" (a sample file is attached for you); do not try to fill it.
 - Radio/checkbox show [checked]/[unchecked]. Use kind="check" (or "uncheck") on them —
   it is reliable for custom/hidden controls where a plain click does nothing. Never
   re-check one already [checked].
