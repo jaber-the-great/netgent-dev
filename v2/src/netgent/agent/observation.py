@@ -33,7 +33,11 @@ def format_observation(snapshot: DomSnapshot, limit: int = 80) -> str:
 
 def _locator_for(el: DomElement) -> list[LocatorStep]:
     """Build a durable locator chain from an element's best candidate selector."""
-    for cand in el.candidates:
+    candidates = el.candidates
+    # <select> accessible names are unreliable (option dumps); prefer a stable selector.
+    if el.tag == "select":
+        candidates = [c for c in candidates if c.kind != "role"] or candidates
+    for cand in candidates:
         if cand.kind == "role" and cand.role:
             kwargs = {"name": cand.name} if cand.name else {}
             return [LocatorStep(fn="get_by_role", args=[cand.role], kwargs=kwargs)]

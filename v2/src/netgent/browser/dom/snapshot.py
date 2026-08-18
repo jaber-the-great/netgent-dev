@@ -32,12 +32,13 @@ DOM_SNAPSHOT_JS = r"""
     const s = getComputedStyle(el);
     return s.visibility !== 'hidden' && s.display !== 'none' && s.opacity !== '0';
   };
-  const accName = (el) => (
+  const clean = (s) => (s || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  const accName = (el) => clean(
     el.getAttribute('aria-label') ||
-    (el.labels && el.labels.length ? el.labels[0].innerText : '') ||
+    (el.labels && el.labels.length ? el.labels[0].childNodes[0]?.textContent : '') ||
     el.getAttribute('placeholder') ||
     el.getAttribute('name') ||
-    (el.innerText || '').trim().slice(0, 120) ||
+    (el.tagName === 'SELECT' ? '' : el.innerText) ||
     el.getAttribute('value') || ''
   );
   const cssPath = (el) => {
