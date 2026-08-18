@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 FORBIDDEN = {
+    "netgent.schema": ["playwright", "langchain", "langgraph", "langchain_core"],
     "netgent.core": ["playwright", "langchain", "langgraph", "langchain_core"],
     "netgent.browser": ["langchain", "langgraph", "langchain_core"],
     "netgent.executor": ["langchain", "langgraph", "langchain_core"],

@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head><title>Vanilla Form</title></head>
+<body>
+  <h1>Vanilla HTML Form</h1>
+  <form id="f" onsubmit="event.preventDefault();
+      if (name.value && email.value.includes('@')) {
+        document.title = 'SUCCESS';
+        document.getElementById('secret').style.display = 'block';
+      }">
+    <label>Name <input id="name" name="name" type="text"></label><br>
+    <label>Email <input id="email" name="email" type="email"></label><br>
+    <label>Plan
+      <select id="plan" name="plan">
+        <option value="">choose</option>
+        <option value="pro">Pro</option>
+        <option value="free">Free</option>
+      </select>
+    </label><br>
+    <button type="button" onclick="alert('red herring')">Cancel</button>
+    <button type="submit">Submit</button>
+  </form>
+  <div id="secret" style="display:none">the secret is: dumbledore</div>
+</body>
+</html>

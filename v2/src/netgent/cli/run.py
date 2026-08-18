@@ -10,26 +10,33 @@ import typer
 def run(
     workflow: Annotated[Path, typer.Argument(exists=True, help="Compiled workflow file (.json, .yaml, or .yml).")],
     save: Annotated[Path | None, typer.Option(help="Write the run record JSON to this path.")] = None,
+    trajectory_dir: Annotated[
+        Path | None,
+        typer.Option("--trajectory", help="Write a trajectory bundle (record.json + per-edge screenshots) here."),
+    ] = None,
     headless: Annotated[bool, typer.Option("--headless/--headed", help="Run the browser headless.")] = True,
+    stealth: Annotated[bool, typer.Option("--stealth/--no-stealth", help="Harden the browser fingerprint.")] = True,
 ) -> None:
     """Execute a compiled workflow (NFA) without LLM calls."""
     # Heavy imports stay inside the handler so `--help` stays fast.
     from pydantic import ValidationError
 
     from netgent.browser.session import BrowserSession
-    from netgent.core.workflow import load_workflow
     from netgent.executor.engine import Executor
+    from netgent.schema.workflow import load_workflow
 
     try:
         wf = load_workflow(workflow)
     except (ValidationError, ValueError) as exc:
         typer.secho(f"invalid workflow artifact: {exc}", fg="red", err=True)
         raise typer.Exit(1) from exc
-    typer.secho(f"workflow: {wf.name} ({len(wf.states)} states, {len(wf.transitions)} transitions)", bold=True)
+    typer.secho(
+        f"workflow: {wf.name} v{wf.version} ({len(wf.states)} states, {len(wf.transitions)} transitions)", bold=True
+    )
 
     async def _run():
-        async with BrowserSession(headless=headless) as session:
-            return await Executor(session, wf).run()
+        async with BrowserSession(headless=headless, stealth=stealth) as session:
+            return await Executor(session, wf, run_dir=trajectory_dir).run()
 
     record = asyncio.run(_run())
 
@@ -44,6 +51,9 @@ def run(
     if save:
         save.write_text(record.model_dump_json(indent=2) + "\n")
         typer.echo(f"run record written to {save}")
+    if trajectory_dir:
+        typer.echo(f"trajectory bundle written to {trajectory_dir}/")
+        typer.echo(f"  view: netgent trajectory {trajectory_dir}/record.json --html out.html")
 
     if not record.success:
         raise typer.Exit(1)

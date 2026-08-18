@@ -1,5 +1,7 @@
-"""Pure domain types: the NFA model (states carry conditions, transitions carry one atomic
-action), the action IR, trigger predicates, and run records.
+"""Cross-cutting domain infrastructure: the error taxonomy and logging.
 
-Import rule: imports nothing but pydantic/stdlib. No Playwright, no LLM SDKs.
+The pydantic models live in netgent.schema; core holds what every layer shares
+that isn't a model.
+
+Import rule: imports nothing but stdlib. No Playwright, no LLM SDKs.
 """

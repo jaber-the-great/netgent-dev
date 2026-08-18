@@ -1,0 +1,34 @@
+name: form-vanilla
+version: "1"
+start_state: init
+
+states:
+  - id: init
+  - id: loaded
+    conditions:
+      - {type: title_contains, text: Vanilla Form}
+      - {type: selector_visible, selector: "#email"}
+  - id: submitted
+    conditions:
+      - {type: selector_visible, selector: "#secret"}
+
+transitions:
+  - {id: open, source: init, target: loaded, action: {type: goto, url: "{base}/vanilla.html"}}
+  - id: fill_name
+    source: loaded
+    target: loaded
+    action: {type: fill, locator: [{fn: locator, args: ["#name"]}], text: "Ada Lovelace"}
+  - id: fill_email
+    source: loaded
+    target: loaded
+    action: {type: fill, locator: [{fn: locator, args: ["#email"]}], text: "ada@example.com"}
+  - id: choose_plan
+    source: loaded
+    target: loaded
+    action: {type: select, locator: [{fn: locator, args: ["#plan"]}], value: "pro"}
+  - id: submit
+    source: loaded
+    target: submitted
+    action: {type: click, locator: [{fn: get_by_role, args: [button], kwargs: {name: Submit}}]}
+
+control_sequence: [open, fill_name, fill_email, choose_plan, submit]

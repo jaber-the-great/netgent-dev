@@ -1,0 +1,74 @@
+{
+  "workflow_name": "form-shadow",
+  "workflow_version": "1",
+  "started_at": "2026-08-18T20:11:46.989824Z",
+  "finished_at": "2026-08-18T20:11:47.140964Z",
+  "success": true,
+  "edges": [
+    {
+      "transition_id": "open",
+      "source": "init",
+      "target": "loaded",
+      "action_type": "goto",
+      "outcome": "ok",
+      "started_at": "2026-08-18T20:11:46.989849Z",
+      "duration_ms": 51.00241699256003,
+      "trigger_latency_ms": 17.182208015583456,
+      "conditions": [
+        {
+          "type": "title_contains",
+          "met": true
+        },
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "http://127.0.0.1:52841/shadow.html",
+      "screenshot": "screenshots/open.png",
+      "error": null
+    },
+    {
+      "transition_id": "fill_name",
+      "source": "loaded",
+      "target": "loaded",
+      "action_type": "fill",
+      "outcome": "ok",
+      "started_at": "2026-08-18T20:11:47.040901Z",
+      "duration_ms": 33.521040924824774,
+      "trigger_latency_ms": 1.8790829926729202,
+      "conditions": [
+        {
+          "type": "title_contains",
+          "met": true
+        },
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "http://127.0.0.1:52841/shadow.html",
+      "screenshot": "screenshots/fill_name.png",
+      "error": null
+    },
+    {
+      "transition_id": "submit",
+      "source": "loaded",
+      "target": "submitted",
+      "action_type": "click",
+      "outcome": "ok",
+      "started_at": "2026-08-18T20:11:47.074457Z",
+      "duration_ms": 66.45004195161164,
+      "trigger_latency_ms": 1.1244170600548387,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "http://127.0.0.1:52841/shadow.html",
+      "screenshot": "screenshots/submit.png",
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "dataset": "forms",
+  "started_at": "2026-08-18T20:11:45.994837Z",
+  "total": 3,
+  "passed": 3,
+  "tasks": [
+    {
+      "task": "progressive",
+      "workflow_name": "form-progressive",
+      "passed": true,
+      "edges": 5,
+      "duration_ms": 212.727,
+      "error": null
+    },
+    {
+      "task": "shadow",
+      "workflow_name": "form-shadow",
+      "passed": true,
+      "edges": 3,
+      "duration_ms": 151.14,
+      "error": null
+    },
+    {
+      "task": "vanilla",
+      "workflow_name": "form-vanilla",
+      "passed": true,
+      "edges": 5,
+      "duration_ms": 246.613,
+      "error": null
+    }
+  ]
+}

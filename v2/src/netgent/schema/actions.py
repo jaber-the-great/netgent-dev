@@ -92,6 +92,19 @@ class ScrollAction(_ActionBase):
     delta_y: int
 
 
+class GoBackAction(_ActionBase):
+    """Navigate back in browser history."""
+
+    type: Literal["go_back"] = "go_back"
+
+
+class HoverAction(_ActionBase):
+    """Hover over an element (opens menus, fires prefetch)."""
+
+    type: Literal["hover"] = "hover"
+    locator: Locator
+
+
 class NoopAction(_ActionBase):
     """The ε-transition action: changes nothing; the edge exists to move between states."""
 
@@ -99,6 +112,16 @@ class NoopAction(_ActionBase):
 
 
 Action = Annotated[
-    Union[GotoAction, ClickAction, FillAction, PressAction, SelectAction, ScrollAction, NoopAction],
+    Union[
+        GotoAction,
+        ClickAction,
+        FillAction,
+        PressAction,
+        SelectAction,
+        ScrollAction,
+        GoBackAction,
+        HoverAction,
+        NoopAction,
+    ],
     Field(discriminator="type"),
 ]

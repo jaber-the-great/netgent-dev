@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head><title>Shadow Form</title></head>
+<body>
+  <h1>Shadow DOM Form</h1>
+  <div id="host"></div>
+  <div id="secret" style="display:none">the secret is: dumbledore</div>
+  <script>
+    const root = document.getElementById('host').attachShadow({mode: 'open'});
+    root.innerHTML = `
+      <label>Full name <input id="name" type="text"></label><br>
+      <button id="go">Submit</button>`;
+    root.getElementById('go').addEventListener('click', () => {
+      if (root.getElementById('name').value) {
+        document.title = 'SUCCESS';
+        document.getElementById('secret').style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head><title>Progressive Form</title></head>
+<body>
+  <h1>Multi-step Form</h1>
+  <div id="step1">
+    <label>Username <input id="user" type="text"></label>
+    <button id="next">Next</button>
+  </div>
+  <div id="step2" style="display:none">
+    <label>Password <input id="pass" type="password"></label>
+    <button id="finish">Finish</button>
+  </div>
+  <div id="secret" style="display:none">the secret is: dumbledore</div>
+  <script>
+    document.getElementById('next').addEventListener('click', () => {
+      if (document.getElementById('user').value) {
+        document.getElementById('step1').style.display = 'none';
+        document.getElementById('step2').style.display = 'block';
+      }
+    });
+    document.getElementById('finish').addEventListener('click', () => {
+      if (document.getElementById('pass').value) {
+        document.title = 'SUCCESS';
+        document.getElementById('secret').style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

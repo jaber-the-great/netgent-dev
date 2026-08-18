@@ -1,0 +1,112 @@
+{
+  "workflow_name": "form-progressive",
+  "workflow_version": "1",
+  "started_at": "2026-08-18T20:11:46.388634Z",
+  "finished_at": "2026-08-18T20:11:46.601361Z",
+  "success": true,
+  "edges": [
+    {
+      "transition_id": "open",
+      "source": "init",
+      "target": "step1",
+      "action_type": "goto",
+      "outcome": "ok",
+      "started_at": "2026-08-18T20:11:46.388672Z",
+      "duration_ms": 54.99375006183982,
+      "trigger_latency_ms": 15.995332971215248,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "http://127.0.0.1:52841/progressive.html",
+      "screenshot": "screenshots/open.png",
+      "error": null
+    },
+    {
+      "transition_id": "fill_user",
+      "source": "step1",
+      "target": "step1",
+      "action_type": "fill",
+      "outcome": "ok",
+      "started_at": "2026-08-18T20:11:46.443714Z",
+      "duration_ms": 30.8605000609532,
+      "trigger_latency_ms": 1.5692909946665168,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "http://127.0.0.1:52841/progressive.html",
+      "screenshot": "screenshots/fill_user.png",
+      "error": null
+    },
+    {
+      "transition_id": "next",
+      "source": "step1",
+      "target": "step2",
+      "action_type": "click",
+      "outcome": "ok",
+      "started_at": "2026-08-18T20:11:46.474615Z",
+      "duration_ms": 65.82524999976158,
+      "trigger_latency_ms": 1.8461659783497453,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        },
+        {
+          "type": "selector_hidden",
+          "met": true
+        }
+      ],
+      "url_after": "http://127.0.0.1:52841/progressive.html",
+      "screenshot": "screenshots/next.png",
+      "error": null
+    },
+    {
+      "transition_id": "fill_pass",
+      "source": "step2",
+      "target": "step2",
+      "action_type": "fill",
+      "outcome": "ok",
+      "started_at": "2026-08-18T20:11:46.540485Z",
+      "duration_ms": 26.3704169774428,
+      "trigger_latency_ms": 1.5248330309987068,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        },
+        {
+          "type": "selector_hidden",
+          "met": true
+        }
+      ],
+      "url_after": "http://127.0.0.1:52841/progressive.html",
+      "screenshot": "screenshots/fill_pass.png",
+      "error": null
+    },
+    {
+      "transition_id": "finish",
+      "source": "step2",
+      "target": "submitted",
+      "action_type": "click",
+      "outcome": "ok",
+      "started_at": "2026-08-18T20:11:46.566902Z",
+      "duration_ms": 34.381499979645014,
+      "trigger_latency_ms": 1.088624936528504,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "http://127.0.0.1:52841/progressive.html",
+      "screenshot": "screenshots/finish.png",
+      "error": null
+    }
+  ]
+}

@@ -9,10 +9,10 @@ import asyncio
 import pytest
 
 from netgent.browser.session import BrowserSession
-from netgent.core.actions import ClickAction, GotoAction, LocatorStep
-from netgent.core.triggers import SelectorVisible
-from netgent.core.workflow import State, Transition, Workflow
 from netgent.executor.engine import Executor
+from netgent.schema.actions import ClickAction, GotoAction, LocatorStep
+from netgent.schema.triggers import SelectorVisible
+from netgent.schema.workflow import State, Transition, Workflow
 
 FIXTURE_HTML = """<!doctype html>
 <html><head><title>NetGent Fixture</title></head><body>
@@ -66,6 +66,29 @@ def test_workflow_replays_end_to_end(fixture_url):
     # The delayed reveal (200ms) must show up as trigger latency, proving the
     # executor waited on the condition rather than racing past it.
     assert record.edges[1].trigger_latency_ms > 150
+    # per-edge condition report is captured even without a run dir
+    assert record.edges[1].conditions and record.edges[1].conditions[0].met
+
+
+def test_trajectory_bundle_written(fixture_url, tmp_path):
+    run_dir = tmp_path / "traj"
+
+    async def _run():
+        async with BrowserSession(headless=True) as session:
+            return await Executor(session, make_workflow(fixture_url), run_dir=run_dir).run()
+
+    record = asyncio.run(_run())
+    assert record.success
+    # record.json + one screenshot per edge exist and are referenced from the record
+    assert (run_dir / "record.json").is_file()
+    for edge in record.edges:
+        assert edge.screenshot is not None
+        assert (run_dir / edge.screenshot).is_file()
+    # the saved record renders to a self-contained HTML page
+    from netgent.trajectory import load_record, render_html
+
+    doc = render_html(load_record(run_dir / "record.json"))
+    assert "screenshots/open.png" in doc
 
 
 def test_trigger_timeout_fails_loudly(fixture_url):

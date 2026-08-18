@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Self
 
 import yaml
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from netgent.core.actions import Action
-from netgent.core.triggers import Trigger
+from netgent.schema.actions import Action
+from netgent.schema.triggers import Trigger
 
 DEFAULT_STATE_TIMEOUT_MS = 10_000
 
@@ -37,6 +37,15 @@ class Transition(BaseModel):
 
 class Workflow(BaseModel):
     name: str
+    # Revision of THIS workflow: "1", "2", ... — bump when the flow is re-compiled/edited.
+    # Provenance for run records and datasets, so traces from different revisions aren't conflated.
+    version: str = Field(default="1", pattern=r"^[1-9][0-9]*$")
+
+    @field_validator("version", mode="before")
+    @classmethod
+    def _int_version_ok(cls, value: object) -> object:
+        # YAML parses an unquoted `version: 2` as an int — accept it as "2".
+        return str(value) if isinstance(value, int) else value
     start_state: str
     states: list[State]
     transitions: list[Transition]

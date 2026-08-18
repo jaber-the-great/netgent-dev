@@ -1,0 +1,39 @@
+# A multi-step form: each step is its own NFA state, recognized by which
+# step is visible. This is the shape long-horizon workflows generalize.
+name: form-progressive
+version: "1"
+start_state: init
+
+states:
+  - id: init
+  - id: step1
+    conditions:
+      - {type: selector_visible, selector: "#user"}
+  - id: step2
+    conditions:
+      - {type: selector_visible, selector: "#pass"}
+      - {type: selector_hidden, selector: "#step1"}
+  - id: submitted
+    conditions:
+      - {type: selector_visible, selector: "#secret"}
+
+transitions:
+  - {id: open, source: init, target: step1, action: {type: goto, url: "{base}/progressive.html"}}
+  - id: fill_user
+    source: step1
+    target: step1
+    action: {type: fill, locator: [{fn: locator, args: ["#user"]}], text: "alan.turing"}
+  - id: next
+    source: step1
+    target: step2
+    action: {type: click, locator: [{fn: get_by_role, args: [button], kwargs: {name: Next}}]}
+  - id: fill_pass
+    source: step2
+    target: step2
+    action: {type: fill, locator: [{fn: locator, args: ["#pass"]}], text: "enigma-1943"}
+  - id: finish
+    source: step2
+    target: submitted
+    action: {type: click, locator: [{fn: get_by_role, args: [button], kwargs: {name: Finish}}]}
+
+control_sequence: [open, fill_user, next, fill_pass, finish]

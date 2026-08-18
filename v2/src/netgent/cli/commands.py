@@ -4,7 +4,7 @@ from importlib import metadata
 
 import typer
 
-from netgent.cli import doctor, evaluate, generate, run
+from netgent.cli import doctor, evaluate, generate, run, schema_command, trajectory_command
 
 cli_app = typer.Typer(
     help="Agent-based automation of network application workflows.",
@@ -15,6 +15,8 @@ cli_app.command("run")(run.run)
 cli_app.command("generate")(generate.generate)
 cli_app.command("eval")(evaluate.evaluate)
 cli_app.command("doctor")(doctor.doctor)
+cli_app.command("schema")(schema_command.schema)
+cli_app.command("trajectory")(trajectory_command.trajectory)
 
 
 def _version_callback(value: bool) -> None:
@@ -32,5 +34,8 @@ def _root(
     version: bool = typer.Option(
         False, "--version", "-V", callback=_version_callback, is_eager=True, help="Show version and exit."
     ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Debug logging (overrides NETGENT_LOG_LEVEL)."),
 ) -> None:
-    pass
+    from netgent.core.logger import configure_logging
+
+    configure_logging("debug" if verbose else None)

@@ -8,30 +8,39 @@ creation here when the capture subsystem lands (docs/browser-layer-design.md §4
 import asyncio
 import re
 import time
+from pathlib import Path
 
 from playwright.async_api import Browser, BrowserContext, Locator, Page, Playwright, async_playwright
 
-from netgent.browser.errors import ActionDispatchError, LocatorResolutionError, TriggerTimeoutError
-from netgent.core.actions import (
+from netgent.browser.dom.snapshot import DOM_SNAPSHOT_JS, DomElement, DomSnapshot
+from netgent.browser.dom.stealth import StealthProfile
+from netgent.core.errors import ActionDispatchError, LocatorResolutionError, TriggerTimeoutError
+from netgent.schema.actions import (
     Action,
     ClickAction,
     FillAction,
+    GoBackAction,
     GotoAction,
+    HoverAction,
     NoopAction,
     PressAction,
     ScrollAction,
     SelectAction,
 )
-from netgent.core.actions import Locator as LocatorChain
-from netgent.core.triggers import SelectorHidden, SelectorVisible, TitleContains, Trigger, UrlMatches
-from netgent.core.workflow import State
+from netgent.schema.actions import Locator as LocatorChain
+from netgent.schema.triggers import SelectorHidden, SelectorVisible, TitleContains, Trigger, UrlMatches
+from netgent.schema.workflow import State
 
 POLL_INTERVAL_S = 0.1
 
 
 class BrowserSession:
-    def __init__(self, headless: bool = True):
+    def __init__(self, headless: bool = True, stealth: bool | StealthProfile = True):
         self._headless = headless
+        # stealth=True → default profile; a StealthProfile → that profile; False → vanilla.
+        self._stealth: StealthProfile | None = (
+            (stealth if isinstance(stealth, StealthProfile) else StealthProfile()) if stealth else None
+        )
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
@@ -39,10 +48,23 @@ class BrowserSession:
 
     async def __aenter__(self) -> "BrowserSession":
         self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(headless=self._headless)
-        self._context = await self._browser.new_context()
+        profile = self._stealth
+        launch_kwargs = profile.launch_kwargs(self._headless) if profile else {"headless": self._headless}
+        self._browser = await self._playwright.chromium.launch(**launch_kwargs)
+        self._context = await self._browser.new_context(**(profile.context_kwargs() if profile else {}))
+        if profile:
+            await self._context.add_init_script(profile.init_script)
         self._page = await self._context.new_page()
         return self
+
+    async def snapshot(self) -> DomSnapshot:
+        """Observe the page's interactive elements (compile-time observation)."""
+        raw = await self.page.evaluate(DOM_SNAPSHOT_JS)
+        return DomSnapshot(
+            url=self.page.url,
+            title=await self.page.title(),
+            elements=[DomElement.model_validate(e) for e in raw],
+        )
 
     async def __aexit__(self, *exc_info: object) -> None:
         if self._context:
@@ -90,6 +112,10 @@ class BrowserSession:
                     await self._resolve(action.locator).select_option(action.value, timeout=action.timeout_ms)
                 case ScrollAction():
                     await self.page.mouse.wheel(0, action.delta_y)
+                case GoBackAction():
+                    await self.page.go_back(timeout=action.timeout_ms)
+                case HoverAction():
+                    await self._resolve(action.locator).hover(timeout=action.timeout_ms)
                 case NoopAction():
                     pass
                 case _:
@@ -110,6 +136,14 @@ class BrowserSession:
             case SelectorHidden():
                 return not await self.page.locator(trigger.selector).first.is_visible()
         return False
+
+    async def condition_report(self, state: State) -> list[tuple[str, bool]]:
+        """Evaluate each of a state's conditions once; return [(type, met), ...]."""
+        return [(t.type, await self._holds(t)) for t in state.conditions]
+
+    async def screenshot(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        await self.page.screenshot(path=str(path))
 
     async def wait_for_state(self, state: State) -> float:
         """Poll until every condition of `state` holds; return recognition latency in ms.

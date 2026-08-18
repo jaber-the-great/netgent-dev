@@ -3,9 +3,10 @@
 import pytest
 from pydantic import ValidationError
 
-from netgent.core.actions import DEFAULT_TIMEOUT_MS, ClickAction, GotoAction, LocatorStep, NoopAction
-from netgent.core.workflow import State, Transition, Workflow, dump_workflow, load_workflow
-from netgent.executor.engine import ControlSequenceError, Executor
+from netgent.core.errors import ControlSequenceError
+from netgent.executor.engine import Executor
+from netgent.schema.actions import DEFAULT_TIMEOUT_MS, ClickAction, GotoAction, LocatorStep, NoopAction
+from netgent.schema.workflow import State, Transition, Workflow, dump_workflow, load_workflow
 
 
 def make_workflow(**overrides) -> Workflow:
@@ -27,6 +28,43 @@ def make_workflow(**overrides) -> Workflow:
     )
     data.update(overrides)
     return Workflow(**data)
+
+
+def test_version_defaults_and_round_trips(tmp_path):
+    assert make_workflow().version == "1"
+    wf = make_workflow(version="2")
+    path = tmp_path / "wf.yaml"
+    dump_workflow(wf, path)
+    assert load_workflow(path).version == "2"
+
+
+def test_version_must_be_a_simple_integer_string():
+    with pytest.raises(ValidationError, match="version"):
+        make_workflow(version="2026-08-17.1")
+    with pytest.raises(ValidationError, match="version"):
+        make_workflow(version="v2")
+    with pytest.raises(ValidationError, match="version"):
+        make_workflow(version="0")
+
+
+def test_run_record_carries_workflow_version():
+    import asyncio
+
+    class FakeSession:
+        async def dispatch(self, action):
+            pass
+
+        async def wait_for_state(self, state):
+            return 0.0
+
+        async def condition_report(self, state):
+            return []
+
+        class page:
+            url = "https://example.com"
+
+    record = asyncio.run(Executor(FakeSession(), make_workflow(version="7")).run())
+    assert record.workflow_version == "7"
 
 
 def test_json_and_yaml_load_identically(tmp_path):
@@ -75,6 +113,24 @@ def test_action_timeout_zero_becomes_default():
     assert GotoAction(url="https://example.com", timeout_ms=0).timeout_ms == DEFAULT_TIMEOUT_MS
 
 
+def test_all_action_types_round_trip():
+    from typing import get_args
+
+    from netgent.schema import Action, GoBackAction, HoverAction, Workflow
+
+    union_members = get_args(get_args(Action)[0])
+    assert GoBackAction in union_members and HoverAction in union_members
+    assert len(union_members) == 9
+
+    for action in (
+        GoBackAction(),
+        HoverAction(locator=[LocatorStep(fn="get_by_role", args=["link"], kwargs={"name": "Menu"})]),
+    ):
+        wf = make_workflow(transitions=[Transition(id="t1", source="home", target="done", action=action)])
+        reloaded = Workflow.model_validate(wf.model_dump(mode="json"))
+        assert type(reloaded.transitions[0].action) is type(action)
+
+
 def test_action_union_round_trips_through_dict():
     wf = make_workflow()
     reloaded = Workflow.model_validate(wf.model_dump(mode="json"))
@@ -96,6 +152,9 @@ def test_executor_rejects_non_walkable_sequence():
         async def wait_for_state(self, state):
             return 0.0
 
+        async def condition_report(self, state):
+            return []
+
         class page:
             url = "https://example.com"
 
@@ -115,6 +174,9 @@ def test_executor_walks_sequence_with_fake_session():
 
         async def wait_for_state(self, state):
             return 1.5
+
+        async def condition_report(self, state):
+            return []
 
         class page:
             url = "https://example.com/done"

@@ -26,3 +26,6 @@ out/
 .DS_Store
 .idea/
 .vscode/
+
+# eval trajectory screenshots (heavy, regenerable; keep the json)
+v2/evals/results/**/screenshots/
