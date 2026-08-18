@@ -101,6 +101,8 @@ DOM_SNAPSHOT_JS = r"""
             type: el.getAttribute('type') || null,
             checked: (el.type === 'checkbox' || el.type === 'radio') ? !!el.checked : null,
             disabled: !!el.disabled,
+            options: el.tagName === 'SELECT'
+              ? [...el.options].map(o => o.value).filter(v => v).slice(0, 25) : null,
             value: (el.value !== undefined ? String(el.value).slice(0, 200) : null),
             framePath,
             bbox: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
@@ -146,6 +148,7 @@ class DomElement(BaseModel):
     type: str | None = None
     checked: bool | None = None  # checkbox/radio state
     disabled: bool = False
+    options: list[str] | None = None  # <select> option values
     value: str | None = None
     frame_path: list[str] = Field(default_factory=list, alias="framePath")
     bbox: BBox

@@ -31,6 +31,8 @@ def format_observation(snapshot: DomSnapshot, limit: int = 80, text_limit: int =
         elif el.role and el.role != el.tag:
             kind += f" ({el.role})"
         val = f' value="{el.value}"' if el.value else ""
+        if el.options:
+            val += f" options=[{', '.join(el.options)}]"
         name = f' "{el.name}"' if el.name else ""
         state = ""
         if el.checked is not None:
