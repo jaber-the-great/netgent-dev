@@ -1,10 +1,10 @@
-"""Deterministically complete every form on a page, one at a time, with verification.
+"""ONE agent completes every form on a page, one at a time, with verification.
 
-Rather than trust one long free-form run (which tends to over-claim "done"), the sweep
-enumerates the forms (each iframe / the top document), runs the agent scoped to just that
-form, then VERIFIES success by looking for a success marker in that form's own text — not
-the agent's self-report. This is NetGent's philosophy: deterministic orchestration, LLM per
-unit, verified outcomes.
+A single BrowserAgent — one continuous memory — works through all the forms: what worked on
+an earlier form (date formats, how to satisfy a validator) informs the later ones. The sweep
+stays deterministic around it: it enumerates the forms, scopes the agent to one form at a
+time, and VERIFIES success by looking for a success marker in that form's own text — not the
+agent's self-report. NetGent's philosophy: deterministic orchestration, verified outcomes.
 """
 
 from pydantic import BaseModel, Field
@@ -77,22 +77,24 @@ async def sweep_forms(
     retries: int = 2,
     markers: tuple[str, ...] = DEFAULT_MARKERS,
 ) -> SweepResult:
-    """Complete and verify every form on the current page.
+    """Complete and verify every form on the current page — with ONE agent.
 
-    Each form is attempted up to `retries + 1` times with a fresh agent (LLM runs vary,
-    and a later attempt has more budget), stopping as soon as a success marker is verified.
+    A single agent (one memory) is walked through the forms; each form is attempted up to
+    `retries + 1` times (LLM runs vary, and a later attempt has more budget), stopping as
+    soon as a success marker is verified.
     """
     frame_paths = await _form_frame_paths(session)
     result = SweepResult(total=len(frame_paths))
     logger.info("sweep: %d forms found", len(frame_paths))
 
+    agent = BrowserAgent(llm, max_steps=max_steps_per_form)
     for i, frame_path in enumerate(frame_paths):
         verified = False
         traj = None
         for attempt in range(retries + 1):
             budget = max_steps_per_form + attempt * (max_steps_per_form // 2)  # more room each retry
-            agent = BrowserAgent(llm, max_steps=budget)
-            traj = await agent.run(session, FORM_TASK, frame_filter=frame_path)
+            agent.note(f"--- now working form {i + 1} of {len(frame_paths)} (attempt {attempt + 1}) ---")
+            traj = await agent.run(session, FORM_TASK, frame_filter=frame_path, max_steps=budget)
             verified = await _form_succeeded(session, frame_path, markers)
             if verified:
                 break

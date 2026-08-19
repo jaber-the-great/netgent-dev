@@ -1,7 +1,7 @@
 """The form sweep completes and VERIFIES multiple forms, driven by a scripted FakeLLM.
 
-Two forms on one page (top document); each reveals a success sentinel on submit. The sweep
-runs the agent per form and verifies each via the sentinel, not the agent's self-report.
+Two forms on one page; each reveals a success sentinel on submit. ONE agent works both
+forms in turn; the sweep verifies each via the sentinel, not the agent's self-report.
 """
 
 import asyncio
@@ -29,8 +29,7 @@ def test_sweep_completes_and_verifies_each_form(tmp_path):
     page = tmp_path / "two.html"
     page.write_text(PAGE)
 
-    # One scripted decision set reused per form (the agent is rebuilt per form in the sweep):
-    # fill the (only) text field, click the (only) submit, done.
+    # One scripted decision set per form: fill the (only) text field, click submit, done.
     def script():
         return FakeLLM(
             [

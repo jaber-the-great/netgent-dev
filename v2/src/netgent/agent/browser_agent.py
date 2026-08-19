@@ -51,6 +51,13 @@ class BrowserAgent:
         # File the agent offers to any file input via kind="upload". A default sample is
         # created on demand so uploads work autonomously without the caller supplying one.
         self._upload_file = upload_file
+        # Persists across run() calls, so ONE agent can work several tasks (e.g. every form
+        # in a sweep) with continuous memory — what worked on an earlier task informs the next.
+        self._history: list[str] = []
+
+    def note(self, text: str) -> None:
+        """Append a marker to the agent's memory (e.g. 'moving on to form 3 of 21')."""
+        self._history.append(text)
 
     def _upload_path(self) -> str:
         if self._upload_file is None:
@@ -66,16 +73,17 @@ class BrowserAgent:
         task: str,
         url: str | None = None,
         frame_filter: list[str] | None = None,
+        max_steps: int | None = None,
     ) -> AgentTrajectory:
         traj = AgentTrajectory(task=task)
         if url:
             await session.page.goto(url)
 
-        history: list[str] = []
+        history = self._history  # instance-level: memory carries across run() calls
         prev_observation: str | None = None
         no_progress = 0
 
-        for n in range(1, self._max_steps + 1):
+        for n in range(1, (max_steps or self._max_steps) + 1):
             snapshot = await session.snapshot()
             if frame_filter is not None:  # focus on one form (iframe) for a sweep
                 snapshot = snapshot.scoped_to(frame_filter)
@@ -130,7 +138,7 @@ class BrowserAgent:
             outcome = f" -> FAILED: {error}" if error else ""
             history.append(f"{n}. {decision.kind}({decision.index}) {decision.reasoning}{outcome}")
         else:
-            traj.stopped_reason = f"reached max_steps={self._max_steps}"
+            traj.stopped_reason = f"reached max_steps={max_steps or self._max_steps}"
 
         if self._run_dir is not None:
             self._run_dir.mkdir(parents=True, exist_ok=True)

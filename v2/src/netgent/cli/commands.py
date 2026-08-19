@@ -11,7 +11,6 @@ from netgent.cli import (
     generate,
     run,
     schema_command,
-    sweep_command,
     trajectory_command,
 )
 
@@ -27,7 +26,6 @@ cli_app.command("doctor")(doctor.doctor)
 cli_app.command("schema")(schema_command.schema)
 cli_app.command("trajectory")(trajectory_command.trajectory)
 cli_app.command("agent")(agent_command.agent)
-cli_app.command("forms-sweep")(sweep_command.forms_sweep)
 
 
 def _version_callback(value: bool) -> None:
