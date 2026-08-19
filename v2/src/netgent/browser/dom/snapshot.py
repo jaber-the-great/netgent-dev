@@ -117,6 +117,10 @@ DOM_SNAPSHOT_JS = r"""
             type: el.getAttribute('type') || null,
             checked: (el.type === 'checkbox' || el.type === 'radio') ? !!el.checked : null,
             disabled: !!el.disabled,
+            required: !!el.required,
+            // A required field the browser considers invalid blocks native form submit
+            // silently (the validation tooltip is not in the DOM) — surface it.
+            invalid: el.willValidate ? !el.validity.valid : false,
             options: el.tagName === 'SELECT'
               ? [...el.options].map(o => o.value).filter(v => v).slice(0, 25) : null,
             value: (el.value !== undefined ? String(el.value).slice(0, 200) : null),
@@ -164,6 +168,8 @@ class DomElement(BaseModel):
     type: str | None = None
     checked: bool | None = None  # checkbox/radio state
     disabled: bool = False
+    required: bool = False
+    invalid: bool = False  # required-but-invalid: silently blocks native form submit
     options: list[str] | None = None  # <select> option values
     value: str | None = None
     frame_path: list[str] = Field(default_factory=list, alias="framePath")

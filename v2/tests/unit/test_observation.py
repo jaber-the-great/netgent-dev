@@ -26,6 +26,10 @@ def _snap() -> DomSnapshot:
                 tag="button", name="Old", disabled=True, bbox=BBox(x=0, y=0, w=1, h=1),
                 candidates=[SelectorCandidate(kind="css", value="#b")],
             ),
+            DomElement(
+                tag="input", type="text", name="Zip", required=True, invalid=True,
+                bbox=BBox(x=0, y=0, w=1, h=1), candidates=[SelectorCandidate(kind="css", value="#zip")],
+            ),
         ],
         texts=[TextBlock(text="Please fill the form"), TextBlock(text="Success!", alert=True)],
     )
@@ -38,6 +42,7 @@ def test_observation_shows_type_state_and_text():
     assert "[disabled]" in obs
     assert "VISIBLE TEXT:" in obs
     assert "!ALERT Success!" in obs  # alert messages are flagged
+    assert "[required]" in obs and "[invalid:" in obs  # blocks-submit hints surfaced
 
 
 def test_check_and_uncheck_map_to_set_checked():

@@ -26,6 +26,11 @@ Input types (shown as tag[type], e.g. input[date]):
   it is reliable for custom/hidden controls where a plain click does nothing. Never
   re-check one already [checked].
 
+Submitting forms:
+- A field marked [required] must be filled. A field marked [invalid] still blocks
+  submission (native validation is invisible on the page). If clicking Submit does
+  nothing, look for a [required]/[invalid] field you missed and fix it before retrying.
+
 Hard rules:
 - If a CAPTCHA, "verify you are human", or similar anti-bot challenge appears, do NOT attempt
   to solve it. Return kind="stop" with success=false and say a CAPTCHA blocked the task.

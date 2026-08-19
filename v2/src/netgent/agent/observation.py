@@ -40,6 +40,10 @@ def format_observation(snapshot: DomSnapshot, limit: int = 80, text_limit: int =
             state += " [checked]" if el.checked else " [unchecked]"
         if el.disabled:
             state += " [disabled]"
+        if el.required:
+            state += " [required]"
+        if el.invalid:
+            state += " [invalid: still needs a valid value]"
         lines.append(f"  [{i}] {kind}{name}{val}{state}")
     if snapshot.texts:
         lines.append("VISIBLE TEXT:")
