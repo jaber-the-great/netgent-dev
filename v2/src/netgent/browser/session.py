@@ -29,6 +29,7 @@ from netgent.schema.actions import (
     UploadFileAction,
 )
 from netgent.schema.actions import Locator as LocatorChain
+from netgent.schema.control import ParamSource
 from netgent.schema.triggers import SelectorHidden, SelectorVisible, TitleContains, Trigger, UrlMatches
 from netgent.schema.workflow import State
 
@@ -213,6 +214,25 @@ class BrowserSession:
             case SelectorHidden():
                 return not await self.page.locator(trigger.selector).first.is_visible()
         return False
+
+    async def extract_value(self, source: "ParamSource", timeout_ms: int = 5000) -> str | None:
+        """Read a dynamic parameter's value from the live page (returns None if unavailable)."""
+        try:
+            if source.kind == "url_group":
+                if not source.pattern:
+                    return None
+                match = re.search(source.pattern, self.page.url)
+                return match.group(source.group) if match else None
+            locator = self.page.locator(source.selector).first
+            if source.kind == "text":
+                return (await locator.inner_text(timeout=timeout_ms)).strip()
+            if source.kind == "input_value":
+                return await locator.input_value(timeout=timeout_ms)
+            if source.kind == "attribute":
+                return await locator.get_attribute(source.attribute, timeout=timeout_ms)
+        except Exception:  # noqa: BLE001 — a missing value is None (a healable signal), not a crash
+            return None
+        return None
 
     async def condition_report(self, state: State) -> list[tuple[str, bool]]:
         """Evaluate each of a state's conditions once; return [(type, met), ...]."""
