@@ -146,20 +146,26 @@ class BrowserSession:
         control whose real <input> is hidden behind a styled label — fall back to clicking
         the associated label in JS, which fires the framework's own handler.
         """
-        kind = (await locator.get_attribute("type")) or (await locator.get_attribute("role"))
+        # Target the first match — real sites often resolve a locator to several elements,
+        # and get_attribute/click are strict (they throw on multi-match).
+        first = locator.first
+        try:
+            kind = (await first.get_attribute("type")) or (await first.get_attribute("role"))
+        except Exception:  # noqa: BLE001 — attribute probe must never break the click
+            kind = None
         if kind not in ("checkbox", "radio"):
-            await locator.click(timeout=timeout_ms)
+            await first.click(timeout=timeout_ms)
             return
 
-        target = True if kind == "radio" else not await locator.is_checked()
+        target = True if kind == "radio" else not await first.is_checked()
         try:
-            await locator.set_checked(target, timeout=timeout_ms)
+            await first.set_checked(target, timeout=timeout_ms)
         except Exception:  # noqa: BLE001 — custom controls make set_checked time out; try the fallback
             pass
-        if await locator.is_checked() != target:
+        if await first.is_checked() != target:
             # Custom radio/checkbox: click the label (or the input) in the element's own
             # context — this fires framework listeners a synthetic input click misses.
-            await locator.evaluate("el => (el.labels && el.labels[0] ? el.labels[0] : el).click()")
+            await first.evaluate("el => (el.labels && el.labels[0] ? el.labels[0] : el).click()")
 
     async def dispatch(self, action: Action) -> None:
         try:

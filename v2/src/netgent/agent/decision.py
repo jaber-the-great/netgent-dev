@@ -4,9 +4,10 @@ Actions reference an element by its `index` in the current observation (not a ra
 which the agent resolves to a durable locator chain from the element's candidate selectors.
 """
 
+import re
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 AgentActionKind = Literal[
     "click", "fill", "select", "upload",
@@ -20,6 +21,15 @@ class AgentDecision(BaseModel):
     reasoning: str = Field(description="Brief why for this step.")
     kind: AgentActionKind
     index: int | None = Field(default=None, description="Element index from the observation (interaction actions).")
+
+    @field_validator("index", mode="before")
+    @classmethod
+    def _coerce_index(cls, value: object) -> object:
+        # The model sometimes echoes the observation's "[3]" bracket form as the index.
+        if isinstance(value, str):
+            digits = re.sub(r"[^0-9]", "", value)
+            return int(digits) if digits else None
+        return value
     text: str | None = Field(default=None, description="Text to type (fill).")
     value: str | None = Field(default=None, description="Option value/label (select).")
     url: str | None = Field(default=None, description="URL (goto).")

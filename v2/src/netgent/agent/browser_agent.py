@@ -93,7 +93,13 @@ class BrowserAgent:
                 break
             prev_observation = observation
 
-            decision = await self._llm.decide(SYSTEM_PROMPT, task, observation, history)
+            try:
+                decision = await self._llm.decide(SYSTEM_PROMPT, task, observation, history)
+            except Exception as exc:  # noqa: BLE001 — a bad LLM response shouldn't crash the run
+                logger.warning("step %d: LLM decision failed: %s", n, exc)
+                history.append(f"{n}. (your last response was invalid: {exc}) — return a valid decision")
+                prev_observation = None  # don't count this as a no-change step
+                continue
             logger.info("step %d: %s — %s", n, decision.kind, decision.reasoning)
 
             if decision.kind in ("done", "stop"):
