@@ -60,7 +60,13 @@ class BrowserAgent:
             self._upload_file = sample
         return str(self._upload_file)
 
-    async def run(self, session: BrowserSession, task: str, url: str | None = None) -> AgentTrajectory:
+    async def run(
+        self,
+        session: BrowserSession,
+        task: str,
+        url: str | None = None,
+        frame_filter: list[str] | None = None,
+    ) -> AgentTrajectory:
         traj = AgentTrajectory(task=task)
         if url:
             await session.page.goto(url)
@@ -71,6 +77,8 @@ class BrowserAgent:
 
         for n in range(1, self._max_steps + 1):
             snapshot = await session.snapshot()
+            if frame_filter is not None:  # focus on one form (iframe) for a sweep
+                snapshot = snapshot.scoped_to(frame_filter)
             observation = format_observation(snapshot)
 
             # Stuck detection is observation-based: an action that changes nothing (a failed

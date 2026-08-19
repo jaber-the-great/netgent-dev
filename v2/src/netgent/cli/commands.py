@@ -4,7 +4,16 @@ from importlib import metadata
 
 import typer
 
-from netgent.cli import agent_command, doctor, evaluate, generate, run, schema_command, trajectory_command
+from netgent.cli import (
+    agent_command,
+    doctor,
+    evaluate,
+    generate,
+    run,
+    schema_command,
+    sweep_command,
+    trajectory_command,
+)
 
 cli_app = typer.Typer(
     help="Agent-based automation of network application workflows.",
@@ -18,6 +27,7 @@ cli_app.command("doctor")(doctor.doctor)
 cli_app.command("schema")(schema_command.schema)
 cli_app.command("trajectory")(trajectory_command.trajectory)
 cli_app.command("agent")(agent_command.agent)
+cli_app.command("forms-sweep")(sweep_command.forms_sweep)
 
 
 def _version_callback(value: bool) -> None:

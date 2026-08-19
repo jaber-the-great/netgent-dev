@@ -193,6 +193,7 @@ class DomElement(BaseModel):
 class TextBlock(BaseModel):
     text: str
     alert: bool = False  # role=alert/status — a confirmation/error message
+    frame_path: list[str] = Field(default_factory=list)  # which frame the text is in
 
 
 class DomSnapshot(BaseModel):
@@ -204,3 +205,14 @@ class DomSnapshot(BaseModel):
 
     def interactive(self) -> list[DomElement]:
         return self.elements
+
+    def scoped_to(self, frame_path: list[str]) -> "DomSnapshot":
+        """A copy restricted to one frame — its elements + texts only. Used to focus the
+        agent on a single form (iframe) so a sweep can complete forms one at a time."""
+        return DomSnapshot(
+            url=self.url,
+            title=self.title,
+            elements=[e for e in self.elements if e.frame_path == frame_path],
+            texts=[t for t in self.texts if t.frame_path == frame_path],
+            viewport_height=self.viewport_height,
+        )

@@ -100,7 +100,9 @@ class BrowserSession:
                 element["framePath"] = frame_path
                 element["bbox"]["y"] += round(offset_y)  # normalize to top-viewport coordinates
                 elements.append(DomElement.model_validate(element))
-            texts.extend(TextBlock.model_validate(t) for t in raw["texts"])
+            for t in raw["texts"]:
+                t["frame_path"] = frame_path
+                texts.append(TextBlock.model_validate(t))
         return DomSnapshot(
             url=self.page.url,
             title=await self.page.title(),
