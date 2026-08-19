@@ -214,11 +214,15 @@ class DomSnapshot(BaseModel):
 
     def scoped_to(self, frame_path: list[str]) -> "DomSnapshot":
         """A copy restricted to one frame — its elements + texts only. Used to focus the
-        agent on a single form (iframe) so a sweep can complete forms one at a time."""
+        agent on a single form (iframe) so a sweep can complete forms one at a time.
+
+        viewport_height is zeroed so the observation is NOT paged: a single bounded form
+        should be shown whole, otherwise fields page out of view and the agent scroll-
+        thrashes looking for inputs it already filled."""
         return DomSnapshot(
             url=self.url,
             title=self.title,
             elements=[e for e in self.elements if e.frame_path == frame_path],
             texts=[t for t in self.texts if t.frame_path == frame_path],
-            viewport_height=self.viewport_height,
+            viewport_height=0,
         )
