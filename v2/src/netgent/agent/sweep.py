@@ -71,26 +71,38 @@ async def sweep_forms(
     llm: LLM,
     *,
     max_steps_per_form: int = 30,
+    retries: int = 2,
     markers: tuple[str, ...] = DEFAULT_MARKERS,
 ) -> SweepResult:
-    """Complete and verify every form on the current page."""
+    """Complete and verify every form on the current page.
+
+    Each form is attempted up to `retries + 1` times with a fresh agent (LLM runs vary,
+    and a later attempt has more budget), stopping as soon as a success marker is verified.
+    """
     frame_paths = await _form_frame_paths(session)
     result = SweepResult(total=len(frame_paths))
     logger.info("sweep: %d forms found", len(frame_paths))
 
     for i, frame_path in enumerate(frame_paths):
-        agent = BrowserAgent(llm, max_steps=max_steps_per_form)
-        traj = await agent.run(session, FORM_TASK, frame_filter=frame_path)
-        verified = await _form_succeeded(session, frame_path, markers)
-        last_error = next((s.error for s in reversed(traj.steps) if s.error), None)
+        verified = False
+        traj = None
+        for attempt in range(retries + 1):
+            budget = max_steps_per_form + attempt * (max_steps_per_form // 2)  # more room each retry
+            agent = BrowserAgent(llm, max_steps=budget)
+            traj = await agent.run(session, FORM_TASK, frame_filter=frame_path)
+            verified = await _form_succeeded(session, frame_path, markers)
+            if verified:
+                break
+            logger.info("sweep: form %d attempt %d not verified, retrying", i + 1, attempt + 1)
+        last_error = next((s.error for s in reversed(traj.steps) if s.error), None) if traj else None
         result.forms.append(
             FormResult(
                 form=i,
                 frame_path=frame_path,
                 submitted=verified,
-                agent_success=traj.success,
-                steps=len(traj.steps),
-                stopped_reason=traj.stopped_reason,
+                agent_success=bool(traj and traj.success),
+                steps=len(traj.steps) if traj else 0,
+                stopped_reason=traj.stopped_reason if traj else "",
                 last_error=last_error,
             )
         )

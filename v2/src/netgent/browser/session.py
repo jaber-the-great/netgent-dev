@@ -141,17 +141,25 @@ class BrowserSession:
     async def _click(self, locator: Locator, timeout_ms: int) -> None:
         """Click, with checkbox/radio handling folded in (keyed on the live element).
 
-        A checkbox toggles; a radio selects — both via Playwright's set_checked/check,
-        which is label-aware and verifies the state changed (works for custom/hidden
-        controls where a raw click on the input does nothing).
+        A checkbox toggles; a radio selects. First try Playwright's set_checked/check
+        (label-aware, verified). If the state still didn't change — the tell of a custom
+        control whose real <input> is hidden behind a styled label — fall back to clicking
+        the associated label in JS, which fires the framework's own handler.
         """
         kind = (await locator.get_attribute("type")) or (await locator.get_attribute("role"))
-        if kind == "checkbox":
-            await locator.set_checked(not await locator.is_checked(), timeout=timeout_ms)
-        elif kind == "radio":
-            await locator.check(timeout=timeout_ms)
-        else:
+        if kind not in ("checkbox", "radio"):
             await locator.click(timeout=timeout_ms)
+            return
+
+        target = True if kind == "radio" else not await locator.is_checked()
+        try:
+            await locator.set_checked(target, timeout=timeout_ms)
+        except Exception:  # noqa: BLE001 — custom controls make set_checked time out; try the fallback
+            pass
+        if await locator.is_checked() != target:
+            # Custom radio/checkbox: click the label (or the input) in the element's own
+            # context — this fires framework listeners a synthetic input click misses.
+            await locator.evaluate("el => (el.labels && el.labels[0] ? el.labels[0] : el).click()")
 
     async def dispatch(self, action: Action) -> None:
         try:
