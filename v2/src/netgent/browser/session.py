@@ -10,9 +10,9 @@ import re
 import time
 from pathlib import Path
 
-from playwright.async_api import Browser, BrowserContext, Locator, Page, Playwright, async_playwright
+from playwright.async_api import Browser, BrowserContext, Frame, Locator, Page, Playwright, async_playwright
 
-from netgent.browser.dom.snapshot import DOM_SNAPSHOT_JS, DomElement, DomSnapshot, TextBlock
+from netgent.browser.dom.snapshot import DOM_SNAPSHOT_JS, FRAME_SELECTOR_JS, DomElement, DomSnapshot, TextBlock
 from netgent.browser.dom.stealth import StealthProfile
 from netgent.core.errors import ActionDispatchError, LocatorResolutionError, TriggerTimeoutError
 from netgent.schema.actions import (
@@ -59,15 +59,40 @@ class BrowserSession:
         self._page = await self._context.new_page()
         return self
 
+    async def _frame_path(self, frame: Frame) -> list[str]:
+        """The chain of iframe CSS selectors from the top document down to `frame`.
+
+        Each selector is computed in its parent frame's context, so it works for
+        cross-origin frames too (Playwright reaches them via CDP).
+        """
+        path: list[str] = []
+        current = frame
+        while current.parent_frame is not None:
+            handle = await current.frame_element()
+            selector = await current.parent_frame.evaluate(FRAME_SELECTOR_JS, handle)
+            path.insert(0, selector)
+            current = current.parent_frame
+        return path
+
     async def snapshot(self) -> DomSnapshot:
-        """Observe the page's interactive elements + salient visible text."""
-        raw = await self.page.evaluate(DOM_SNAPSHOT_JS)
-        return DomSnapshot(
-            url=self.page.url,
-            title=await self.page.title(),
-            elements=[DomElement.model_validate(e) for e in raw["elements"]],
-            texts=[TextBlock.model_validate(t) for t in raw["texts"]],
-        )
+        """Observe interactive elements + text across ALL frames (same- and cross-origin).
+
+        The DOM walk runs inside each frame's own context (Playwright evaluates it there
+        via CDP, bypassing the same-origin policy that limits in-page contentDocument access).
+        """
+        elements: list[DomElement] = []
+        texts: list[TextBlock] = []
+        for frame in self.page.frames:
+            try:
+                frame_path = await self._frame_path(frame)
+                raw = await frame.evaluate(DOM_SNAPSHOT_JS)
+            except Exception:  # a detached/unreachable frame is skipped, not fatal
+                continue
+            for element in raw["elements"]:
+                element["framePath"] = frame_path
+                elements.append(DomElement.model_validate(element))
+            texts.extend(TextBlock.model_validate(t) for t in raw["texts"])
+        return DomSnapshot(url=self.page.url, title=await self.page.title(), elements=elements, texts=texts)
 
     async def __aexit__(self, *exc_info: object) -> None:
         if self._context:

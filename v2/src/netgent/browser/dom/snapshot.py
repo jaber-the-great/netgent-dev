@@ -85,28 +85,15 @@ DOM_SNAPSHOT_JS = r"""
     for (const n of el.childNodes) if (n.nodeType === 3) t += n.textContent;
     return clean(t);
   };
-  // A DOCUMENT-UNIQUE selector for an <iframe>, for frame_locator chains. A bare
-  // `iframe:nth-of-type(n)` is scoped to siblings, so it is ambiguous when each iframe
-  // sits in its own container — use id/name, else a full structural path (cssPath).
-  const frameSelector = (fr) => {
-    if (fr.id) return `iframe#${CSS.escape(fr.id)}`;
-    if (fr.name) return `iframe[name="${CSS.escape(fr.name)}"]`;
-    return cssPath(fr);
-  };
-  const walk = (root, framePath) => {
+  const walk = (root) => {
     let nodes;
     try { nodes = root.querySelectorAll('*'); } catch (e) { return; }
     for (const el of nodes) {
       try {
-        if (el.shadowRoot) walk(el.shadowRoot, framePath);
-        if (el.tagName === 'IFRAME') {
-          // Descend into same-origin iframes; cross-origin access throws and is skipped.
-          try {
-            const doc = el.contentDocument;
-            if (doc) walk(doc, framePath.concat([frameSelector(el)]));
-          } catch (e) { /* cross-origin frame, unreachable from page JS */ }
-          continue;
-        }
+        if (el.shadowRoot) walk(el.shadowRoot);
+        // iframes are NOT descended here — the Python layer iterates page.frames and
+        // evaluates this walk inside EACH frame's own context (works cross-origin via CDP).
+        if (el.tagName === 'IFRAME') continue;
         if (isInteractive(el)) {
           if (!visible(el)) continue;
           const r = el.getBoundingClientRect();
@@ -124,7 +111,7 @@ DOM_SNAPSHOT_JS = r"""
             options: el.tagName === 'SELECT'
               ? [...el.options].map(o => o.value).filter(v => v).slice(0, 25) : null,
             value: (el.value !== undefined ? String(el.value).slice(0, 200) : null),
-            framePath,
+            framePath: [],  // set by the Python layer from Playwright's frame tree
             bbox: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
             candidates: candidates(el),
           });
@@ -141,8 +128,32 @@ DOM_SNAPSHOT_JS = r"""
       } catch (e) { /* skip pathological node */ }
     }
   };
-  walk(document, []);
+  walk(document);
   return { elements: results, texts };
+}
+"""
+
+# Computes a document-unique CSS selector for a given element (an <iframe>), evaluated in
+# the element's OWN frame — used to build the frame_locator path for each Playwright frame.
+FRAME_SELECTOR_JS = r"""
+(fr) => {
+  if (fr.id) return `iframe#${CSS.escape(fr.id)}`;
+  if (fr.name) return `iframe[name="${CSS.escape(fr.name)}"]`;
+  const parts = [];
+  let node = fr;
+  while (node && node.nodeType === 1 && parts.length < 6) {
+    let sel = node.tagName.toLowerCase();
+    if (node.id) { parts.unshift(`#${CSS.escape(node.id)}`); break; }
+    if (node.classList && node.classList.length) sel += '.' + [...node.classList].map(c => CSS.escape(c)).join('.');
+    const parent = node.parentNode;
+    if (parent) {
+      const sibs = [...parent.children].filter(c => c.tagName === node.tagName);
+      if (sibs.length > 1) sel += `:nth-of-type(${sibs.indexOf(node) + 1})`;
+    }
+    parts.unshift(sel);
+    node = node.parentElement;
+  }
+  return parts.join(' > ');
 }
 """
 
