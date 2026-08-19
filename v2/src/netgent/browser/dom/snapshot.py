@@ -18,9 +18,15 @@ from pydantic import BaseModel, Field
 DOM_SNAPSHOT_JS = r"""
 () => {
   const INTERACTIVE = new Set(['A','BUTTON','INPUT','SELECT','TEXTAREA']);
+  // Roles you actually operate on. Container roles (radiogroup, group, list, tablist, …)
+  // are NOT here: listing them makes the agent try to click a wrapper and time out.
+  const INTERACTIVE_ROLES = new Set(['button','link','checkbox','radio','textbox','combobox',
+    'searchbox','spinbutton','slider','switch','option','tab','menuitem','menuitemcheckbox',
+    'menuitemradio','listbox']);
   const isInteractive = (el) => {
     if (INTERACTIVE.has(el.tagName)) return true;
-    if (el.hasAttribute('role')) return true;
+    const role = el.getAttribute('role');
+    if (role && INTERACTIVE_ROLES.has(role)) return true;
     if (el.hasAttribute('onclick')) return true;
     if (el.isContentEditable) return true;
     const ti = el.getAttribute && el.getAttribute('tabindex');

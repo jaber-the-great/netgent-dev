@@ -32,6 +32,8 @@ class FormResult(BaseModel):
     submitted: bool  # verified: a success marker appeared in this form
     agent_success: bool  # what the agent claimed
     steps: int
+    stopped_reason: str = ""  # why the agent's run for this form ended
+    last_error: str | None = None  # last action error seen, if any
 
 
 class SweepResult(BaseModel):
@@ -80,6 +82,7 @@ async def sweep_forms(
         agent = BrowserAgent(llm, max_steps=max_steps_per_form)
         traj = await agent.run(session, FORM_TASK, frame_filter=frame_path)
         verified = await _form_succeeded(session, frame_path, markers)
+        last_error = next((s.error for s in reversed(traj.steps) if s.error), None)
         result.forms.append(
             FormResult(
                 form=i,
@@ -87,6 +90,8 @@ async def sweep_forms(
                 submitted=verified,
                 agent_success=traj.success,
                 steps=len(traj.steps),
+                stopped_reason=traj.stopped_reason,
+                last_error=last_error,
             )
         )
         result.submitted += int(verified)
