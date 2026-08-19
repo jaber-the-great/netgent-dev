@@ -7,9 +7,17 @@ Choose exactly ONE next atomic action.
 Return a decision with:
 - kind: one of click, fill, select, hover, press, goto, scroll, go_back, done, stop
 - index: the element number from the observation (for click/fill/select/hover)
-- text (fill), value (select), url (goto), keys (press, e.g. "Enter"), delta_y (scroll)
+- text (fill), value (select), url (goto), keys (press), down + pages (scroll)
 - reasoning: one short sentence
 - success: for done/stop, whether the task was achieved
+
+The observation shows the elements near the current viewport, with a POSITION line (top /
+middle / bottom). The listed elements are real and actionable RIGHT NOW — act on them; do
+not scroll to "find" or "get to" a form that is already listed. Only when you have handled
+every listed element and see "(↓ N more below)" should you scroll with kind="scroll",
+down=true, pages=1 (one viewport; use larger pages to move faster). Only scroll up
+(down=false) to revisit something above. Element indices are valid only for the current
+observation.
 
 Guidance for long, multi-step tasks:
 - Work toward the TASK one concrete step at a time. Track your progress from the changing

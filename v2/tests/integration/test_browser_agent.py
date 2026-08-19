@@ -80,7 +80,7 @@ def test_agent_stops_on_captcha_signal(form_url, tmp_path):
 
 def test_agent_detects_stuck_loop(form_url):
     # Same no-op decision repeated → the loop detector must break, not spin to max_steps.
-    script = [AgentDecision(reasoning="scroll", kind="scroll", delta_y=100) for _ in range(10)]
+    script = [AgentDecision(reasoning="scroll", kind="scroll", down=True, pages=0.5) for _ in range(10)]
 
     async def _run():
         async with BrowserSession(headless=True) as s:

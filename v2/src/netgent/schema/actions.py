@@ -88,8 +88,13 @@ class SelectAction(_ActionBase):
 
 
 class ScrollAction(_ActionBase):
+    """Scroll by viewport pages (browser-use's model): the LLM picks a direction and a
+    fraction of a viewport, converted to pixels at dispatch. pages=10 ≈ to the end.
+    """
+
     type: Literal["scroll"] = "scroll"
-    delta_y: int
+    down: bool = True
+    pages: float = 1.0
 
 
 class SetCheckedAction(_ActionBase):

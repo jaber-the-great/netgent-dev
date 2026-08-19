@@ -200,6 +200,7 @@ class DomSnapshot(BaseModel):
     title: str
     elements: list[DomElement] = Field(default_factory=list)
     texts: list[TextBlock] = Field(default_factory=list)
+    viewport_height: int = 0  # top-frame innerHeight; 0 = unknown (show everything)
 
     def interactive(self) -> list[DomElement]:
         return self.elements

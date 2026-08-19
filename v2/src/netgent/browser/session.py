@@ -59,40 +59,55 @@ class BrowserSession:
         self._page = await self._context.new_page()
         return self
 
-    async def _frame_path(self, frame: Frame) -> list[str]:
-        """The chain of iframe CSS selectors from the top document down to `frame`.
+    async def _frame_info(self, frame: Frame) -> tuple[list[str], float]:
+        """(iframe CSS-selector chain, top-viewport Y offset) for a frame.
 
-        Each selector is computed in its parent frame's context, so it works for
-        cross-origin frames too (Playwright reaches them via CDP).
+        Both are computed in each parent frame's context, so they work for cross-origin
+        frames too (Playwright reaches them via CDP). The Y offset is the sum of each
+        iframe's getBoundingClientRect().top up the chain, i.e. the frame's top edge in
+        the TOP viewport's coordinates — used to place in-frame elements for scroll paging.
         """
         path: list[str] = []
+        offset = 0.0
         current = frame
         while current.parent_frame is not None:
             handle = await current.frame_element()
             selector = await current.parent_frame.evaluate(FRAME_SELECTOR_JS, handle)
+            top = await current.parent_frame.evaluate("(el) => el.getBoundingClientRect().top", handle)
             path.insert(0, selector)
+            offset += top
             current = current.parent_frame
-        return path
+        return path, offset
 
     async def snapshot(self) -> DomSnapshot:
         """Observe interactive elements + text across ALL frames (same- and cross-origin).
 
         The DOM walk runs inside each frame's own context (Playwright evaluates it there
         via CDP, bypassing the same-origin policy that limits in-page contentDocument access).
+        Element bbox.y is normalized to TOP-viewport coordinates so the observation can be
+        paged by scroll position.
         """
         elements: list[DomElement] = []
         texts: list[TextBlock] = []
+        viewport_height = await self.page.evaluate("() => window.innerHeight")
         for frame in self.page.frames:
             try:
-                frame_path = await self._frame_path(frame)
+                frame_path, offset_y = await self._frame_info(frame)
                 raw = await frame.evaluate(DOM_SNAPSHOT_JS)
             except Exception:  # a detached/unreachable frame is skipped, not fatal
                 continue
             for element in raw["elements"]:
                 element["framePath"] = frame_path
+                element["bbox"]["y"] += round(offset_y)  # normalize to top-viewport coordinates
                 elements.append(DomElement.model_validate(element))
             texts.extend(TextBlock.model_validate(t) for t in raw["texts"])
-        return DomSnapshot(url=self.page.url, title=await self.page.title(), elements=elements, texts=texts)
+        return DomSnapshot(
+            url=self.page.url,
+            title=await self.page.title(),
+            elements=elements,
+            texts=texts,
+            viewport_height=int(viewport_height),
+        )
 
     async def __aexit__(self, *exc_info: object) -> None:
         if self._context:
@@ -139,7 +154,9 @@ class BrowserSession:
                 case SelectAction():
                     await self._resolve(action.locator).select_option(action.value, timeout=action.timeout_ms)
                 case ScrollAction():
-                    await self.page.mouse.wheel(0, action.delta_y)
+                    viewport = await self.page.evaluate("() => window.innerHeight")
+                    pixels = int(action.pages * viewport) * (1 if action.down else -1)
+                    await self.page.mouse.wheel(0, pixels)
                 case SetCheckedAction():
                     await self._resolve(action.locator).set_checked(action.checked, timeout=action.timeout_ms)
                 case UploadFileAction():

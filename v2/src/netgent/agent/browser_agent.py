@@ -66,12 +66,25 @@ class BrowserAgent:
             await session.page.goto(url)
 
         history: list[str] = []
-        last_key: tuple[str, int | None] | None = None
-        repeats = 0
+        prev_observation: str | None = None
+        no_progress = 0
 
         for n in range(1, self._max_steps + 1):
             snapshot = await session.snapshot()
             observation = format_observation(snapshot)
+
+            # Stuck detection is observation-based: an action that changes nothing (a failed
+            # fill, a scroll at the bottom, re-doing a done step) makes no progress. A scroll
+            # that reveals a new batch DOES change the observation, so paging isn't penalized.
+            if prev_observation is not None:
+                no_progress = no_progress + 1 if observation == prev_observation else 0
+            if no_progress >= MAX_REPEAT:
+                reason = f"stuck: {MAX_REPEAT} steps with no change on screen"
+                traj.stopped_reason = reason
+                traj.steps.append(AgentStep(n=n, kind="stop", reasoning=reason, url=snapshot.url, error=reason))
+                break
+            prev_observation = observation
+
             decision = await self._llm.decide(SYSTEM_PROMPT, task, observation, history)
             logger.info("step %d: %s — %s", n, decision.kind, decision.reasoning)
 
@@ -79,14 +92,6 @@ class BrowserAgent:
                 traj.success = decision.kind == "done" and decision.success
                 traj.stopped_reason = decision.reasoning
                 traj.steps.append(self._step(n, decision, snapshot.url))
-                break
-
-            key = (decision.kind, decision.index)
-            repeats = repeats + 1 if key == last_key else 0
-            last_key = key
-            if repeats >= MAX_REPEAT:
-                traj.stopped_reason = f"stuck: repeated {decision.kind} {repeats + 1}×"
-                traj.steps.append(self._step(n, decision, snapshot.url, error=traj.stopped_reason))
                 break
 
             error = None

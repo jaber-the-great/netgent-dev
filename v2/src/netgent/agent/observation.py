@@ -23,9 +23,33 @@ from netgent.schema.actions import (
 )
 
 
-def format_observation(snapshot: DomSnapshot, limit: int = 80, text_limit: int = 30) -> str:
-    lines = [f"URL: {snapshot.url}", f"TITLE: {snapshot.title}", "INTERACTIVE ELEMENTS:"]
-    for i, el in enumerate(snapshot.interactive()[:limit]):
+def format_observation(snapshot: DomSnapshot, limit: int = 60, text_limit: int = 25) -> str:
+    """Render the near-viewport slice of the page. Elements keep their original snapshot
+    index (what the agent references); scrolling shifts which slice is shown."""
+    lines = [f"URL: {snapshot.url}", f"TITLE: {snapshot.title}"]
+
+    # Page the elements by top-viewport position so scroll reveals the next batch.
+    vh = snapshot.viewport_height or 0
+    indexed = list(enumerate(snapshot.interactive()))
+    if vh:
+        above = sum(1 for _, el in indexed if el.bbox.y < -60)
+        visible = sorted((ie for ie in indexed if ie[1].bbox.y >= -60), key=lambda ie: ie[1].bbox.y)
+    else:  # viewport unknown → show in document order, no paging
+        above, visible = 0, indexed
+    shown = visible[:limit]
+    below = len(visible) - len(shown)
+    if vh:
+        if not above and below:
+            lines.append("POSITION: top of page. The elements below are the first ones — act on them.")
+        elif above and not below:
+            lines.append("POSITION: bottom of page. Nothing more below; do not scroll down further.")
+        elif above and below:
+            lines.append("POSITION: middle of page.")
+    if above:
+        lines.append(f"(↑ {above} elements above — already handled; scroll up only to revisit)")
+    lines.append("INTERACTIVE ELEMENTS (near viewport):")
+
+    for i, el in shown:
         kind = el.tag
         if el.type:  # input[date], input[file], input[email] — the agent needs the type
             kind += f"[{el.type}]"
@@ -45,6 +69,8 @@ def format_observation(snapshot: DomSnapshot, limit: int = 80, text_limit: int =
         if el.invalid:
             state += " [invalid: still needs a valid value]"
         lines.append(f"  [{i}] {kind}{name}{val}{state}")
+    if below:
+        lines.append(f"(↓ {below} more elements below — scroll down to reveal and reach them)")
     if snapshot.texts:
         lines.append("VISIBLE TEXT:")
         for t in snapshot.texts[:text_limit]:
@@ -120,7 +146,10 @@ def to_action(decision: AgentDecision, snapshot: DomSnapshot, upload_path: str |
         case "press":
             return PressAction(keys=decision.keys or "Enter")
         case "scroll":
-            return ScrollAction(delta_y=decision.delta_y or 400)
+            return ScrollAction(
+                down=decision.down if decision.down is not None else True,
+                pages=decision.pages if decision.pages is not None else 1.0,
+            )
         case "go_back":
             return GoBackAction()
     raise ValueError(f"{decision.kind} is not a dispatchable action")
