@@ -32,7 +32,6 @@ from netgent.schema.control import (
     EdgeStep,
     Milestone,
     Param,
-    ParamSource,
     Repeat,
 )
 from netgent.schema.export import SCHEMAS, generate, render, write_all
@@ -52,7 +51,6 @@ __all__ = [
     "EdgeStep",
     "Milestone",
     "Param",
-    "ParamSource",
     "Repeat",
     "resolve_params",
     "FillAction",

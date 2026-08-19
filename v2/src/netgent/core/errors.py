@@ -51,8 +51,3 @@ class ElementDriftError(ExecutionError):
 
     Reserved for the resolution/fingerprint layer (docs/browser-layer-design.md §2).
     """
-
-
-class ParamError(ExecutionError):
-    """A parameter couldn't be resolved: missing required value, a dynamic extraction that
-    failed, or a value that failed its `validate` guard. A healable drift signal."""

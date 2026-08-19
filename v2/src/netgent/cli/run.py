@@ -26,11 +26,12 @@ def run(
 
     from netgent.browser.session import BrowserSession
     from netgent.executor.engine import Executor
-    from netgent.schema.workflow import load_workflow
+    from netgent.schema.workflow import load_workflow, resolve_params
 
     try:
         wf = load_workflow(workflow)
         values = dict(p.split("=", 1) for p in (param or []))
+        wf = resolve_params(wf, values)
     except (ValidationError, ValueError) as exc:
         typer.secho(f"invalid workflow artifact: {exc}", fg="red", err=True)
         raise typer.Exit(1) from exc
@@ -40,8 +41,7 @@ def run(
 
     async def _run():
         async with BrowserSession(headless=headless, stealth=stealth) as session:
-            # params are substituted at dispatch (statics upfront, dynamics from the live page)
-            return await Executor(session, wf, run_dir=trajectory_dir, params=values).run()
+            return await Executor(session, wf, run_dir=trajectory_dir).run()
 
     record = asyncio.run(_run())
 

@@ -13,7 +13,6 @@ from netgent.cli import (
     schema_command,
     sweep_command,
     trajectory_command,
-    variations_command,
 )
 
 cli_app = typer.Typer(
@@ -29,7 +28,6 @@ cli_app.command("schema")(schema_command.schema)
 cli_app.command("trajectory")(trajectory_command.trajectory)
 cli_app.command("agent")(agent_command.agent)
 cli_app.command("forms-sweep")(sweep_command.forms_sweep)
-cli_app.command("infer-params")(variations_command.infer_params)
 
 
 def _version_callback(value: bool) -> None:
