@@ -112,7 +112,9 @@ class BrowserAgent:
                 except Exception:  # noqa: BLE001 — a screenshot must never fail the run
                     pass
             traj.steps.append(step)
-            history.append(f"{n}. {decision.kind}({decision.index}) {decision.reasoning}")
+            # Feed failures back so the agent can recover instead of repeating them.
+            outcome = f" -> FAILED: {error}" if error else ""
+            history.append(f"{n}. {decision.kind}({decision.index}) {decision.reasoning}{outcome}")
         else:
             traj.stopped_reason = f"reached max_steps={self._max_steps}"
 

@@ -11,13 +11,15 @@ Return a decision with:
 - reasoning: one short sentence
 - success: for done/stop, whether the task was achieved
 
-The observation shows the elements near the current viewport, with a POSITION line (top /
-middle / bottom). The listed elements are real and actionable RIGHT NOW — act on them; do
-not scroll to "find" or "get to" a form that is already listed. Only when you have handled
-every listed element and see "(↓ N more below)" should you scroll with kind="scroll",
-down=true, pages=1 (one viewport; use larger pages to move faster). Only scroll up
-(down=false) to revisit something above. Element indices are valid only for the current
-observation.
+The observation shows the elements near the current viewport, with a POSITION line. The
+listed elements are real and actionable RIGHT NOW.
+
+NEVER scroll to explore, survey, "see all forms first", or "understand the layout" — you
+already have everything you need in the current observation. Your action must operate on a
+listed element (fill/select/check/click). Only AFTER you have filled and submitted every
+form currently listed, and you see "(↓ N more below)", scroll with kind="scroll", down=true,
+pages=1 to reveal the next batch. Scroll up (down=false) only to revisit something above.
+Element indices are valid only for the current observation.
 
 Guidance for long, multi-step tasks:
 - Work toward the TASK one concrete step at a time. Track your progress from the changing

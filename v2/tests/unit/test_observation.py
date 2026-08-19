@@ -58,6 +58,34 @@ def test_bad_index_raises():
         to_action(AgentDecision(reasoning="x", kind="click", index=99), _snap())
 
 
+def test_action_type_guards_give_corrective_errors():
+    snap = DomSnapshot(
+        url="u", title="t",
+        elements=[
+            DomElement(tag="input", type="date", name="DOB", bbox=BBox(x=0, y=0, w=1, h=1),
+                       candidates=[SelectorCandidate(kind="css", value="#d")]),
+            DomElement(tag="select", name="Country", options=["usa", "uk"], bbox=BBox(x=0, y=0, w=1, h=1),
+                       candidates=[SelectorCandidate(kind="css", value="#c")]),
+            DomElement(tag="input", type="text", name="Zip", bbox=BBox(x=0, y=0, w=1, h=1),
+                       candidates=[SelectorCandidate(kind="css", value="#z")]),
+        ],
+    )
+    # select on a date input → tells the agent to fill instead (the exact stall we hit)
+    with pytest.raises(ValueError, match="not a dropdown"):
+        to_action(AgentDecision(reasoning="x", kind="select", index=0, value="2024-01-01"), snap)
+    # fill on a real dropdown → tells the agent to select
+    with pytest.raises(ValueError, match="use 'select'"):
+        to_action(AgentDecision(reasoning="x", kind="fill", index=1, text="usa"), snap)
+    # select value not among options → lists the valid options
+    with pytest.raises(ValueError, match="not an option"):
+        to_action(AgentDecision(reasoning="x", kind="select", index=1, value="france"), snap)
+    # check on a plain text input → not a checkbox/radio
+    with pytest.raises(ValueError, match="not a checkbox/radio"):
+        to_action(AgentDecision(reasoning="x", kind="check", index=2), snap)
+    # a valid select still works
+    assert to_action(AgentDecision(reasoning="x", kind="select", index=1, value="uk"), snap).value == "uk"
+
+
 def test_iframe_element_gets_frame_locator_prefix():
     from netgent.agent.observation import _locator_for
 

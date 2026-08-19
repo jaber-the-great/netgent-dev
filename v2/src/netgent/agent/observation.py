@@ -134,22 +134,41 @@ def to_action(decision: AgentDecision, snapshot: DomSnapshot, upload_path: str |
                 raise ValueError("no upload file configured for this agent")
             return UploadFileAction(locator=_locator_for(element()), paths=[upload_path])
         case "fill":
-            return FillAction(locator=_locator_for(element()), text=decision.text or "")
+            el = element()
+            if el.tag == "select":
+                raise ValueError(f"element {decision.index} is a dropdown — use 'select' with one of its options")
+            return FillAction(locator=_locator_for(el), text=decision.text or "")
         case "select":
-            return SelectAction(locator=_locator_for(element()), value=decision.value or "")
-        case "check":
-            return SetCheckedAction(locator=_locator_for(element()), checked=True)
-        case "uncheck":
-            return SetCheckedAction(locator=_locator_for(element()), checked=False)
+            el = element()
+            if el.tag != "select":
+                kind = f"{el.tag}[{el.type}]" if el.type else el.tag
+                raise ValueError(
+                    f"element {decision.index} is <{kind}>, not a dropdown — use 'fill'"
+                    " (dates as YYYY-MM-DD), or 'check' for a radio/checkbox"
+                )
+            if el.options and decision.value and decision.value not in el.options:
+                raise ValueError(f"'{decision.value}' is not an option; choose one of {el.options}")
+            return SelectAction(locator=_locator_for(el), value=decision.value or "")
+        case "check" | "uncheck":
+            el = element()
+            if not (el.tag == "input" and el.type in ("checkbox", "radio")):
+                raise ValueError(f"element {decision.index} is not a checkbox/radio — use 'click' or 'fill'")
+            return SetCheckedAction(locator=_locator_for(el), checked=decision.kind == "check")
         case "hover":
             return HoverAction(locator=_locator_for(element()))
         case "press":
             return PressAction(keys=decision.keys or "Enter")
         case "scroll":
-            return ScrollAction(
-                down=decision.down if decision.down is not None else True,
-                pages=decision.pages if decision.pages is not None else 1.0,
-            )
+            down = decision.down if decision.down is not None else True
+            # Guard against survey-scrolling: don't scroll past required fields still in view.
+            if down and snapshot.viewport_height:
+                vh = snapshot.viewport_height
+                pending = [i for i, e in enumerate(snapshot.interactive()) if e.invalid and 0 <= e.bbox.y <= vh]
+                if pending:
+                    raise ValueError(
+                        f"do not scroll yet — fill the [required]/[invalid] fields in view first: {pending[:8]}"
+                    )
+            return ScrollAction(down=down, pages=decision.pages if decision.pages is not None else 1.0)
         case "go_back":
             return GoBackAction()
     raise ValueError(f"{decision.kind} is not a dispatchable action")
