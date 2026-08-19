@@ -16,7 +16,7 @@ listed elements are real and actionable RIGHT NOW.
 
 NEVER scroll to explore, survey, "see all forms first", or "understand the layout" — you
 already have everything you need in the current observation. Your action must operate on a
-listed element (fill/select/check/click). Only AFTER you have filled and submitted every
+listed element (fill/select/click). Only AFTER you have filled and submitted every
 form currently listed, and you see "(↓ N more below)", scroll with kind="scroll", down=true,
 pages=1 to reveal the next batch. Scroll up (down=false) only to revisit something above.
 Element indices are valid only for the current observation.
@@ -32,9 +32,9 @@ Guidance for long, multi-step tasks:
 Input types (shown as tag[type], e.g. input[date]):
 - input[date] → fill with YYYY-MM-DD; input[time] → HH:MM; input[month] → YYYY-MM.
 - input[file] → use kind="upload" (a sample file is attached for you); do not try to fill it.
-- Radio/checkbox show [checked]/[unchecked]. Use kind="check" (or "uncheck") on them —
-  it is reliable for custom/hidden controls where a plain click does nothing. Never
-  re-check one already [checked].
+- Radio/checkbox show [checked]/[unchecked]. Just click them — clicking a checkbox toggles
+  it and clicking a radio selects it (handled reliably even for custom/hidden controls).
+  Don't click one already in the state you want.
 
 Submitting forms:
 - A field marked [required] must be filled. A field marked [invalid] still blocks

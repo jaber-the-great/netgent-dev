@@ -45,12 +45,30 @@ def test_observation_shows_type_state_and_text():
     assert "[required]" in obs and "[invalid:" in obs  # blocks-submit hints surfaced
 
 
-def test_check_and_uncheck_map_to_set_checked():
-    snap = _snap()
-    checked = to_action(AgentDecision(reasoning="x", kind="check", index=1), snap)
-    assert isinstance(checked, SetCheckedAction) and checked.checked is True
-    unchecked = to_action(AgentDecision(reasoning="x", kind="uncheck", index=1), snap)
-    assert isinstance(unchecked, SetCheckedAction) and unchecked.checked is False
+def test_click_routes_checkbox_and_radio_to_set_checked():
+    from netgent.schema.actions import ClickAction
+
+    snap = DomSnapshot(
+        url="u", title="t",
+        elements=[
+            DomElement(tag="input", type="radio", name="Email", checked=False, bbox=BBox(x=0, y=0, w=1, h=1),
+                       candidates=[SelectorCandidate(kind="css", value="#r")]),
+            DomElement(tag="input", type="checkbox", name="TOS", checked=False, bbox=BBox(x=0, y=0, w=1, h=1),
+                       candidates=[SelectorCandidate(kind="css", value="#cb")]),
+            DomElement(tag="input", type="checkbox", name="News", checked=True, bbox=BBox(x=0, y=0, w=1, h=1),
+                       candidates=[SelectorCandidate(kind="css", value="#nb")]),
+            DomElement(tag="button", name="Go", bbox=BBox(x=0, y=0, w=1, h=1),
+                       candidates=[SelectorCandidate(kind="css", value="#b")]),
+        ],
+    )
+    # click a radio → select it (checked=True)
+    radio = to_action(AgentDecision(reasoning="x", kind="click", index=0), snap)
+    assert isinstance(radio, SetCheckedAction) and radio.checked is True
+    # click an unchecked checkbox → check it; click a checked one → uncheck it (toggle)
+    assert to_action(AgentDecision(reasoning="x", kind="click", index=1), snap).checked is True
+    assert to_action(AgentDecision(reasoning="x", kind="click", index=2), snap).checked is False
+    # click a plain button → a normal click
+    assert isinstance(to_action(AgentDecision(reasoning="x", kind="click", index=3), snap), ClickAction)
 
 
 def test_bad_index_raises():
@@ -79,9 +97,6 @@ def test_action_type_guards_give_corrective_errors():
     # select value not among options → lists the valid options
     with pytest.raises(ValueError, match="not an option"):
         to_action(AgentDecision(reasoning="x", kind="select", index=1, value="france"), snap)
-    # check on a plain text input → not a checkbox/radio
-    with pytest.raises(ValueError, match="not a checkbox/radio"):
-        to_action(AgentDecision(reasoning="x", kind="check", index=2), snap)
     # a valid select still works
     assert to_action(AgentDecision(reasoning="x", kind="select", index=1, value="uk"), snap).value == "uk"
 

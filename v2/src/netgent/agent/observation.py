@@ -128,7 +128,14 @@ def to_action(decision: AgentDecision, snapshot: DomSnapshot, upload_path: str |
                 raise ValueError("goto needs a url")
             return GotoAction(url=decision.url)
         case "click":
-            return ClickAction(locator=_locator_for(element()))
+            el = element()
+            # Clicking a checkbox/radio routes to the robust set_checked path (label-aware,
+            # verified, idempotent) — so the agent only needs one verb, "click".
+            if el.tag == "input" and el.type == "checkbox":
+                return SetCheckedAction(locator=_locator_for(el), checked=not bool(el.checked))
+            if el.tag == "input" and el.type == "radio":
+                return SetCheckedAction(locator=_locator_for(el), checked=True)
+            return ClickAction(locator=_locator_for(el))
         case "upload":
             if not upload_path:
                 raise ValueError("no upload file configured for this agent")
@@ -144,16 +151,11 @@ def to_action(decision: AgentDecision, snapshot: DomSnapshot, upload_path: str |
                 kind = f"{el.tag}[{el.type}]" if el.type else el.tag
                 raise ValueError(
                     f"element {decision.index} is <{kind}>, not a dropdown — use 'fill'"
-                    " (dates as YYYY-MM-DD), or 'check' for a radio/checkbox"
+                    " (dates as YYYY-MM-DD), or 'click' for a radio/checkbox"
                 )
             if el.options and decision.value and decision.value not in el.options:
                 raise ValueError(f"'{decision.value}' is not an option; choose one of {el.options}")
             return SelectAction(locator=_locator_for(el), value=decision.value or "")
-        case "check" | "uncheck":
-            el = element()
-            if not (el.tag == "input" and el.type in ("checkbox", "radio")):
-                raise ValueError(f"element {decision.index} is not a checkbox/radio — use 'click' or 'fill'")
-            return SetCheckedAction(locator=_locator_for(el), checked=decision.kind == "check")
         case "hover":
             return HoverAction(locator=_locator_for(element()))
         case "press":
