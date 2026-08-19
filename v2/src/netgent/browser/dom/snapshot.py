@@ -85,12 +85,13 @@ DOM_SNAPSHOT_JS = r"""
     for (const n of el.childNodes) if (n.nodeType === 3) t += n.textContent;
     return clean(t);
   };
-  // A CSS selector locating an <iframe> within its own document, for frame_locator chains.
+  // A DOCUMENT-UNIQUE selector for an <iframe>, for frame_locator chains. A bare
+  // `iframe:nth-of-type(n)` is scoped to siblings, so it is ambiguous when each iframe
+  // sits in its own container — use id/name, else a full structural path (cssPath).
   const frameSelector = (fr) => {
     if (fr.id) return `iframe#${CSS.escape(fr.id)}`;
     if (fr.name) return `iframe[name="${CSS.escape(fr.name)}"]`;
-    const sibs = [...fr.ownerDocument.querySelectorAll('iframe')];
-    return `iframe:nth-of-type(${sibs.indexOf(fr) + 1})`;
+    return cssPath(fr);
   };
   const walk = (root, framePath) => {
     let nodes;
