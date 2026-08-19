@@ -97,14 +97,6 @@ class ScrollAction(_ActionBase):
     pages: float = 1.0
 
 
-class SetCheckedAction(_ActionBase):
-    """Set a checkbox/radio to a state (Playwright .set_checked: label-aware, idempotent)."""
-
-    type: Literal["set_checked"] = "set_checked"
-    locator: Locator
-    checked: bool = True
-
-
 class UploadFileAction(_ActionBase):
     """Set the file(s) on a file input (Playwright .set_input_files)."""
 
@@ -140,7 +132,6 @@ Action = Annotated[
         PressAction,
         SelectAction,
         ScrollAction,
-        SetCheckedAction,
         UploadFileAction,
         GoBackAction,
         HoverAction,

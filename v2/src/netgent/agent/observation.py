@@ -18,7 +18,6 @@ from netgent.schema.actions import (
     PressAction,
     ScrollAction,
     SelectAction,
-    SetCheckedAction,
     UploadFileAction,
 )
 
@@ -128,14 +127,10 @@ def to_action(decision: AgentDecision, snapshot: DomSnapshot, upload_path: str |
                 raise ValueError("goto needs a url")
             return GotoAction(url=decision.url)
         case "click":
-            el = element()
-            # Clicking a checkbox/radio routes to the robust set_checked path (label-aware,
-            # verified, idempotent) — so the agent only needs one verb, "click".
-            if el.tag == "input" and el.type == "checkbox":
-                return SetCheckedAction(locator=_locator_for(el), checked=not bool(el.checked))
-            if el.tag == "input" and el.type == "radio":
-                return SetCheckedAction(locator=_locator_for(el), checked=True)
-            return ClickAction(locator=_locator_for(el))
+            # One click verb for everything. Checkbox/radio handling (toggle/select via
+            # a verified, label-aware path) lives in the click dispatch, keyed on the live
+            # element — so both the agent and the schema stay simple.
+            return ClickAction(locator=_locator_for(element()))
         case "upload":
             if not upload_path:
                 raise ValueError("no upload file configured for this agent")

@@ -26,7 +26,6 @@ from netgent.schema.actions import (
     PressAction,
     ScrollAction,
     SelectAction,
-    SetCheckedAction,
     UploadFileAction,
 )
 from netgent.schema.actions import Locator as LocatorChain
@@ -139,13 +138,28 @@ class BrowserSession:
             raise LocatorResolutionError("empty locator chain")
         return target
 
+    async def _click(self, locator: Locator, timeout_ms: int) -> None:
+        """Click, with checkbox/radio handling folded in (keyed on the live element).
+
+        A checkbox toggles; a radio selects — both via Playwright's set_checked/check,
+        which is label-aware and verifies the state changed (works for custom/hidden
+        controls where a raw click on the input does nothing).
+        """
+        kind = (await locator.get_attribute("type")) or (await locator.get_attribute("role"))
+        if kind == "checkbox":
+            await locator.set_checked(not await locator.is_checked(), timeout=timeout_ms)
+        elif kind == "radio":
+            await locator.check(timeout=timeout_ms)
+        else:
+            await locator.click(timeout=timeout_ms)
+
     async def dispatch(self, action: Action) -> None:
         try:
             match action:
                 case GotoAction():
                     await self.page.goto(action.url, timeout=action.timeout_ms)
                 case ClickAction():
-                    await self._resolve(action.locator).click(timeout=action.timeout_ms)
+                    await self._click(self._resolve(action.locator), action.timeout_ms)
                 case FillAction():
                     await self._resolve(action.locator).fill(action.text, timeout=action.timeout_ms)
                 case PressAction():
@@ -159,8 +173,6 @@ class BrowserSession:
                     viewport = await self.page.evaluate("() => window.innerHeight")
                     pixels = int(action.pages * viewport) * (1 if action.down else -1)
                     await self.page.mouse.wheel(0, pixels)
-                case SetCheckedAction():
-                    await self._resolve(action.locator).set_checked(action.checked, timeout=action.timeout_ms)
                 case UploadFileAction():
                     await self._resolve(action.locator).set_input_files(action.paths, timeout=action.timeout_ms)
                 case GoBackAction():

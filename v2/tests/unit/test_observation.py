@@ -5,7 +5,7 @@ import pytest
 from netgent.agent.decision import AgentDecision
 from netgent.agent.observation import format_observation, to_action
 from netgent.browser.dom.snapshot import BBox, DomElement, DomSnapshot, SelectorCandidate, TextBlock
-from netgent.schema.actions import SetCheckedAction
+from netgent.schema.actions import ClickAction
 
 
 def _snap() -> DomSnapshot:
@@ -45,30 +45,20 @@ def test_observation_shows_type_state_and_text():
     assert "[required]" in obs and "[invalid:" in obs  # blocks-submit hints surfaced
 
 
-def test_click_routes_checkbox_and_radio_to_set_checked():
-    from netgent.schema.actions import ClickAction
-
+def test_click_always_maps_to_click_action():
+    # The single click verb produces a ClickAction for everything; checkbox/radio toggle
+    # vs select is handled at dispatch (keyed on the live element), tested in integration.
     snap = DomSnapshot(
         url="u", title="t",
         elements=[
-            DomElement(tag="input", type="radio", name="Email", checked=False, bbox=BBox(x=0, y=0, w=1, h=1),
-                       candidates=[SelectorCandidate(kind="css", value="#r")]),
             DomElement(tag="input", type="checkbox", name="TOS", checked=False, bbox=BBox(x=0, y=0, w=1, h=1),
                        candidates=[SelectorCandidate(kind="css", value="#cb")]),
-            DomElement(tag="input", type="checkbox", name="News", checked=True, bbox=BBox(x=0, y=0, w=1, h=1),
-                       candidates=[SelectorCandidate(kind="css", value="#nb")]),
             DomElement(tag="button", name="Go", bbox=BBox(x=0, y=0, w=1, h=1),
                        candidates=[SelectorCandidate(kind="css", value="#b")]),
         ],
     )
-    # click a radio → select it (checked=True)
-    radio = to_action(AgentDecision(reasoning="x", kind="click", index=0), snap)
-    assert isinstance(radio, SetCheckedAction) and radio.checked is True
-    # click an unchecked checkbox → check it; click a checked one → uncheck it (toggle)
-    assert to_action(AgentDecision(reasoning="x", kind="click", index=1), snap).checked is True
-    assert to_action(AgentDecision(reasoning="x", kind="click", index=2), snap).checked is False
-    # click a plain button → a normal click
-    assert isinstance(to_action(AgentDecision(reasoning="x", kind="click", index=3), snap), ClickAction)
+    assert isinstance(to_action(AgentDecision(reasoning="x", kind="click", index=0), snap), ClickAction)
+    assert isinstance(to_action(AgentDecision(reasoning="x", kind="click", index=1), snap), ClickAction)
 
 
 def test_bad_index_raises():
