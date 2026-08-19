@@ -43,19 +43,22 @@ class SweepResult(BaseModel):
 
 
 async def _form_frame_paths(session: BrowserSession) -> list[list[str]]:
-    """Distinct frames that contain a submit-like button, in document order."""
+    """Distinct frames that hold an actual form — a fillable field AND a submit button.
+
+    Requiring a field (not just any button) excludes the top document, whose only
+    "buttons" belong to page chrome around the embedded form iframes.
+    """
     snapshot = await session.snapshot()
+    fields = {"input", "select", "textarea"}
+    by_frame: dict[tuple[str, ...], set[str]] = {}
     order: list[list[str]] = []
-    seen: set[tuple[str, ...]] = set()
     for el in snapshot.elements:
         key = tuple(el.frame_path)
-        if key in seen:
-            continue
-        # a form frame has a button (submit) somewhere in it
-        if any(tuple(e.frame_path) == key and e.tag == "button" for e in snapshot.elements):
-            seen.add(key)
+        if key not in by_frame:
+            by_frame[key] = set()
             order.append(el.frame_path)
-    return order
+        by_frame[key].add(el.tag)
+    return [fp for fp in order if (by_frame[tuple(fp)] & fields) and "button" in by_frame[tuple(fp)]]
 
 
 async def _form_succeeded(session: BrowserSession, frame_path: list[str], markers: tuple[str, ...]) -> bool:
