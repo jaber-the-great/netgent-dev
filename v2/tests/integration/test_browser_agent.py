@@ -59,7 +59,7 @@ def test_agent_completes_a_form_with_scripted_llm(form_url, tmp_path):
 
     traj = asyncio.run(_run())
     assert traj.success, [(s.kind, s.error) for s in traj.steps]
-    assert [s.kind for s in traj.steps] == ["fill", "fill", "click", "done"]
+    assert [s.kind for s in traj.steps] == ["goto", "fill", "fill", "click", "done"]
     assert (tmp_path / "traj" / "trajectory.json").is_file()
     # screenshots captured for the acting steps
     assert any(s.screenshot for s in traj.steps)
