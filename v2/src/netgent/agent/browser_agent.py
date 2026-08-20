@@ -21,7 +21,7 @@ from netgent.agent.prompt import SYSTEM_PROMPT
 from netgent.browser.session import BrowserSession
 from netgent.core.errors import ExecutionError
 from netgent.core.logger import get_logger
-from netgent.schema.actions import Action, GotoAction
+from netgent.schema.actions import Action, GotoAction, WaitAction
 
 logger = get_logger(__name__)
 
@@ -154,6 +154,8 @@ class BrowserAgent:
             traj.steps.append(step)
             # Feed failures back so the agent can recover instead of repeating them.
             outcome = f" -> FAILED: {error}" if error else ""
+            if error is None and isinstance(action, WaitAction):
+                outcome = f" -> DONE WAITING: you already watched/waited {action.seconds:g}s. Do NOT wait again."
             history.append(f"{n}. {decision.kind}({decision.index}) {decision.reasoning}{outcome}")
         else:
             traj.stopped_reason = f"reached max_steps={max_steps or self._max_steps}"

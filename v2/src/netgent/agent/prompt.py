@@ -5,11 +5,14 @@ OBSERVATION of the current page: its URL, title, and a numbered list of interact
 Choose exactly ONE next atomic action.
 
 Return a decision with:
-- kind: one of click, fill, select, hover, press, goto, scroll, go_back, done, stop
+- kind: one of click, fill, select, hover, press, goto, scroll, go_back, wait, done, stop
 - index: the element number from the observation (for click/fill/select/hover)
-- text (fill), value (select), url (goto), keys (press), down + pages (scroll)
+- text (fill), value (select), url (goto), keys (press), down + pages (scroll), seconds (wait)
 - reasoning: one short sentence
 - success: for done/stop, whether the task was achieved
+
+Use kind="wait" with seconds=N to dwell on the page — e.g. when the task says to watch a
+video or stream for some time. Wait ONCE for the full duration, then declare done.
 
 The observation shows the elements near the current viewport, with a POSITION line. The
 listed elements are real and actionable RIGHT NOW.

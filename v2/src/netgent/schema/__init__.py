@@ -23,6 +23,7 @@ from netgent.schema.actions import (
     ScrollAction,
     SelectAction,
     UploadFileAction,
+    WaitAction,
 )
 from netgent.schema.control import (
     Branch,
@@ -67,6 +68,7 @@ __all__ = [
     "ScrollAction",
     "SelectAction",
     "UploadFileAction",
+    "WaitAction",
     "SelectorHidden",
     "SelectorVisible",
     "State",

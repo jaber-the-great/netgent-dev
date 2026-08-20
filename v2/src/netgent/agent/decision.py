@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 
 AgentActionKind = Literal[
     "click", "fill", "select", "upload",
-    "hover", "press", "goto", "scroll", "go_back", "done", "stop",
+    "hover", "press", "goto", "scroll", "go_back", "wait", "done", "stop",
 ]
 
 
@@ -35,5 +35,6 @@ class AgentDecision(BaseModel):
     url: str | None = Field(default=None, description="URL (goto).")
     keys: str | None = Field(default=None, description="Key or combo (press), e.g. 'Enter'.")
     down: bool | None = Field(default=None, description="Scroll direction: true=down, false=up (scroll).")
+    seconds: float | None = Field(default=None, description="How long to dwell/watch, in seconds (wait).")
     pages: float | None = Field(default=None, description="Scroll amount in viewport pages, e.g. 1.0 (scroll).")
     success: bool = Field(default=False, description="For done/stop: whether the task was achieved.")

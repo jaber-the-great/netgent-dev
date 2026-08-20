@@ -27,6 +27,7 @@ from netgent.schema.actions import (
     ScrollAction,
     SelectAction,
     UploadFileAction,
+    WaitAction,
 )
 from netgent.schema.actions import Locator as LocatorChain
 from netgent.schema.control import ParamSource
@@ -192,6 +193,8 @@ class BrowserSession:
                     await self._resolve(action.locator).set_input_files(action.paths, timeout=action.timeout_ms)
                 case GoBackAction():
                     await self.page.go_back(timeout=action.timeout_ms)
+                case WaitAction():
+                    await self.page.wait_for_timeout(action.seconds * 1000)
                 case HoverAction():
                     await self._resolve(action.locator).hover(timeout=action.timeout_ms)
                 case NoopAction():

@@ -22,9 +22,7 @@ states:
   timeout_ms: 10000
 - id: s4
   description: ''
-  conditions:
-  - type: url_matches
-    pattern: https://www\.youtube\.com/results
+  conditions: []
   timeout_ms: 10000
 - id: s5
   description: ''
@@ -32,9 +30,27 @@ states:
   timeout_ms: 10000
 - id: s6
   description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s7
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/results
+  timeout_ms: 10000
+- id: s8
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s9
+  description: ''
   conditions:
   - type: url_matches
     pattern: https://www\.youtube\.com/watch
+  timeout_ms: 10000
+- id: s10
+  description: ''
+  conditions: []
   timeout_ms: 10000
 transitions:
 - id: t1
@@ -74,19 +90,56 @@ transitions:
   target: s4
   action:
     timeout_ms: 5000
-    type: press
-    keys: Enter
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: Search
 - id: t5
   source: s4
   target: s5
   action:
     timeout_ms: 5000
-    type: scroll
-    down: true
-    pages: 1.0
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - combobox
+      kwargs:
+        name: Search
 - id: t6
   source: s5
   target: s6
+  action:
+    timeout_ms: 5000
+    type: fill
+    locator:
+    - fn: get_by_role
+      args:
+      - combobox
+      kwargs:
+        name: Search
+    text: ${query}
+- id: t7
+  source: s6
+  target: s7
+  action:
+    timeout_ms: 5000
+    type: press
+    keys: Enter
+- id: t8
+  source: s7
+  target: s8
+  action:
+    timeout_ms: 5000
+    type: scroll
+    down: true
+    pages: 1.0
+- id: t9
+  source: s8
+  target: s9
   action:
     timeout_ms: 5000
     type: click
@@ -95,6 +148,13 @@ transitions:
       args:
       - '#video-title'
       kwargs: {}
+- id: t10
+  source: s9
+  target: s10
+  action:
+    timeout_ms: 5000
+    type: wait
+    seconds: 10.0
 params:
 - name: query
   description: exploration used 'cat videos'
@@ -108,5 +168,9 @@ control_sequence:
 - t4
 - t5
 - t6
+- t7
+- t8
+- t9
+- t10
 accept_states: []
 milestones: []

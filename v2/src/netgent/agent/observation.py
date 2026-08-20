@@ -21,6 +21,7 @@ from netgent.schema.actions import (
     ScrollAction,
     SelectAction,
     UploadFileAction,
+    WaitAction,
 )
 
 
@@ -181,4 +182,7 @@ def to_action(decision: AgentDecision, snapshot: DomSnapshot, upload_path: str |
             return ScrollAction(down=down, pages=decision.pages if decision.pages is not None else 1.0)
         case "go_back":
             return GoBackAction()
+        case "wait":
+            # cap the agent's dwell so a runaway decision can't stall exploration
+            return WaitAction(seconds=min(decision.seconds or 3.0, 60.0))
     raise ValueError(f"{decision.kind} is not a dispatchable action")

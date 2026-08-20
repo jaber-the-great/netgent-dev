@@ -111,6 +111,14 @@ class GoBackAction(_ActionBase):
     type: Literal["go_back"] = "go_back"
 
 
+class WaitAction(_ActionBase):
+    """Dwell on the page — e.g. watch a video / let a stream play. Core to NetGent's
+    purpose: the dwell is when the interesting network traffic happens."""
+
+    type: Literal["wait"] = "wait"
+    seconds: float = Field(gt=0, le=3600)
+
+
 class HoverAction(_ActionBase):
     """Hover over an element (opens menus, fires prefetch)."""
 
@@ -134,6 +142,7 @@ Action = Annotated[
         ScrollAction,
         UploadFileAction,
         GoBackAction,
+        WaitAction,
         HoverAction,
         NoopAction,
     ],
