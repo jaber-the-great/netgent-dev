@@ -21,6 +21,7 @@ from netgent.agent.prompt import SYSTEM_PROMPT
 from netgent.browser.session import BrowserSession
 from netgent.core.errors import ExecutionError
 from netgent.core.logger import get_logger
+from netgent.schema.actions import Action, GotoAction
 
 logger = get_logger(__name__)
 
@@ -34,6 +35,9 @@ class AgentStep(BaseModel):
     url: str
     screenshot: str | None = None
     error: str | None = None
+    # The resolved, durable-locator action that was dispatched (None for done/stop or
+    # failed steps). This is what `netgent generate` compiles into a workflow transition.
+    action: Action | None = None
 
 
 class AgentTrajectory(BaseModel):
@@ -78,6 +82,17 @@ class BrowserAgent:
         traj = AgentTrajectory(task=task)
         if url:
             await session.page.goto(url)
+            # Record the starting navigation as a real step, so a compiled workflow
+            # begins with this goto instead of assuming an already-open page.
+            traj.steps.append(
+                AgentStep(
+                    n=0,
+                    kind="goto",
+                    reasoning="starting URL",
+                    url=session.page.url,
+                    action=GotoAction(url=url),
+                )
+            )
 
         history = self._history  # instance-level: memory carries across run() calls
         prev_observation: str | None = None
@@ -117,6 +132,7 @@ class BrowserAgent:
                 break
 
             error = None
+            action = None
             try:
                 upload = self._upload_path() if decision.kind == "upload" else None
                 action = to_action(decision, snapshot, upload_path=upload)
@@ -126,6 +142,8 @@ class BrowserAgent:
                 logger.warning("step %d failed: %s", n, error)
 
             step = self._step(n, decision, session.page.url, error=error)
+            if error is None:
+                step.action = action  # the compilable record of what actually ran
             if self._run_dir is not None:
                 rel = f"screenshots/step-{n:02d}.png"
                 try:

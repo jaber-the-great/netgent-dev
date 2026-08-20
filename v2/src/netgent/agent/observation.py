@@ -5,6 +5,8 @@ The observation is a numbered list of interactive elements. The LLM answers with
 from the element's most durable candidate selector (role → test-id → label → css).
 """
 
+import re
+
 from netgent.agent.decision import AgentDecision
 from netgent.browser.dom.snapshot import DomElement, DomSnapshot
 from netgent.schema.actions import (
@@ -78,12 +80,17 @@ def format_observation(snapshot: DomSnapshot, limit: int = 60, text_limit: int =
     return "\n".join(lines)
 
 
+_VOLATILE_ID = re.compile(r"\d{4,}|[0-9a-f]{8,}|^#(tw|ember|react|:)")
+
+
 def _locator_for(el: DomElement) -> list[LocatorStep]:
     """Build a durable locator chain: frame_locator steps for any iframe path, then the element.
 
     Preference order: a simple #id (precise and pierces open shadow DOM) → role WITH a real
     accessible name → test-id → label → any css path. A role locator with no name is skipped:
     it comes from a placeholder-only field, which Playwright's role-name matching won't match.
+    Ids that look machine-generated (long digit/hex runs, tw-/ember-/react- prefixes) are
+    skipped: they change every session, so a compiled workflow could never replay them.
     """
     chain = [LocatorStep(fn="frame_locator", args=[sel]) for sel in el.frame_path]
     cands = el.candidates
@@ -91,9 +98,15 @@ def _locator_for(el: DomElement) -> list[LocatorStep]:
     def css(value: str) -> list[LocatorStep]:
         return chain + [LocatorStep(fn="locator", args=[value])]
 
-    # 1. simple #id — most precise, and Playwright's css engine pierces open shadow roots
+    # 1. simple, stable-looking #id — precise, and Playwright's css engine pierces open shadow roots
     for c in cands:
-        if c.kind == "css" and c.value and c.value.startswith("#") and " " not in c.value:
+        if (
+            c.kind == "css"
+            and c.value
+            and c.value.startswith("#")
+            and " " not in c.value
+            and not _VOLATILE_ID.search(c.value)
+        ):
             return css(c.value)
     # 2. role with a genuine accessible name (skip <select>: its name is an option dump)
     if el.tag != "select":

@@ -157,6 +157,8 @@ def resolve_params(workflow: Workflow, values: dict[str, str] | None = None) -> 
     values = dict(values or {})
     resolved: dict[str, str] = {}
     for p in workflow.params:
+        if p.source is not None:  # dynamic: extracted from the live page at dispatch, not here
+            continue
         if p.name in values:
             resolved[p.name] = values[p.name]
         elif p.default is not None:

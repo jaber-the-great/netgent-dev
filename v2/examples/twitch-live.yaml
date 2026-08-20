@@ -1,4 +1,4 @@
-name: cat-video
+name: twitch-live
 version: '1'
 start_state: init
 states:
@@ -10,7 +10,7 @@ states:
   description: ''
   conditions:
   - type: url_matches
-    pattern: https://www\.youtube\.com/
+    pattern: https://www\.twitch\.tv/
   timeout_ms: 10000
 - id: s2
   description: ''
@@ -22,19 +22,23 @@ states:
   timeout_ms: 10000
 - id: s4
   description: ''
-  conditions:
-  - type: url_matches
-    pattern: https://www\.youtube\.com/results
+  conditions: []
   timeout_ms: 10000
 - id: s5
   description: ''
-  conditions: []
+  conditions:
+  - type: url_matches
+    pattern: https://www\.twitch\.tv/search
   timeout_ms: 10000
 - id: s6
   description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s7
+  description: ''
   conditions:
   - type: url_matches
-    pattern: https://www\.youtube\.com/watch
+    pattern: https://www\.twitch\.tv/${channel}
   timeout_ms: 10000
 transitions:
 - id: t1
@@ -43,7 +47,7 @@ transitions:
   action:
     timeout_ms: 5000
     type: goto
-    url: https://www.youtube.com
+    url: https://www.twitch.tv
 - id: t2
   source: s1
   target: s2
@@ -53,53 +57,71 @@ transitions:
     locator:
     - fn: get_by_role
       args:
-      - combobox
+      - searchbox
       kwargs:
-        name: Search
+        name: Search Input
 - id: t3
   source: s2
   target: s3
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - searchbox
+      kwargs:
+        name: Search Input
+- id: t4
+  source: s3
+  target: s4
   action:
     timeout_ms: 5000
     type: fill
     locator:
     - fn: get_by_role
       args:
-      - combobox
+      - searchbox
       kwargs:
-        name: Search
-    text: ${query}
-- id: t4
-  source: s3
-  target: s4
-  action:
-    timeout_ms: 5000
-    type: press
-    keys: Enter
+        name: Search Input
+    text: ${channel}
 - id: t5
   source: s4
   target: s5
   action:
     timeout_ms: 5000
-    type: scroll
-    down: true
-    pages: 1.0
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: Search Button
 - id: t6
   source: s5
   target: s6
   action:
     timeout_ms: 5000
+    type: scroll
+    down: true
+    pages: 1.0
+- id: t7
+  source: s6
+  target: s7
+  action:
+    timeout_ms: 5000
     type: click
     locator:
-    - fn: locator
+    - fn: get_by_role
       args:
-      - '#video-title'
-      kwargs: {}
+      - link
+      kwargs:
+        name: ${channel}
 params:
-- name: query
-  description: exploration used 'cat videos'
+- name: channel
+  description: exploration used 'monstercat'
   required: true
-  default: cat videos
+  default: monstercat
   secret: false
 control_sequence:
 - t1
@@ -108,5 +130,6 @@ control_sequence:
 - t4
 - t5
 - t6
+- t7
 accept_states: []
 milestones: []

@@ -1,5 +1,7 @@
-"""`netgent generate` — full agent pipeline: state prompts -> compiled workflow (v1's Code Generation Mode)."""
+"""`netgent generate` — the compile step: agent explores the task, the trajectory
+compiles into a replayable workflow (NFA). LLM at generate time, zero LLM at run time."""
 
+import asyncio
 from pathlib import Path
 from typing import Annotated
 
@@ -7,14 +9,58 @@ import typer
 
 
 def generate(
-    prompts: Annotated[str, typer.Argument(help="State prompts JSON file or inline JSON string.")],
-    api_keys: Annotated[
-        Path | None, typer.Option("--api-keys", help="LLM API keys JSON file (or rely on env vars).")
+    task: Annotated[str, typer.Argument(help="What the workflow should do, in plain language.")],
+    url: Annotated[str | None, typer.Option(help="Starting URL for exploration.")] = None,
+    name: Annotated[str | None, typer.Option(help="Workflow name (default: derived from --out or 'workflow').")] = None,
+    out: Annotated[Path, typer.Option(help="Where to write the compiled workflow (.yaml or .json).")] = Path(
+        "workflow.yaml"
+    ),
+    param: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--param", "-p", help="name=sample_value used during exploration; becomes a ${name} param (repeatable)."
+        ),
     ] = None,
-    credentials: Annotated[str | None, typer.Option(help="Credentials JSON file or inline JSON string.")] = None,
-    out: Annotated[Path | None, typer.Option(help="Where to write the compiled workflow JSON.")] = None,
-    headless: Annotated[bool, typer.Option("--headless", help="Run the browser headless.")] = False,
+    model: Annotated[str | None, typer.Option(help="LLM as provider/model (default: NETGENT_GENERATOR_MODEL).")] = None,
+    max_steps: Annotated[int, typer.Option(help="Exploration step budget.")] = 25,
+    trajectory_dir: Annotated[
+        Path | None, typer.Option("--trajectory", help="Also write the exploration trajectory here.")
+    ] = None,
+    headless: Annotated[bool, typer.Option("--headless/--headed")] = True,
 ) -> None:
-    """Run the agent pipeline to compile state prompts into executable workflow code."""
-    typer.secho("`netgent generate` is not implemented yet: the v2 agent core has not landed", fg="red", err=True)
-    raise typer.Exit(1)
+    """Run the agent on the task, then compile its trajectory into a workflow artifact."""
+    try:
+        from netgent.agent import BrowserAgent, make_llm
+        from netgent.agent.compiler import compile_trajectory
+        from netgent.browser.session import BrowserSession
+    except ImportError as exc:
+        typer.secho(f"generate needs the 'generate' extra: pip install 'netgent[generate]'  ({exc})", fg="red")
+        raise typer.Exit(1) from exc
+
+    from netgent.core.settings import get_settings
+    from netgent.schema.workflow import dump_workflow
+
+    params = dict(p.split("=", 1) for p in (param or []))
+    resolved_model = model or get_settings().generator_model
+    wf_name = name or (out.stem if out.stem != "workflow" else "workflow")
+
+    async def _run():
+        llm = make_llm(resolved_model)
+        async with BrowserSession(headless=headless, stealth=True) as session:
+            return await BrowserAgent(llm, max_steps=max_steps, run_dir=trajectory_dir).run(session, task, url)
+
+    typer.secho(f"exploring: {task}", bold=True)
+    traj = asyncio.run(_run())
+    for s in traj.steps:
+        typer.secho(f" {s.n}. {s.kind} — {s.reasoning}", fg="red" if s.error else "green")
+    if not traj.success:
+        typer.secho(f"✗ exploration failed: {traj.stopped_reason or 'not completed'}", fg="red", err=True)
+        raise typer.Exit(1)
+
+    wf = compile_trajectory(traj, name=wf_name, params=params)
+    dump_workflow(wf, out)
+    typer.secho(f"\n✓ compiled {len(wf.transitions)} transitions, {len(wf.states)} states", bold=True, fg="green")
+    for p in wf.params:
+        typer.echo(f"  param {p.name} (default: {p.default!r})")
+    typer.echo(f"workflow written to {out}")
+    typer.echo(f"replay: netgent run {out}" + ("".join(f' --param "{p.name}=..."' for p in wf.params)))
