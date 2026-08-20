@@ -76,14 +76,36 @@ ControlNode = Annotated[
 ]
 
 
+class ParamSource(BaseModel):
+    """Where a DYNAMIC parameter's value comes from — extracted from the live page at
+    runtime, so a value observed on one page can feed a later step's ${name}.
+
+    kind: text (element inner text) | input_value (a field's value) | attribute (an
+    element attribute) | url_group (a capture group of a regex over the current URL).
+    """
+
+    kind: Literal["text", "input_value", "attribute", "url_group"]
+    selector: str | None = None  # CSS, for text/input_value/attribute
+    attribute: str | None = None  # for kind=attribute
+    pattern: str | None = None  # regex over page.url, for kind=url_group
+    group: int = 1  # which capture group, for kind=url_group
+
+
 class Param(BaseModel):
-    """A workflow-level parameter, substituted as ${name} in action string fields."""
+    """A workflow parameter, substituted as ${name} in action string fields.
+
+    Static (source=None): supplied by the caller / default. Dynamic (source set):
+    extracted from the page at runtime. `guard` is a regex the resolved value
+    must match — a failed extraction or validation is a healable drift signal.
+    """
 
     name: str
     description: str = ""
     required: bool = True
     default: str | None = None
     secret: bool = False  # secret values never appear in logs/records; only the name may
+    source: ParamSource | None = None  # None = static (caller-provided); set = dynamic
+    guard: str | None = None  # regex the resolved value must match
 
 
 class Milestone(BaseModel):

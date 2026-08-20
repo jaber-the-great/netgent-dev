@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-EdgeOutcome = Literal["ok", "trigger_timeout", "action_error"]
+EdgeOutcome = Literal["ok", "trigger_timeout", "action_error", "param_error"]
 
 
 def utcnow() -> datetime:

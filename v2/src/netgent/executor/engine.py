@@ -12,8 +12,9 @@ import time
 from pathlib import Path
 
 from netgent.browser.session import BrowserSession
-from netgent.core.errors import ControlSequenceError, ExecutionError, TriggerTimeoutError
+from netgent.core.errors import ControlSequenceError, ExecutionError, ParamError, TriggerTimeoutError
 from netgent.core.logger import get_logger
+from netgent.executor.params import ParamContext
 from netgent.schema.control import Branch, Call, ControlNode, EdgeStep, Repeat
 from netgent.schema.records import ConditionCheck, EdgeRecord, RunRecord, utcnow
 from netgent.schema.workflow import Transition, Workflow
@@ -22,15 +23,25 @@ logger = get_logger(__name__)
 
 
 class Executor:
-    def __init__(self, session: BrowserSession, workflow: Workflow, run_dir: Path | None = None):
+    def __init__(
+        self,
+        session: BrowserSession,
+        workflow: Workflow,
+        run_dir: Path | None = None,
+        params: dict[str, str] | None = None,
+    ):
         self._session = session
         self._workflow = workflow
         self._run_dir = run_dir
+        self._provided = params
+        self._ctx: ParamContext | None = None
         self._record = RunRecord(workflow_name=workflow.name, workflow_version=workflow.version)
         self._current = workflow.start_state
         self._aborted = False
 
     async def run(self) -> RunRecord:
+        if self._workflow.params:  # build the param context (may raise ParamError for a missing static)
+            self._ctx = ParamContext(self._workflow.params, self._provided, self._session)
         await self._run_nodes(self._workflow.as_control())
         if not self._aborted:
             self._record.success = await self._reached_accept_state()
@@ -126,8 +137,13 @@ class Executor:
         start = time.monotonic()
         outcome, error, latency = "ok", None, None
         try:
-            await self._session.dispatch(transition.action)
+            action = transition.action
+            if self._ctx is not None:  # substitute ${params} against the live page
+                action = await self._ctx.resolve_action(action)
+            await self._session.dispatch(action)
             latency = await self._session.wait_for_state(target_state)
+        except ParamError as exc:  # before ExecutionError — ParamError is a subclass
+            outcome, error = "param_error", str(exc)
         except TriggerTimeoutError as exc:
             outcome, error = "trigger_timeout", str(exc)
         except ExecutionError as exc:
