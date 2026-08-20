@@ -1,0 +1,69 @@
+# Watch a video on YouTube — parameterized by search query.
+# The SAME compiled workflow replays for any query:
+#   netgent run examples/cat-video.yaml                          # default: cat videos
+#   netgent run examples/cat-video.yaml --param "query=dog videos"
+version: "2"
+name: cat-video
+description: Search YouTube for ${query} and play the first result.
+
+params:
+  - name: query
+    description: What to search YouTube for.
+    default: cat videos
+
+start_state: init
+
+states:
+  - id: init
+  - id: home
+    conditions:
+      - type: selector_visible
+        selector: "input[name=search_query]"
+  - id: results
+    conditions:
+      - type: url_matches
+        pattern: "search_query="
+      - type: selector_visible
+        selector: "ytd-video-renderer a#video-title"
+  - id: watching
+    conditions:
+      - type: url_matches
+        pattern: "/watch\\?v="
+
+transitions:
+  - id: open
+    source: init
+    target: home
+    action:
+      type: goto
+      url: "https://www.youtube.com"
+  - id: search
+    source: home
+    target: home
+    action:
+      type: fill
+      locator:
+        - fn: locator
+          args: ["input[name=search_query]"]
+      text: "${query}"
+  - id: submit
+    source: home
+    target: results
+    action:
+      type: press
+      keys: Enter
+      locator:
+        - fn: locator
+          args: ["input[name=search_query]"]
+  - id: play
+    source: results
+    target: watching
+    action:
+      type: click
+      locator:
+        - fn: locator
+          args: ["ytd-video-renderer a#video-title"]
+        - fn: nth
+          args: [0]
+
+control_sequence: [open, search, submit, play]
