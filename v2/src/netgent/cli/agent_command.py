@@ -16,8 +16,16 @@ def agent(
         Path | None, typer.Option("--trajectory", help="Write the agent trajectory here.")
     ] = None,
     headless: Annotated[bool, typer.Option("--headless/--headed")] = True,
+    show_graph: Annotated[
+        bool, typer.Option("--graph", help="Print the agent loop's LangGraph (Mermaid) and exit.")
+    ] = False,
 ) -> None:
     """Drive a stealth browser to complete a task, one atomic action per step."""
+    if show_graph:
+        from netgent.agent.graph import agent_graph_mermaid
+
+        typer.echo(agent_graph_mermaid())
+        return
     try:
         from netgent.agent import BrowserAgent, make_llm
         from netgent.browser.session import BrowserSession

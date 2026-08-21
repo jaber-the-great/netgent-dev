@@ -79,6 +79,7 @@ planner/discovery/validation agents, LangGraph orchestration, or evals:
 Reinstall on a fresh clone: `npx skills add langchain-ai/langchain-skills --skill '*' --yes`
 (or clone the repo and run `./install.sh --yes <this-dir>`).
 
-Today NetGent uses LangChain narrowly — `init_chat_model` + `with_structured_output` in
-`agent/llm.py` — and `langgraph` is a declared-but-unused dependency; keep new LangChain/LangGraph
-usage inside `agent/` and behind the `LLM` protocol.
+NetGent uses LangChain for the model seam (`init_chat_model` + `with_structured_output` in
+`agent/llm.py`) and **LangGraph for the browser agent's loop** (`agent/graph.py`: a `StateGraph`
+observe → decide → act with `Command` routing; `netgent agent --graph` prints it as Mermaid).
+Keep LangChain/LangGraph usage inside `agent/`, imported lazily, behind the `LLM` protocol.
