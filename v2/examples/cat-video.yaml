@@ -24,24 +24,62 @@ states:
 - id: s2
   description: 'after fill combobox {''name'': ''Search''}'
   conditions:
-  - type: selector_visible
-    selector: video
+  - type: element_visible
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: Search
   - type: text_visible
     text: Report search predictions
   timeout_ms: 10000
 - id: s3
+  description: 'after click button {''name'': ''Search''}'
+  conditions: []
+  timeout_ms: 10000
+- id: s4
+  description: after goto
+  conditions:
+  - type: element_visible
+    locator:
+    - fn: get_by_role
+      args:
+      - combobox
+      kwargs:
+        name: Search
+  timeout_ms: 10000
+- id: s5
+  description: 'after fill combobox {''name'': ''Search''}'
+  conditions:
+  - type: text_visible
+    text: Report search predictions
+  timeout_ms: 10000
+- id: s6
   description: after press
   conditions:
   - type: url_matches
     pattern: https://www\.youtube\.com/results
-  - type: selector_visible
-    selector: video
+  - type: text_visible
+    text: All
   timeout_ms: 10000
-- id: s4
-  description: after wait
+- id: s7
+  description: after scroll down 1
   conditions: []
   timeout_ms: 10000
-- id: s4b1
+- id: s7b1
+  description: 'interstitial present: click link {''name'': ''Ranking MOST Adorable
+    ${query}''}'
+  conditions:
+  - type: element_visible
+    locator:
+    - fn: get_by_role
+      args:
+      - link
+      kwargs:
+        name: Ranking MOST Adorable ${query}
+  timeout_ms: 10000
+- id: s7b2
   description: 'interstitial present: click #video-title'
   conditions:
   - type: element_visible
@@ -51,11 +89,7 @@ states:
       - '#video-title'
       kwargs: {}
   timeout_ms: 10000
-- id: s4b1_1
-  description: 'after click #video-title'
-  conditions: []
-  timeout_ms: 10000
-- id: s4b2
+- id: s7b3
   description: "interstitial present: click link {'name': 'Top 5 Funny Dog Fails Moment\
     \ You Must See \U0001F436\u2764\uFE0F'}"
   conditions:
@@ -67,24 +101,20 @@ states:
       kwargs:
         name: "Top 5 Funny Dog Fails Moment You Must See \U0001F436\u2764\uFE0F"
   timeout_ms: 10000
-- id: s4j
-  description: s4, interstitial resolved
-  conditions:
-  - type: selector_visible
-    selector: video
+- id: s7j
+  description: s7, interstitial resolved
+  conditions: []
   timeout_ms: 10000
-- id: s5
+- id: s8
   description: after wait
-  conditions:
-  - type: selector_visible
-    selector: video
+  conditions: []
   timeout_ms: 10000
 transitions:
 - id: t1
   source: init
   target: s1
   action:
-    timeout_ms: 5000
+    timeout_ms: 30000
     type: goto
     url: https://www.youtube.com
 - id: t2
@@ -105,24 +135,75 @@ transitions:
   target: s3
   action:
     timeout_ms: 5000
-    type: press
-    keys: Enter
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: Search
 - id: t4
   source: s3
   target: s4
   action:
     timeout_ms: 5000
-    type: wait
-    seconds: 2.0
-- id: t4b1_eps
+    type: goto
+    url: https://www.youtube.com
+- id: t5
   source: s4
-  target: s4b1
+  target: s5
+  action:
+    timeout_ms: 5000
+    type: fill
+    locator:
+    - fn: get_by_role
+      args:
+      - combobox
+      kwargs:
+        name: Search
+    text: ${query}
+- id: t6
+  source: s5
+  target: s6
+  action:
+    timeout_ms: 5000
+    type: press
+    keys: Enter
+- id: t7
+  source: s6
+  target: s7
+  action:
+    timeout_ms: 5000
+    type: scroll
+    down: true
+    pages: 1.0
+- id: t7b1_eps
+  source: s7
+  target: s7b1
   action:
     timeout_ms: 5000
     type: noop
-- id: t4b1_1
-  source: s4b1
-  target: s4b1_1
+- id: t7b1_1
+  source: s7b1
+  target: s7j
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - link
+      kwargs:
+        name: Ranking MOST Adorable ${query}
+- id: t7b2_eps
+  source: s7
+  target: s7b2
+  action:
+    timeout_ms: 5000
+    type: noop
+- id: t7b2_1
+  source: s7b2
+  target: s7j
   action:
     timeout_ms: 5000
     type: click
@@ -131,22 +212,15 @@ transitions:
       args:
       - '#video-title'
       kwargs: {}
-- id: t4b1_2
-  source: s4b1_1
-  target: s4j
-  action:
-    timeout_ms: 5000
-    type: wait
-    seconds: 3.0
-- id: t4b2_eps
-  source: s4
-  target: s4b2
+- id: t7b3_eps
+  source: s7
+  target: s7b3
   action:
     timeout_ms: 5000
     type: noop
-- id: t4b2_1
-  source: s4b2
-  target: s4j
+- id: t7b3_1
+  source: s7b3
+  target: s7j
   action:
     timeout_ms: 5000
     type: click
@@ -156,9 +230,9 @@ transitions:
       - link
       kwargs:
         name: "Top 5 Funny Dog Fails Moment You Must See \U0001F436\u2764\uFE0F"
-- id: t5
-  source: s4j
-  target: s5
+- id: t8
+  source: s7j
+  target: s8
   action:
     timeout_ms: 5000
     type: wait
@@ -178,83 +252,91 @@ control:
   edge: t3
 - kind: edge
   edge: t4
-- kind: branch
-  arms:
-  - when: s4b1
-    then:
-    - kind: edge
-      edge: t4b1_eps
-    - kind: edge
-      edge: t4b1_1
-    - kind: edge
-      edge: t4b1_2
-  - when: s4b2
-    then:
-    - kind: edge
-      edge: t4b2_eps
-    - kind: edge
-      edge: t4b2_1
-  probe_ms: 3000
 - kind: edge
   edge: t5
+- kind: edge
+  edge: t6
+- kind: edge
+  edge: t7
+- kind: branch
+  arms:
+  - when: s7b1
+    then:
+    - kind: edge
+      edge: t7b1_eps
+    - kind: edge
+      edge: t7b1_1
+  - when: s7b2
+    then:
+    - kind: edge
+      edge: t7b2_eps
+    - kind: edge
+      edge: t7b2_1
+  - when: s7b3
+    then:
+    - kind: edge
+      edge: t7b3_eps
+    - kind: edge
+      edge: t7b3_1
+  probe_ms: 3000
+- kind: edge
+  edge: t8
 accept_states:
-- s5
+- s8
 milestones: []
 provenance:
-  generated_at: '2026-08-21T17:47:36+00:00'
+  generated_at: '2026-08-21T17:55:23+00:00'
   generator: anthropic/claude-haiku-4-5-20251001
   runs: 3
-  successful_runs: 2
+  successful_runs: 3
   variations:
   - query: dog videos
-  validated: false
+  validated: true
   validation:
   - params:
       query: cat videos
     success: false
-    edges_ok: 0
-    failed_edge: t1
-    failed_state: s1
+    edges_ok: 8
+    failed_edge: t7b1_1
+    failed_state: s7j
     unmet:
     - selector_visible
-    error: 'state ''s1'' not recognized within 10000ms; unmet conditions: [''selector_visible'']'
+    error: 'state ''s7j'' not recognized within 10000ms; unmet conditions: [''selector_visible'']'
   - params:
       query: dog videos
-    success: false
-    edges_ok: 0
-    failed_edge: t1
-    failed_state: s1
-    unmet:
-    - selector_visible
-    error: 'state ''s1'' not recognized within 10000ms; unmet conditions: [''selector_visible'']'
+    success: true
+    edges_ok: 10
+    unmet: []
   - params:
       query: cat videos
-    success: false
-    edges_ok: 1
-    failed_edge: t2
-    failed_state: s2
-    unmet:
-    - selector_visible
-    error: 'state ''s2'' not recognized within 10000ms; unmet conditions: [''selector_visible'']'
+    success: true
+    edges_ok: 10
+    unmet: []
   - params:
       query: dog videos
-    success: false
-    edges_ok: 1
-    failed_edge: t2
-    failed_state: s2
-    unmet:
-    - selector_visible
-    error: 'state ''s2'' not recognized within 10000ms; unmet conditions: [''selector_visible'']'
+    success: true
+    edges_ok: 10
+    unmet: []
   relaxed:
-  - 's1: selector_visible'
+  - 's7j: selector_visible'
+  - 's8: selector_visible'
   notes:
-  - 1 of 3 exploration(s) did not reach done; used the rest
+  - 'run 1: dropped click on a field that is filled next (click combobox {''name'':
+    ''Search''})'
   - 'run 1: dropped click on a field that is filled next (click combobox {''name'':
     ''Search''})'
   - 'run 2: dropped click on a field that is filled next (click combobox {''name'':
     ''Search''})'
-  - 'core path: 5 action(s) common to all 2 successful run(s)'
-  - "state s4: optional step(s) seen in some runs \u2192 guarded branch: click #video-title,\
-    \ wait"
-  - "state s4: optional step(s) seen in some runs \u2192 guarded branch: click link\
+  - 'run 2: dropped click on a field that is filled next (click combobox {''name'':
+    ''Search''})'
+  - 'run 3: dropped click on a field that is filled next (click combobox {''name'':
+    ''Search''})'
+  - 'run 3: dropped click on a field that is filled next (click combobox {''name'':
+    ''Search''})'
+  - 'core path: 8 action(s) common to all 3 successful run(s)'
+  - 'state s3: dropped 1 incidental step(s) seen in some runs (not guardable)'
+  - "state s7: optional step(s) seen in some runs \u2192 guarded branch: click link\
+    \ {'name': 'Ranking MOST Adorable ${query}'}"
+  - "state s7: optional step(s) seen in some runs \u2192 guarded branch: click #video-title"
+  - "state s7: optional step(s) seen in some runs \u2192 guarded branch: click link\
     \ {'name': 'Top 5 Funny Dog Fails Moment You Must See \U0001F436\u2764\uFE0F'}"

@@ -127,3 +127,22 @@ def test_failed_runs_are_excluded_and_noted():
 def test_abstract_params_literal_and_encoded_case_insensitive():
     out = abstract_params({"a": "Cat+Videos and cat videos", "b": ["x"]}, {"q": "cat videos"})
     assert out == {"a": "${q} and ${q}", "b": ["x"]}
+
+
+def test_branch_arms_ordered_by_run_count_then_guard_durability():
+    title = [{"fn": "get_by_role", "args": ["link"], "kwargs": {"name": "A very long content-specific video title!!"}}]
+    css = [{"fn": "locator", "args": ["#video-title"], "kwargs": {}}]
+
+    def variant(locator):
+        steps = [
+            step(0, {"type": "goto", "url": HOME}, HOME),
+            step(1, {"type": "click", "locator": locator}, WATCH),
+            step(2, {"type": "wait", "seconds": 10}, WATCH),
+        ]
+        return Exploration(AgentTrajectory(task="t", success=True, steps=steps))
+
+    wf = synthesize([variant(title), variant(css)], name="w").workflow
+    branch = next(n for n in wf.control if n.kind == "branch")
+    guards = [wf.state(arm.when).conditions[0].locator[-1].fn for arm in branch.arms]
+    assert guards == ["locator", "get_by_role"]  # #video-title first, despite being seen second
+    assert branch.else_ is None  # every run needed one of the arms: no ε-skip

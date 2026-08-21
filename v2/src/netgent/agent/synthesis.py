@@ -439,11 +439,29 @@ def synthesize(
     return Synthesis(workflow=wf, notes=notes)
 
 
+def _durability(action: Action) -> int:
+    """Rank of a guard locator's durability: id/test-id/label (0) < role with a short
+    accessible name (1) < role with a long, content-like name (2) < anything else (3).
+    Branch arms are ordered by it, so the most general guard is tried first."""
+    chain = locator_of(action) or []
+    if not chain:
+        return 3
+    last = chain[-1]
+    if last.fn in ("get_by_test_id", "get_by_label") or (last.fn == "locator" and str(last.args[0]).startswith("#")):
+        return 0
+    if last.fn == "get_by_role":
+        name = str(last.kwargs.get("name", ""))
+        return 1 if len(name) <= 40 else 2
+    return 3
+
+
 def _variants(per_run: list[list[_Step]]) -> tuple[list[list[_Step]], int]:
     """Distinct, guardable optional sequences in a gap, plus how many steps were dropped.
     Leading steps without a locator (scroll/wait/press) cannot be guarded and are trimmed;
-    a variant with nothing guardable left is incidental and dropped entirely."""
+    a variant with nothing guardable left is incidental and dropped entirely. Variants are
+    ordered by how many runs took them, then by guard durability (arms dispatch in order)."""
     seen: dict[str, list[_Step]] = {}
+    count: dict[str, int] = {}
     dropped = 0
     for gap in per_run:
         trimmed = list(gap)
@@ -452,5 +470,8 @@ def _variants(per_run: list[list[_Step]]) -> tuple[list[list[_Step]], int]:
             dropped += 1
         if not trimmed:
             continue
-        seen.setdefault("|".join(s.key for s in trimmed), trimmed)
-    return list(seen.values()), dropped
+        key = "|".join(s.key for s in trimmed)
+        seen.setdefault(key, trimmed)
+        count[key] = count.get(key, 0) + 1
+    ordered = sorted(seen, key=lambda k: (-count[k], _durability(seen[k][0].action)))
+    return [seen[k] for k in ordered], dropped

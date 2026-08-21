@@ -18,8 +18,9 @@ states:
       - searchbox
       kwargs:
         name: Search Input
-  - type: selector_visible
+  - type: video_playing
     selector: video
+    sample_ms: 300
   - type: text_visible
     text: Cookies and Advertising Choices
   timeout_ms: 10000
@@ -68,7 +69,7 @@ transitions:
   source: init
   target: s1
   action:
-    timeout_ms: 5000
+    timeout_ms: 30000
     type: goto
     url: https://www.twitch.tv
 - id: t2
@@ -159,7 +160,7 @@ accept_states:
 - s3
 milestones: []
 provenance:
-  generated_at: '2026-08-21T17:47:28+00:00'
+  generated_at: '2026-08-21T17:51:54+00:00'
   generator: anthropic/claude-haiku-4-5-20251001
   runs: 3
   successful_runs: 3
