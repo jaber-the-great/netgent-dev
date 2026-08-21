@@ -8,7 +8,7 @@ import asyncio
 
 import pytest
 
-from netgent.browser.session import BrowserSession
+from netgent.browser.session import PATCHED_BROWSER, BrowserSession
 
 SHADOW_FIXTURE = """<!doctype html><html><head><title>Shadow Form</title></head><body>
 <h1>outer</h1>
@@ -50,22 +50,30 @@ def test_stealth_hides_webdriver_flag():
             await s.page.goto("about:blank")
             return await s.page.evaluate("navigator.webdriver")
 
-    assert asyncio.run(_run(True)) in (False, None)   # hidden under stealth
-    assert asyncio.run(_run(False)) is True            # the vanilla tell is present
+    assert asyncio.run(_run(True)) in (False, None)  # hidden under stealth
+    if not PATCHED_BROWSER:  # plain Playwright: the vanilla tell must still be present
+        assert asyncio.run(_run(False)) is True
 
 
-def test_stealth_sets_consistent_fingerprint_surface():
+def test_stealth_fingerprint_is_consistent_with_the_real_binary():
+    """No spoofed strings: the UA must match the launched browser's major version, carry
+    no 'HeadlessChrome' stamp, and the page must look like a normal Chrome (plugins,
+    window.chrome) WITHOUT any JS patching of navigator."""
+
     async def _run():
         async with BrowserSession(headless=True, stealth=True) as s:
             await s.page.goto("about:blank")
-            return await s.page.evaluate(
-                "({langs: navigator.languages, plugins: navigator.plugins.length, "
-                "chrome: !!window.chrome, webgl: (() => { const c=document.createElement('canvas')"
-                ".getContext('webgl'); return c ? c.getParameter(37445) : null; })()})"
+            fp = await s.page.evaluate(
+                "({ua: navigator.userAgent, langs: navigator.languages, plugins: navigator.plugins.length, "
+                "chrome: !!window.chrome, pluginArray: Object.prototype.toString.call(navigator.plugins)})"
             )
+            return s._browser.version, fp
 
-    fp = asyncio.run(_run())
-    assert list(fp["langs"]) == ["en-US", "en"]
+    version, fp = asyncio.run(_run())
+    assert "HeadlessChrome" not in fp["ua"]
+    assert f"Chrome/{version.split('.')[0]}." in fp["ua"]  # UA major == real binary major
+    assert fp["langs"][0].startswith("en")
     assert fp["plugins"] > 0
     assert fp["chrome"] is True
-    assert fp["webgl"] == "Intel Inc."
+    if PATCHED_BROWSER:  # native profile: a REAL PluginArray, not a spoofed JS array
+        assert fp["pluginArray"] == "[object PluginArray]"
