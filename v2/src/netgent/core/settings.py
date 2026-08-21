@@ -4,16 +4,16 @@ This is the single source of truth for netgent's config surface (see .env.exampl
 environment variables win over .env — pydantic-settings' default precedence — so an export
 or a CI secret is never overridden by a checked-out .env.
 
-Provider keys use the names the LLM SDKs themselves read (GOOGLE_API_KEY for Gemini via
-langchain-google-genai, OPENAI_API_KEY, ANTHROPIC_API_KEY); GEMINI_API_KEY is accepted as an
-alias because Google's own docs use it. `sync_provider_keys()` publishes the resolved keys into
-the process environment so the SDKs pick them up regardless of which name was set.
+Provider keys use exactly the names the LLM SDKs read (GOOGLE_API_KEY for Gemini via
+langchain-google-genai, OPENAI_API_KEY, ANTHROPIC_API_KEY) — one name per provider, no
+aliases. `sync_provider_keys()` publishes keys loaded from .env into the process environment
+so the SDKs see them.
 """
 
 import os
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,10 +25,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ── LLM provider keys (GOOGLE_API_KEY is what langchain reads; GEMINI_API_KEY is an alias) ──
-    gemini_api_key: str | None = Field(
-        default=None, validation_alias=AliasChoices("GOOGLE_API_KEY", "GEMINI_API_KEY")
-    )
+    # ── LLM provider keys (exactly the names the SDKs read) ──────────────────────────────
+    google_api_key: str | None = Field(default=None, validation_alias="GOOGLE_API_KEY")
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
 
@@ -49,8 +47,8 @@ class Settings(BaseSettings):
     def provider_key(self, provider: str) -> str | None:
         """The API key for a litellm-style provider prefix ('gemini'/'openai'/'anthropic')."""
         return {
-            "gemini": self.gemini_api_key,
-            "google": self.gemini_api_key,
+            "gemini": self.google_api_key,
+            "google": self.google_api_key,
             "openai": self.openai_api_key,
             "anthropic": self.anthropic_api_key,
         }.get(provider)
@@ -58,12 +56,10 @@ class Settings(BaseSettings):
     def sync_provider_keys(self) -> None:
         """Publish provider keys into os.environ under the names the LLM SDKs read.
 
-        Only sets a var that isn't already present (real env wins). The Gemini key is
-        published under both names so either convention works downstream.
+        Only sets a var that isn't already present (real env wins).
         """
         for env_name, value in (
-            ("GOOGLE_API_KEY", self.gemini_api_key),
-            ("GEMINI_API_KEY", self.gemini_api_key),
+            ("GOOGLE_API_KEY", self.google_api_key),
             ("OPENAI_API_KEY", self.openai_api_key),
             ("ANTHROPIC_API_KEY", self.anthropic_api_key),
             ("LANGSMITH_API_KEY", self.langsmith_api_key),

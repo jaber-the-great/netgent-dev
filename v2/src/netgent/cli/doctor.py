@@ -14,7 +14,7 @@ MIN_PYTHON = (3, 11)
 
 # Provider prefix in NETGENT_GENERATOR_MODEL -> env vars that can satisfy it.
 PROVIDER_KEYS: dict[str, tuple[str, ...]] = {
-    "gemini": ("GOOGLE_API_KEY", "GEMINI_API_KEY"),
+    "gemini": ("GOOGLE_API_KEY",),
     "openai": ("OPENAI_API_KEY",),
     "anthropic": ("ANTHROPIC_API_KEY",),
 }

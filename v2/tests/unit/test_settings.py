@@ -14,10 +14,12 @@ def test_reads_from_env(monkeypatch):
     assert s.headless is True  # default
 
 
-def test_gemini_falls_back_to_google_api_key(monkeypatch):
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+def test_google_api_key_is_the_only_gemini_key_name(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "goog-123")
-    assert Settings(_env_file=None).gemini_api_key == "goog-123"
+    monkeypatch.setenv("GEMINI_API_KEY", "ignored-alias")  # no alias: this must NOT be read
+    s = Settings(_env_file=None)
+    assert s.google_api_key == "goog-123"
+    assert s.provider_key("gemini") == "goog-123"
 
 
 def test_loads_from_env_file(tmp_path):
@@ -35,14 +37,14 @@ def test_real_env_wins_over_env_file(tmp_path, monkeypatch):
     assert Settings(_env_file=env).openai_api_key == "from-env"
 
 
-def test_sync_provider_keys_maps_gemini_to_google(monkeypatch):
+def test_sync_provider_keys_publishes_google_api_key(monkeypatch):
     for k in ("GOOGLE_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY"):
         monkeypatch.delenv(k, raising=False)
     s = Settings(_env_file=None)
-    object.__setattr__(s, "gemini_api_key", "g-key")
+    object.__setattr__(s, "google_api_key", "g-key")
     s.sync_provider_keys()
     assert os.environ["GOOGLE_API_KEY"] == "g-key"  # what langchain-google reads
-    assert os.environ["GEMINI_API_KEY"] == "g-key"
+    assert "GEMINI_API_KEY" not in os.environ  # no alias is published
 
 
 def test_provider_key_lookup():

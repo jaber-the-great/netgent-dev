@@ -11,7 +11,7 @@ def test_loggers_live_under_the_netgent_tree():
 
 
 def test_secret_env_values_are_redacted(monkeypatch):
-    monkeypatch.setenv("GEMINI_API_KEY", "sk-super-secret-123")
+    monkeypatch.setenv("GOOGLE_API_KEY", "sk-super-secret-123")
     monkeypatch.setenv("NETGENT_LOG_LEVEL", "info")  # non-secret name: never redacted
     redact = RedactSecretsFilter()
 
@@ -20,7 +20,7 @@ def test_secret_env_values_are_redacted(monkeypatch):
     )
     assert redact.filter(record)
     assert "sk-super-secret-123" not in record.getMessage()
-    assert "[redacted:GEMINI_API_KEY]" in record.getMessage()
+    assert "[redacted:GOOGLE_API_KEY]" in record.getMessage()
 
 
 def test_short_values_not_redacted(monkeypatch):
