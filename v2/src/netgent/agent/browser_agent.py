@@ -27,6 +27,7 @@ from netgent.schema.actions import Action, GotoAction, WaitAction
 logger = get_logger(__name__)
 
 MAX_REPEAT = 3  # identical (kind,index) decisions in a row → declare stuck
+START_GOTO_TIMEOUT_MS = 30_000  # the starting navigation gets Playwright's default budget, in the artifact too
 
 
 class AgentStep(BaseModel):
@@ -94,7 +95,7 @@ class BrowserAgent:
     ) -> AgentTrajectory:
         traj = AgentTrajectory(task=task)
         if url:
-            await session.page.goto(url)
+            await session.page.goto(url, timeout=START_GOTO_TIMEOUT_MS)
             # Record the starting navigation as a real step, so a compiled workflow
             # begins with this goto instead of assuming an already-open page.
             traj.steps.append(
@@ -103,7 +104,7 @@ class BrowserAgent:
                     kind="goto",
                     reasoning="starting URL",
                     url=session.page.url,
-                    action=GotoAction(url=url),
+                    action=GotoAction(url=url, timeout_ms=START_GOTO_TIMEOUT_MS),
                     evidence=await self._observe(session),
                 )
             )

@@ -7,50 +7,77 @@ states:
   conditions: []
   timeout_ms: 10000
 - id: s1
-  description: ''
+  description: after goto
   conditions:
   - type: url_matches
     pattern: https://www\.youtube\.com/
+  - type: element_visible
+    locator:
+    - fn: get_by_role
+      args:
+      - combobox
+      kwargs:
+        name: Search
+  - type: text_visible
+    text: Skip navigation
   timeout_ms: 10000
 - id: s2
-  description: ''
-  conditions: []
+  description: 'after fill combobox {''name'': ''Search''}'
+  conditions:
+  - type: selector_visible
+    selector: video
+  - type: text_visible
+    text: Report search predictions
   timeout_ms: 10000
 - id: s3
-  description: ''
-  conditions: []
-  timeout_ms: 10000
-- id: s4
-  description: ''
-  conditions: []
-  timeout_ms: 10000
-- id: s5
-  description: ''
-  conditions: []
-  timeout_ms: 10000
-- id: s6
-  description: ''
-  conditions: []
-  timeout_ms: 10000
-- id: s7
-  description: ''
+  description: after press
   conditions:
   - type: url_matches
     pattern: https://www\.youtube\.com/results
+  - type: selector_visible
+    selector: video
   timeout_ms: 10000
-- id: s8
-  description: ''
+- id: s4
+  description: after wait
   conditions: []
   timeout_ms: 10000
-- id: s9
-  description: ''
+- id: s4b1
+  description: 'interstitial present: click #video-title'
   conditions:
-  - type: url_matches
-    pattern: https://www\.youtube\.com/watch
+  - type: element_visible
+    locator:
+    - fn: locator
+      args:
+      - '#video-title'
+      kwargs: {}
   timeout_ms: 10000
-- id: s10
-  description: ''
+- id: s4b1_1
+  description: 'after click #video-title'
   conditions: []
+  timeout_ms: 10000
+- id: s4b2
+  description: "interstitial present: click link {'name': 'Top 5 Funny Dog Fails Moment\
+    \ You Must See \U0001F436\u2764\uFE0F'}"
+  conditions:
+  - type: element_visible
+    locator:
+    - fn: get_by_role
+      args:
+      - link
+      kwargs:
+        name: "Top 5 Funny Dog Fails Moment You Must See \U0001F436\u2764\uFE0F"
+  timeout_ms: 10000
+- id: s4j
+  description: s4, interstitial resolved
+  conditions:
+  - type: selector_visible
+    selector: video
+  timeout_ms: 10000
+- id: s5
+  description: after wait
+  conditions:
+  - type: selector_visible
+    selector: video
   timeout_ms: 10000
 transitions:
 - id: t1
@@ -65,81 +92,37 @@ transitions:
   target: s2
   action:
     timeout_ms: 5000
-    type: click
+    type: fill
     locator:
     - fn: get_by_role
       args:
       - combobox
       kwargs:
         name: Search
+    text: ${query}
 - id: t3
   source: s2
   target: s3
   action:
     timeout_ms: 5000
-    type: fill
-    locator:
-    - fn: get_by_role
-      args:
-      - combobox
-      kwargs:
-        name: Search
-    text: ${query}
+    type: press
+    keys: Enter
 - id: t4
   source: s3
   target: s4
   action:
     timeout_ms: 5000
-    type: click
-    locator:
-    - fn: get_by_role
-      args:
-      - button
-      kwargs:
-        name: Search
-- id: t5
+    type: wait
+    seconds: 2.0
+- id: t4b1_eps
   source: s4
-  target: s5
+  target: s4b1
   action:
     timeout_ms: 5000
-    type: click
-    locator:
-    - fn: get_by_role
-      args:
-      - combobox
-      kwargs:
-        name: Search
-- id: t6
-  source: s5
-  target: s6
-  action:
-    timeout_ms: 5000
-    type: fill
-    locator:
-    - fn: get_by_role
-      args:
-      - combobox
-      kwargs:
-        name: Search
-    text: ${query}
-- id: t7
-  source: s6
-  target: s7
-  action:
-    timeout_ms: 5000
-    type: press
-    keys: Enter
-- id: t8
-  source: s7
-  target: s8
-  action:
-    timeout_ms: 5000
-    type: scroll
-    down: true
-    pages: 1.0
-- id: t9
-  source: s8
-  target: s9
+    type: noop
+- id: t4b1_1
+  source: s4b1
+  target: s4b1_1
   action:
     timeout_ms: 5000
     type: click
@@ -148,9 +131,34 @@ transitions:
       args:
       - '#video-title'
       kwargs: {}
-- id: t10
-  source: s9
-  target: s10
+- id: t4b1_2
+  source: s4b1_1
+  target: s4j
+  action:
+    timeout_ms: 5000
+    type: wait
+    seconds: 3.0
+- id: t4b2_eps
+  source: s4
+  target: s4b2
+  action:
+    timeout_ms: 5000
+    type: noop
+- id: t4b2_1
+  source: s4b2
+  target: s4j
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - link
+      kwargs:
+        name: "Top 5 Funny Dog Fails Moment You Must See \U0001F436\u2764\uFE0F"
+- id: t5
+  source: s4j
+  target: s5
   action:
     timeout_ms: 5000
     type: wait
@@ -161,16 +169,92 @@ params:
   required: true
   default: cat videos
   secret: false
-control_sequence:
-- t1
-- t2
-- t3
-- t4
-- t5
-- t6
-- t7
-- t8
-- t9
-- t10
-accept_states: []
+control:
+- kind: edge
+  edge: t1
+- kind: edge
+  edge: t2
+- kind: edge
+  edge: t3
+- kind: edge
+  edge: t4
+- kind: branch
+  arms:
+  - when: s4b1
+    then:
+    - kind: edge
+      edge: t4b1_eps
+    - kind: edge
+      edge: t4b1_1
+    - kind: edge
+      edge: t4b1_2
+  - when: s4b2
+    then:
+    - kind: edge
+      edge: t4b2_eps
+    - kind: edge
+      edge: t4b2_1
+  probe_ms: 3000
+- kind: edge
+  edge: t5
+accept_states:
+- s5
 milestones: []
+provenance:
+  generated_at: '2026-08-21T17:47:36+00:00'
+  generator: anthropic/claude-haiku-4-5-20251001
+  runs: 3
+  successful_runs: 2
+  variations:
+  - query: dog videos
+  validated: false
+  validation:
+  - params:
+      query: cat videos
+    success: false
+    edges_ok: 0
+    failed_edge: t1
+    failed_state: s1
+    unmet:
+    - selector_visible
+    error: 'state ''s1'' not recognized within 10000ms; unmet conditions: [''selector_visible'']'
+  - params:
+      query: dog videos
+    success: false
+    edges_ok: 0
+    failed_edge: t1
+    failed_state: s1
+    unmet:
+    - selector_visible
+    error: 'state ''s1'' not recognized within 10000ms; unmet conditions: [''selector_visible'']'
+  - params:
+      query: cat videos
+    success: false
+    edges_ok: 1
+    failed_edge: t2
+    failed_state: s2
+    unmet:
+    - selector_visible
+    error: 'state ''s2'' not recognized within 10000ms; unmet conditions: [''selector_visible'']'
+  - params:
+      query: dog videos
+    success: false
+    edges_ok: 1
+    failed_edge: t2
+    failed_state: s2
+    unmet:
+    - selector_visible
+    error: 'state ''s2'' not recognized within 10000ms; unmet conditions: [''selector_visible'']'
+  relaxed:
+  - 's1: selector_visible'
+  notes:
+  - 1 of 3 exploration(s) did not reach done; used the rest
+  - 'run 1: dropped click on a field that is filled next (click combobox {''name'':
+    ''Search''})'
+  - 'run 2: dropped click on a field that is filled next (click combobox {''name'':
+    ''Search''})'
+  - 'core path: 5 action(s) common to all 2 successful run(s)'
+  - "state s4: optional step(s) seen in some runs \u2192 guarded branch: click #video-title,\
+    \ wait"
+  - "state s4: optional step(s) seen in some runs \u2192 guarded branch: click link\
+    \ {'name': 'Top 5 Funny Dog Fails Moment You Must See \U0001F436\u2764\uFE0F'}"

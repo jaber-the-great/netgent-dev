@@ -42,7 +42,9 @@ EVIDENCE_JS = r"""
       out.push(t);
     } catch (e) { /* skip */ }
   }
-  return { title: document.title || '', texts: out, videoPresent: !!document.querySelector('video') };
+  // "present" means VISIBLE, matching the selector_visible trigger (sites preload hidden players)
+  const video = [...document.querySelectorAll('video')].some(visible);
+  return { title: document.title || '', texts: out, videoPresent: video };
 }
 """
 

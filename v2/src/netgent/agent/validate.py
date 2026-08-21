@@ -78,29 +78,39 @@ def relax(workflow: Workflow, failure: ValidationResult) -> tuple[Workflow, list
 
     Unmet evidence conditions go first; `url_matches` is dropped only when it was itself
     unmet. When the executor could not say which (accept-state failure), every non-URL
-    condition on that state is dropped. Returns the relaxed workflow and what was dropped;
-    an empty list means nothing was relaxable (an action error, or a bare state).
+    condition on that state is dropped. The exact conditions dropped are also removed from
+    the states that follow on the SAME page (up to the next state with a URL condition):
+    they rest on the same evidence context, which replay has just shown to be unreliable.
+    Returns the relaxed workflow and what was dropped; an empty list means nothing was
+    relaxable (an action error, or a bare state).
     """
     if failure.failed_state is None:
         return workflow, []
     data = workflow.model_dump(mode="json")
+    states = data["states"]
+    idx = next((i for i, s in enumerate(states) if s["id"] == failure.failed_state), None)
+    if idx is None:
+        return workflow, []
+    failed = states[idx]
+    if failure.unmet:
+        kill_types = set(failure.unmet)
+    else:
+        kill_types = {c["type"] for c in failed["conditions"] if c["type"] != "url_matches"}
+    killed = [c for c in failed["conditions"] if c["type"] in kill_types]
+    if not killed:
+        return workflow, []
     dropped: list[str] = []
-    for state in data["states"]:
-        if state["id"] != failure.failed_state:
-            continue
-        if failure.unmet:
-            kill = set(failure.unmet)
-        else:
-            kill = {c["type"] for c in state["conditions"] if c["type"] != "url_matches"}
+    for i in range(idx, len(states)):
+        state = states[i]
+        if i > idx and any(c["type"] == "url_matches" for c in state["conditions"]):
+            break  # a new page: its evidence stands on its own
         keep = []
         for cond in state["conditions"]:
-            if cond["type"] in kill:
+            if cond in killed:
                 dropped.append(f"{state['id']}: {cond['type']}")
             else:
                 keep.append(cond)
         state["conditions"] = keep
-    if not dropped:
-        return workflow, []
     return Workflow.model_validate(data), dropped
 
 
