@@ -9,7 +9,7 @@ agent's self-report. NetGent's philosophy: deterministic orchestration, verified
 
 from pydantic import BaseModel, Field
 
-from netgent.agent.browser_agent import BrowserAgent
+from netgent.agent.explore_agent.browser_agent import BrowserAgent
 from netgent.agent.llm import LLM
 from netgent.browser.session import BrowserSession
 from netgent.core.logger import get_logger

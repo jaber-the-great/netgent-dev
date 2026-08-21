@@ -2,8 +2,8 @@
 
 import pytest
 
-from netgent.agent.decision import AgentDecision
-from netgent.agent.observation import format_observation, to_action
+from netgent.agent.explore_agent.decision import AgentDecision
+from netgent.agent.explore_agent.observation import format_observation, to_action
 from netgent.browser.dom.snapshot import BBox, DomElement, DomSnapshot, SelectorCandidate, TextBlock
 from netgent.schema.actions import ClickAction
 
@@ -92,7 +92,7 @@ def test_action_type_guards_give_corrective_errors():
 
 
 def test_iframe_element_gets_frame_locator_prefix():
-    from netgent.agent.observation import _locator_for
+    from netgent.agent.explore_agent.observation import _locator_for
 
     el = DomElement(
         tag="input", type="text", name="Email", frame_path=["iframe#outer", "iframe:nth-of-type(1)"],

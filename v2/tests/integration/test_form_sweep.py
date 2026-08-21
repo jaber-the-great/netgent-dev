@@ -8,7 +8,7 @@ import asyncio
 import html
 
 from netgent.agent import AgentDecision, FakeLLM
-from netgent.agent.sweep import sweep_forms
+from netgent.agent.explore_agent.sweep import sweep_forms
 from netgent.browser.session import BrowserSession
 
 # Each form lives in its OWN iframe — matching forms-comparison.html, which the sweep

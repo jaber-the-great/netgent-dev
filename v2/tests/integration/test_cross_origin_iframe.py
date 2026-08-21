@@ -11,7 +11,7 @@ import http.server
 import socketserver
 import threading
 
-from netgent.agent.observation import _locator_for
+from netgent.agent.explore_agent.observation import _locator_for
 from netgent.browser.session import BrowserSession
 
 CHILD_HTML = """<!doctype html><html><head><title>Child</title></head><body>

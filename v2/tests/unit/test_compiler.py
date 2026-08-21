@@ -3,8 +3,8 @@ state conditions, and sample values become ${name} parameters."""
 
 import pytest
 
-from netgent.agent.browser_agent import AgentStep, AgentTrajectory
-from netgent.agent.compiler import compile_trajectory
+from netgent.agent.explore_agent.browser_agent import AgentStep, AgentTrajectory
+from netgent.agent.workflow_generator_agent.compiler import compile_trajectory
 
 
 def _traj() -> AgentTrajectory:

@@ -4,8 +4,8 @@ Imports LLM SDKs (langchain) lazily inside LangChainLLM, so importing this packa
 require the `netgent[generate]` extra until a real model is actually used. FakeLLM needs nothing.
 """
 
-from netgent.agent.browser_agent import AgentStep, AgentTrajectory, BrowserAgent
-from netgent.agent.decision import AgentDecision
+from netgent.agent.explore_agent.browser_agent import AgentStep, AgentTrajectory, BrowserAgent
+from netgent.agent.explore_agent.decision import AgentDecision
 from netgent.agent.llm import FakeLLM, LangChainLLM, make_llm
 
 __all__ = [

@@ -7,7 +7,7 @@ from the element's most durable candidate selector (role → test-id → label �
 
 import re
 
-from netgent.agent.decision import AgentDecision
+from netgent.agent.explore_agent.decision import AgentDecision
 from netgent.browser.dom.snapshot import DomElement, DomSnapshot
 from netgent.schema.actions import (
     Action,

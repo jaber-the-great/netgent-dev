@@ -16,9 +16,9 @@ output costs a step but never crashes, failures echoed into history, and the ste
 import operator
 from typing import Annotated, Any, Literal, TypedDict
 
-from netgent.agent.browser_agent import MAX_REPEAT, AgentStep, BrowserAgent
-from netgent.agent.observation import format_observation, to_action
-from netgent.agent.prompt import SYSTEM_PROMPT
+from netgent.agent.explore_agent.browser_agent import MAX_REPEAT, AgentStep, BrowserAgent
+from netgent.agent.explore_agent.observation import format_observation, to_action
+from netgent.agent.explore_agent.prompt import SYSTEM_PROMPT
 from netgent.browser.session import BrowserSession
 from netgent.core.errors import ExecutionError
 from netgent.core.logger import get_logger

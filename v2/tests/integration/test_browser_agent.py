@@ -10,7 +10,7 @@ import asyncio
 import pytest
 
 from netgent.agent import AgentDecision, BrowserAgent, FakeLLM
-from netgent.agent.observation import format_observation
+from netgent.agent.explore_agent.observation import format_observation
 from netgent.browser.session import BrowserSession
 
 FORM = """<!doctype html><html><head><title>Agent Form</title></head><body>

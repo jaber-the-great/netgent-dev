@@ -22,7 +22,7 @@ def agent(
 ) -> None:
     """Drive a stealth browser to complete a task, one atomic action per step."""
     if show_graph:
-        from netgent.agent.graph import agent_graph_mermaid
+        from netgent.agent.explore_agent.graph import agent_graph_mermaid
 
         typer.echo(agent_graph_mermaid())
         return
