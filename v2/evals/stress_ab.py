@@ -31,11 +31,13 @@ CHALLENGE_TASK = (
     "instruction is in the page text (e.g. 'Click the button to start', 'Select one of the "
     "radio buttons'). The header shows 'Score: N / 17' and N goes up by one each time a task "
     "registers; a card's own text (slider value, keys pressed, upload status) also tells you "
-    "whether it registered. There are 15 cards. Do exactly what each instruction says using "
-    "click, fill, select, hover, press, upload, or scroll-inside-a-box. If a card is "
-    "impossible for you (e.g. reading letters off a canvas image), skip it and move on. "
-    "Scroll down only when every card in view is done or skipped. Finish with done "
-    "(success=true if you attempted all 15 cards) when nothing more is below."
+    "whether it registered. There are exactly 15 cards (the page's '/ 17' is a typo — the "
+    "score can never reach 17, so do not hunt for missing points). Do exactly what each "
+    "instruction says using click, fill, select, hover, press, upload, or scroll-inside-a-box; "
+    "attempt each card once, in order, and do not go back. If a card is impossible for you "
+    "(e.g. reading letters off a canvas image), skip it and move on. Scroll down only when "
+    "every card in view is done or skipped. Finish with done (success=true if you attempted "
+    "all 15 cards) when the last card (the contenteditable one) is done."
 )
 
 

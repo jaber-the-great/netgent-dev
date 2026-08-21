@@ -46,6 +46,23 @@ from netgent.schema.triggers import SelectorHidden, SelectorVisible, TitleContai
 from netgent.schema.workflow import State
 
 POLL_INTERVAL_S = 0.1
+HOVER_SETTLE_MS = 1200
+
+# Key names models commonly emit that Playwright does not accept verbatim.
+KEY_ALIASES = {
+    "return": "Enter", "esc": "Escape", "del": "Delete", "up": "ArrowUp", "down": "ArrowDown",
+    "left": "ArrowLeft", "right": "ArrowRight", "spacebar": "Space", "pgup": "PageUp", "pgdn": "PageDown",
+}
+
+
+def normalize_keys(keys: str) -> str:
+    """'Return' → 'Enter', 'ctrl+a' → 'Control+a': each chord part through the alias table."""
+    modifiers = {"ctrl": "Control", "cmd": "Meta", "option": "Alt"}
+    parts = []
+    for part in keys.split("+"):
+        low = part.strip().lower()
+        parts.append(KEY_ALIASES.get(low) or modifiers.get(low) or part.strip())
+    return "+".join(parts)
 
 # Evaluated through CDP with includeCommandLineAPI so `getEventListeners` exists. Lists the
 # document-order index of every element with a direct mouse/keyboard listener.
@@ -111,8 +128,8 @@ class BrowserSession:
         self._page = await self._context.new_page()
         return self
 
-    async def _frame_info(self, frame: Frame) -> tuple[list[str], float]:
-        """(iframe CSS-selector chain, top-viewport Y offset) for a frame.
+    async def _frame_info(self, frame: Frame) -> tuple[list[str], float, float]:
+        """(iframe CSS-selector chain, top-viewport Y offset, X offset) for a frame.
 
         Both are computed in each parent frame's context, so they work for cross-origin
         frames too (Playwright reaches them via CDP). The Y offset is the sum of each
@@ -120,16 +137,17 @@ class BrowserSession:
         the TOP viewport's coordinates — used to place in-frame elements for scroll paging.
         """
         path: list[str] = []
-        offset = 0.0
+        offset_y = offset_x = 0.0
         current = frame
         while current.parent_frame is not None:
             handle = await current.frame_element()
             selector = await current.parent_frame.evaluate(FRAME_SELECTOR_JS, handle)
-            top = await current.parent_frame.evaluate("(el) => el.getBoundingClientRect().top", handle)
+            rect = await current.parent_frame.evaluate("(el) => el.getBoundingClientRect().toJSON()", handle)
             path.insert(0, selector)
-            offset += top
+            offset_y += rect["top"]
+            offset_x += rect["left"]
             current = current.parent_frame
-        return path, offset
+        return path, offset_y, offset_x
 
     async def snapshot(self) -> DomSnapshot:
         """Observe interactive elements + text across ALL frames (same- and cross-origin).
@@ -181,7 +199,7 @@ class BrowserSession:
         texts: list[TextBlock] = []
         for frame in self.page.frames:
             try:
-                frame_path, offset_y = await self._frame_info(frame)
+                frame_path, offset_y, offset_x = await self._frame_info(frame)
                 listeners = await self._listener_probe(frame)
                 raw = await frame.evaluate(DOM_SNAPSHOT_JS, {"extrasOnly": extras_only, "listeners": listeners})
             except Exception:  # a detached/unreachable frame is skipped, not fatal
@@ -189,6 +207,7 @@ class BrowserSession:
             for element in raw["elements"]:
                 element["framePath"] = frame_path
                 element["bbox"]["y"] += round(offset_y)  # normalize to top-viewport coordinates
+                element["bbox"]["x"] += round(offset_x)
                 elements.append(DomElement.model_validate(element))
             for t in raw["texts"]:
                 t["frame_path"] = frame_path
@@ -322,10 +341,13 @@ class BrowserSession:
                 case FillAction():
                     await self._resolve(action.locator).fill(action.text, timeout=action.timeout_ms)
                 case PressAction():
-                    if action.locator is not None:
-                        await self._resolve(action.locator).press(action.keys, timeout=action.timeout_ms)
-                    else:
-                        await self.page.keyboard.press(action.keys)
+                    # "ArrowRight ArrowRight ArrowRight" is a sequence of presses; each item
+                    # may be a chord ("Control+a"). Aliases like Return/Esc are normalized.
+                    for keys in (normalize_keys(k) for k in action.keys.split()):
+                        if action.locator is not None:
+                            await self._resolve(action.locator).press(keys, timeout=action.timeout_ms)
+                        else:
+                            await self.page.keyboard.press(keys)
                 case SelectAction():
                     await self._resolve(action.locator).select_option(action.value, timeout=action.timeout_ms)
                 case ScrollAction():
@@ -348,6 +370,9 @@ class BrowserSession:
                     await self.page.wait_for_timeout(action.seconds * 1000)
                 case HoverAction():
                     await self._resolve(action.locator).hover(timeout=action.timeout_ms)
+                    # Let the page react to the pointer: hover menus/tooltips open on a delay
+                    # and "hover for a second" handlers cancel on mouseleave.
+                    await self.page.wait_for_timeout(HOVER_SETTLE_MS)
                 case NoopAction():
                     pass
                 case _:

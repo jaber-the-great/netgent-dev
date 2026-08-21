@@ -93,6 +93,11 @@ DOM_SNAPSHOT_JS = r"""
     }
     return parts.join(' > ');
   };
+  const INTERACTIVE_QUERY = 'a,button,input,select,textarea,summary,[role],[onclick],[tabindex],[contenteditable]';
+  const isPageSized = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width * r.height > 0.5 * window.innerWidth * window.innerHeight;
+  };
   const scrollState = (el) => {
     const max = el.scrollHeight - el.clientHeight;
     return max > 0 ? `scrolled ${Math.round(100 * el.scrollTop / max)}%` : null;
@@ -154,7 +159,13 @@ DOM_SNAPSHOT_JS = r"""
         // iframes are NOT descended here — the Python layer iterates page.frames and
         // evaluates this walk inside EACH frame's own context (works cross-origin via CDP).
         if (el.tagName === 'IFRAME') continue;
-        const listening = root === document ? listenerOf(el, i) : null;
+        // A listener-only element counts when it is a self-contained target: named, not a
+        // wrapper around other controls (delegation roots like YouTube's <ytd-app>), and
+        // not page-sized.
+        const listening = root === document && listenerOf(el, i) && !isInteractive(el)
+          && el !== document.documentElement && el !== document.body
+          && !el.querySelector(INTERACTIVE_QUERY) && accName(el)
+          && !isPageSized(el);
         if (isInteractive(el) || listening) {
           if (!visible(el)) continue;
           if (extrasOnly && hasAriaInteractive(el)) continue;

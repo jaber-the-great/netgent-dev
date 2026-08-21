@@ -31,64 +31,74 @@ BACKENDS = ("dom", "ax")
 
 
 def _key(e) -> tuple:
-    return (tuple(e.frame_path), e.bbox.x // 4, e.bbox.y // 4, e.bbox.w // 4, e.bbox.h // 4)
+    # Same element across backends: same frame, tag, and (coarse) position/size. x is
+    # excluded so a 1-2px iframe border difference does not split a match.
+    return (tuple(e.frame_path), e.tag, round(e.bbox.y / 6), round(e.bbox.h / 6), round(e.bbox.w / 6))
 
 
-async def measure(url: str, backend: str, repeats: int = 3) -> dict:
-    async with BrowserSession(headless=True, observation=backend) as s:
+async def measure_site(url: str, repeats: int = 3) -> dict[str, dict]:
+    """Both backends on the SAME loaded page (so coverage differences are the backend's, not
+    the feed's): open once, snapshot with each backend in turn."""
+    async with BrowserSession(headless=True, observation="dom") as s:
         await s.page.goto(url, wait_until="domcontentloaded", timeout=60_000)
         try:
             await s.page.wait_for_load_state("networkidle", timeout=15_000)
         except Exception:  # noqa: BLE001 — live sites may never go idle
             pass
         await s.page.wait_for_timeout(1500)
-        times = []
-        snap = None
-        for _ in range(repeats):
-            t = time.perf_counter()
-            snap = await s.snapshot()
-            times.append(time.perf_counter() - t)
-        assert snap is not None
-        elements = snap.elements
-        named = sum(1 for e in elements if e.name)
-        role_loc = unique = resolved_any = 0
-        details = []
-        for e in elements:
-            try:
-                chain = _locator_for(e)
-            except ValueError:
-                continue
-            is_role = any(step.fn == "get_by_role" for step in chain)
-            role_loc += int(is_role)
-            try:
-                n = await s._resolve(chain).count()
-            except Exception:  # noqa: BLE001
-                n = -1
-            resolved_any += int(n >= 1)
-            unique += int(n == 1)
-            details.append(
-                {"name": e.name, "tag": e.tag, "role": e.role, "frame": e.frame_path, "n": n,
-                 "key": json.dumps(_key(e))}
-            )
-        obs = format_observation(snap)
-        return {
-            "backend": backend,
-            "url": url,
-            "elements": len(elements),
-            "named_pct": round(100 * named / len(elements), 1) if elements else 0.0,
-            "role_locator_pct": round(100 * role_loc / len(elements), 1) if elements else 0.0,
-            "unique_pct": round(100 * unique / len(elements), 1) if elements else 0.0,
-            "resolves_pct": round(100 * resolved_any / len(elements), 1) if elements else 0.0,
-            "obs_chars": len(obs),
-            "obs_tokens_est": len(obs) // 4,
-            "texts": len(snap.texts),
-            "snapshot_s": round(statistics.median(times), 3),
-            "frames": len(s.page.frames),
-            "in_iframe": sum(1 for e in elements if e.frame_path),
-            "iframes_with_elements": len({tuple(e.frame_path) for e in elements if e.frame_path}),
-            "keys": sorted({json.dumps(_key(e)) for e in elements}),
-            "details": details,
-        }
+        return {backend: await measure(s, backend, repeats) for backend in BACKENDS}
+
+
+async def measure(s: BrowserSession, backend: str, repeats: int = 3) -> dict:
+    s.observation = backend
+    url = s.page.url
+    times = []
+    snap = None
+    for _ in range(repeats):
+        t = time.perf_counter()
+        snap = await s.snapshot()
+        times.append(time.perf_counter() - t)
+    assert snap is not None
+    elements = snap.elements
+    named = sum(1 for e in elements if e.name)
+    role_loc = unique = resolved_any = 0
+    details = []
+    for e in elements:
+        try:
+            chain = _locator_for(e)
+        except ValueError:
+            continue
+        is_role = any(step.fn == "get_by_role" for step in chain)
+        role_loc += int(is_role)
+        try:
+            n = await s._resolve(chain).count()
+        except Exception:  # noqa: BLE001
+            n = -1
+        resolved_any += int(n >= 1)
+        unique += int(n == 1)
+        details.append(
+            {"name": e.name, "tag": e.tag, "role": e.role, "frame": e.frame_path, "n": n,
+             "key": json.dumps(_key(e))}
+        )
+    obs = format_observation(snap)
+    return {
+        "backend": backend,
+        "url": url,
+        "elements": len(elements),
+        "named_pct": round(100 * named / len(elements), 1) if elements else 0.0,
+        "role_locator_pct": round(100 * role_loc / len(elements), 1) if elements else 0.0,
+        "unique_pct": round(100 * unique / len(elements), 1) if elements else 0.0,
+        "resolves_pct": round(100 * resolved_any / len(elements), 1) if elements else 0.0,
+        "obs_chars": len(obs),
+        "obs_tokens_est": len(obs) // 4,
+        "texts": len(snap.texts),
+        "snapshot_s": round(statistics.median(times), 3),
+        "frames": len(s.page.frames),
+        "in_iframe": sum(1 for e in elements if e.frame_path),
+        "iframes_with_elements": len({tuple(e.frame_path) for e in elements if e.frame_path}),
+        "keys": sorted({json.dumps(_key(e)) for e in elements}),
+        "details": details,
+    }
 
 
 def table(rows: list[dict]) -> str:
@@ -110,14 +120,13 @@ async def main(sites: list[str]) -> tuple[list[dict], list[str]]:
     diffs: list[str] = []
     for name in sites:
         url = SITES[name]
-        per: dict[str, dict] = {}
+        try:
+            per = await measure_site(url)
+        except Exception as exc:  # noqa: BLE001 — report the failure as rows
+            per = {b: {"backend": b, "url": url, "error": str(exc)[:200], "keys": [], "details": []} for b in BACKENDS}
         for backend in BACKENDS:
-            try:
-                r = await measure(url, backend)
-            except Exception as exc:  # noqa: BLE001 — report the failure as a row
-                r = {"backend": backend, "url": url, "error": str(exc)[:200], "keys": [], "details": []}
+            r = per[backend]
             r["site"] = name
-            per[backend] = r
             rows.append(r)
             print(table([r]).splitlines()[-1], flush=True)
         a, b = set(per["dom"]["keys"]), set(per["ax"]["keys"])

@@ -69,10 +69,28 @@ def build_agent_graph(
         no_progress = state.get("no_progress", 0)
         if prev is not None:
             no_progress = no_progress + 1 if observation == prev else 0
-        if no_progress >= MAX_REPEAT:
-            reason = f"stuck: {MAX_REPEAT} steps with no change on screen"
+            # Tell the agent what its last action changed on the page (new text such as a
+            # counter, a confirmation, "Keys pressed: →") — outcomes it would otherwise
+            # have to infer by diffing two observations from memory.
+            prev_snapshot = state.get("snapshot")
+            if prev_snapshot is not None and history:
+                before = {t.text for t in prev_snapshot.texts}
+                new_text = [t.text for t in snapshot.texts if t.text not in before][:4]
+                if new_text:
+                    history[-1] += " -> page now shows: " + "; ".join(f"'{t[:80]}'" for t in new_text)
+                elif observation == prev and "FAILED" not in history[-1]:
+                    history[-1] += " -> done, but nothing visible changed"
+        if no_progress >= 2 * MAX_REPEAT:
+            reason = f"stuck: {2 * MAX_REPEAT} steps with no change on screen"
             stop = AgentStep(n=n, kind="done", reasoning=reason, url=snapshot.url, error=reason)
             return Command(update={"n": n, "steps": [stop], "stopped_reason": reason}, goto=END)
+        if no_progress == MAX_REPEAT:
+            # One warning before giving up: on a long multi-task page a single stubborn
+            # control must not end the whole exploration without the agent being told.
+            history.append(
+                f"!! The last {MAX_REPEAT} actions changed NOTHING on screen. Do something different "
+                "(another element, another action kind, press keys, or skip this task and move on)."
+            )
         return Command(
             update={
                 "n": n,
