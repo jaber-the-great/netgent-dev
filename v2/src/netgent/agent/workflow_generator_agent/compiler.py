@@ -13,7 +13,10 @@ import re
 from urllib.parse import quote_plus
 
 from netgent.agent.explore_agent.browser_agent import AgentTrajectory
+from netgent.schema.actions import GotoAction
 from netgent.schema.workflow import Param, State, Transition, Workflow
+
+NAVIGATION_TIMEOUT_MS = 30_000  # a page load needs a navigation-scale budget, not an element-action one
 
 
 def _base_url(url: str) -> str:
@@ -48,9 +51,12 @@ def compile_trajectory(
         prev_base = base
         state_id = f"s{i}"
         states.append(State(id=state_id, conditions=conditions))
-        transitions.append(
-            Transition(id=f"t{i}", source=states[-2].id, target=state_id, action=step.action)
-        )
+        action = step.action
+        if isinstance(action, GotoAction) and action.timeout_ms < NAVIGATION_TIMEOUT_MS:
+            # Exploration navigated with Playwright's 30 s default; the artifact must too,
+            # or a slow real site fails replay on its very first edge.
+            action = action.model_copy(update={"timeout_ms": NAVIGATION_TIMEOUT_MS})
+        transitions.append(Transition(id=f"t{i}", source=states[-2].id, target=state_id, action=action))
 
     wf = Workflow(
         name=name,
