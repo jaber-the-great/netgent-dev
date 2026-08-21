@@ -74,10 +74,23 @@ def format_observation(snapshot: DomSnapshot, limit: int = 60, text_limit: int =
     if below:
         lines.append(f"(↓ {below} more elements below — scroll down to reveal and reach them)")
     if snapshot.texts:
+        # Text is paged like the elements: blocks above the viewport are summarized as a
+        # count, the rest shown top-down (alerts always shown — they are the outcome signal).
+        texts = snapshot.texts
+        if vh:
+            above_t = [t for t in texts if t.y is not None and t.y < -60 and not t.alert]
+            texts = [t for t in texts if t.alert or t.y is None or t.y >= -60]
+            texts = sorted(texts, key=lambda t: (0 if t.alert else 1, t.y if t.y is not None else -1))
+        else:
+            above_t = []
         lines.append("VISIBLE TEXT:")
-        for t in snapshot.texts[:text_limit]:
+        if above_t:
+            lines.append(f"  (↑ {len(above_t)} text blocks above the viewport)")
+        for t in texts[:text_limit]:
             prefix = "  !ALERT " if t.alert else "  "
             lines.append(f"{prefix}{t.text}")
+        if len(texts) > text_limit:
+            lines.append(f"  (↓ {len(texts) - text_limit} more text blocks below — scroll to read them)")
     return "\n".join(lines)
 
 

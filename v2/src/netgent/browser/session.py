@@ -192,6 +192,8 @@ class BrowserSession:
                 elements.append(DomElement.model_validate(element))
             for t in raw["texts"]:
                 t["frame_path"] = frame_path
+                if t.get("y") is not None:
+                    t["y"] += round(offset_y)
                 texts.append(TextBlock.model_validate(t))
         return elements, texts
 

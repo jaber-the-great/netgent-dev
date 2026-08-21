@@ -27,6 +27,9 @@ def generate(
         Path | None, typer.Option("--trajectory", help="Also write the exploration trajectory here.")
     ] = None,
     headless: Annotated[bool, typer.Option("--headless/--headed")] = True,
+    observation: Annotated[
+        str | None, typer.Option(help="Observation backend: dom | ax (default: NETGENT_OBSERVATION).")
+    ] = None,
     validate: Annotated[
         bool, typer.Option("--validate/--no-validate", help="Replay the compiled workflow with zero LLM calls.")
     ] = True,
@@ -57,6 +60,7 @@ def generate(
         params=dict(p.split("=", 1) for p in (param or [])),
         max_steps=max_steps,
         headless=headless,
+        observation=observation,
         out=out,
         trajectory_dir=trajectory_dir,
         validate_replay=validate,

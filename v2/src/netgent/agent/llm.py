@@ -33,12 +33,24 @@ class LangChainLLM:
         if not name:  # bare model name, no provider prefix
             provider, name = "gemini", provider
         chat = init_chat_model(name, model_provider=_PROVIDER_ALIAS.get(provider, provider), temperature=0)
-        self._model = chat.with_structured_output(AgentDecision)
+        self._model = chat.with_structured_output(AgentDecision, include_raw=True)
+        # Running totals across decide() calls — what an exploration cost (evals compare
+        # observation backends by these).
+        self.usage: dict[str, int] = {"calls": 0, "input_tokens": 0, "output_tokens": 0, "observation_chars": 0}
 
     async def decide(self, system: str, task: str, observation: str, history: list[str]) -> AgentDecision:
         hist = "\n".join(history[-10:]) if history else "(none yet)"
         prompt = f"{system}\n\nTASK: {task}\n\nRECENT STEPS:\n{hist}\n\nOBSERVATION:\n{observation}\n\nNext action:"
-        return await self._model.ainvoke(prompt)
+        result = await self._model.ainvoke(prompt)
+        self.usage["calls"] += 1
+        self.usage["observation_chars"] += len(observation)
+        meta = getattr(result.get("raw"), "usage_metadata", None) or {}
+        self.usage["input_tokens"] += int(meta.get("input_tokens", 0) or 0)
+        self.usage["output_tokens"] += int(meta.get("output_tokens", 0) or 0)
+        parsed = result.get("parsed")
+        if parsed is None:
+            raise ValueError(f"structured output failed: {result.get('parsing_error')}")
+        return parsed
 
 
 class FakeLLM:

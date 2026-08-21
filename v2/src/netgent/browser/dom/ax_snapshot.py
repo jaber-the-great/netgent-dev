@@ -48,6 +48,7 @@ INTERACTIVE_ROLES = frozenset(
 ALERT_ROLES = frozenset({"alert", "status"})
 # Roles that never contribute text (their name is the control's label, shown on the element).
 _NO_TEXT_ROLES = INTERACTIVE_ROLES | {"iframe", "img", "separator"}
+_NAMED_CONTAINER_ROLES = frozenset({"group", "region", "dialog", "alertdialog", "form", "navigation", "tabpanel"})
 _CHECKABLE_ROLES = frozenset({"checkbox", "radio", "switch", "menuitemcheckbox", "menuitemradio"})
 
 # Builds the same candidate facts the DOM walk computes, for ONE element (resolved via
@@ -215,31 +216,30 @@ def collect(nodes: list[AxNode]) -> tuple[list[AxInteractive], list[tuple[list[s
         t = _clean(" ".join(p for p in parts if p))
         return t or None
 
-    def push_text(frame_refs: list[str], t: str, alert: bool) -> None:
+    def push_text(frame_refs: list[str], t: str, alert: bool, y: int | None) -> None:
         t = t[:200]
         if len(t) > 1 and t not in seen_text:
             seen_text.add(t)
-            texts.append((frame_refs, TextBlock(text=t, alert=alert, frame_path=[])))
+            texts.append((frame_refs, TextBlock(text=t, alert=alert, frame_path=[], y=y)))
+
+    def y_of(n: AxNode, offset: tuple[int, int]) -> int | None:
+        return n.box.y + offset[1] if n.box is not None else None
 
     def walk(n: AxNode, frame_refs: list[str], offset: tuple[int, int]) -> None:
-        # 1. text: merge this node's leaf children into one block ("Score: 0 / 17")
-        leaves: list[str] = []
-        alert = n.role in ALERT_ROLES
-        for c in n.children:
-            if _is_interactive(c):
-                continue
-            lt = leaf_text(c)
-            if lt is not None:
-                leaves.append(lt)
-                alert = alert or c.role in ALERT_ROLES
-        if n.name and n.role not in _NO_TEXT_ROLES and n.role not in ("generic", "text") and n.children:
-            leaves.insert(0, n.name)  # e.g. a named region/group heading its content
-        if leaves:
-            push_text(frame_refs, " ".join(leaves), alert)
-        # 2. recurse; interactive nodes are recorded, iframes open a new frame context
+        # A named landmark/group heads its content ("Rate your experience *").
+        if n.name and n.role in _NAMED_CONTAINER_ROLES and n.children:
+            push_text(frame_refs, n.name, n.role in ALERT_ROLES, y_of(n, offset))
+        run: list[str] = []  # consecutive inline fragments → one block ("Score: 0 / 17")
+
+        def flush() -> None:
+            if run:
+                push_text(frame_refs, " ".join(run), n.role in ALERT_ROLES, y_of(n, offset))
+                run.clear()
+
         for c in n.children:
             box = c.box
             if _is_interactive(c):
+                flush()
                 if box is not None:
                     interactives.append(
                         AxInteractive(
@@ -247,8 +247,17 @@ def collect(nodes: list[AxNode]) -> tuple[list[AxInteractive], list[tuple[list[s
                             bbox=BBox(x=box.x + offset[0], y=box.y + offset[1], w=box.w, h=box.h),
                         )
                     )
-                # a combobox/listbox's options are its value list, not separate targets
+                continue  # a combobox/listbox's options are its value list, not separate targets
+            lt = leaf_text(c)
+            if lt is not None:
+                if c.role in ("text", "generic"):
+                    run.append(lt)  # inline fragment
+                else:  # a block of its own: paragraph, heading, alert, cell, listitem …
+                    flush()
+                    alert = c.role in ALERT_ROLES or n.role in ALERT_ROLES
+                    push_text(frame_refs, lt, alert, y_of(c, offset) if box is not None else y_of(n, offset))
                 continue
+            flush()
             if c.role == "iframe":
                 ref = c.ref
                 if ref is None or box is None:
@@ -256,9 +265,8 @@ def collect(nodes: list[AxNode]) -> tuple[list[AxInteractive], list[tuple[list[s
                 iframes.append(ref)
                 walk(c, frame_refs + [ref], (offset[0] + box.x, offset[1] + box.y))
                 continue
-            if leaf_text(c) is not None:
-                continue  # already merged above
             walk(c, frame_refs, offset)
+        flush()
 
     root = AxNode(role="document", children=nodes)
     walk(root, [], (0, 0))

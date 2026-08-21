@@ -43,6 +43,7 @@ class GenerateRequest(BaseModel):
     params: dict[str, str] = Field(default_factory=dict)  # name -> sample value used in exploration
     max_steps: int = 25
     headless: bool = True
+    observation: str | None = None  # dom | ax (None → NETGENT_OBSERVATION)
     out: Path | None = None  # write the artifact here (yaml/json by suffix)
     trajectory_dir: Path | None = None
     validate_replay: bool = True  # run the validation agent after generating
@@ -81,7 +82,7 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
     async def explore(state: OrchestrationState) -> Command[Literal["generate", "__end__"]]:
         emit("explore", f"exploring: {req.task}")
         agent = BrowserAgent(llm, max_steps=req.max_steps, run_dir=req.trajectory_dir)
-        async with BrowserSession(headless=req.headless, stealth=True) as session:
+        async with BrowserSession(headless=req.headless, stealth=True, observation=req.observation) as session:
             traj = await agent.run(session, req.task, req.url)
         for s in traj.steps:
             emit("explore", f"{s.n}. {s.kind} — {s.reasoning}" + (f" [FAILED: {s.error}]" if s.error else ""))

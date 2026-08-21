@@ -186,7 +186,7 @@ DOM_SNAPSHOT_JS = r"""
           if (t && t.length > 1 && !seenText.has(t)) {
             const alert = el.getAttribute('role') === 'alert' || el.getAttribute('role') === 'status';
             seenText.add(t);
-            texts.push({ text: t.slice(0, 200), alert });
+            texts.push({ text: t.slice(0, 200), alert, y: Math.round(el.getBoundingClientRect().y) });
           }
         }
       } catch (e) { /* skip pathological node */ }
@@ -263,6 +263,7 @@ class TextBlock(BaseModel):
     text: str
     alert: bool = False  # role=alert/status — a confirmation/error message
     frame_path: list[str] = Field(default_factory=list)  # which frame the text is in
+    y: int | None = None  # top-viewport y of the block (None = unknown → never paged out)
 
 
 class DomSnapshot(BaseModel):
