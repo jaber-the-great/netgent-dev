@@ -1,5 +1,5 @@
-"""`netgent generate` — the compile step: agent explores the task, the trajectory
-compiles into a replayable workflow (NFA). LLM at generate time, zero LLM at run time."""
+"""`netgent generate` — the compile step, run by the orchestrator:
+explore (LLM agent) → generate (trajectory → NFA) → validate (zero-LLM replay)."""
 
 import asyncio
 from pathlib import Path
@@ -30,56 +30,52 @@ def generate(
     validate: Annotated[
         bool, typer.Option("--validate/--no-validate", help="Replay the compiled workflow with zero LLM calls.")
     ] = True,
+    show_graph: Annotated[
+        bool, typer.Option("--graph", help="Print the pipeline's LangGraph (Mermaid) and exit.")
+    ] = False,
 ) -> None:
-    """Run the agent on the task, then compile its trajectory into a workflow artifact."""
+    """Explore the task with the agent, compile its trajectory into a workflow, validate it."""
+    if show_graph:
+        from netgent.agent.orchestrator import orchestration_graph_mermaid
+
+        typer.echo(orchestration_graph_mermaid())
+        return
+
     try:
-        from netgent.agent import BrowserAgent, make_llm
-        from netgent.agent.workflow_generator_agent.compiler import compile_trajectory
-        from netgent.browser.session import BrowserSession
+        from netgent.agent import make_llm
+        from netgent.agent.orchestrator import GenerateRequest, orchestrate
     except ImportError as exc:
         typer.secho(f"generate needs the 'generate' extra: pip install 'netgent[generate]'  ({exc})", fg="red")
         raise typer.Exit(1) from exc
 
     from netgent.core.settings import get_settings
-    from netgent.schema.workflow import dump_workflow
 
-    params = dict(p.split("=", 1) for p in (param or []))
-    resolved_model = model or get_settings().generator_model
-    wf_name = name or (out.stem if out.stem != "workflow" else "workflow")
+    req = GenerateRequest(
+        task=task,
+        url=url,
+        name=name or (out.stem if out.stem != "workflow" else "workflow"),
+        params=dict(p.split("=", 1) for p in (param or [])),
+        max_steps=max_steps,
+        headless=headless,
+        out=out,
+        trajectory_dir=trajectory_dir,
+        validate_replay=validate,
+    )
+    llm = make_llm(model or get_settings().generator_model)
 
-    async def _run():
-        llm = make_llm(resolved_model)
-        async with BrowserSession(headless=headless, stealth=True) as session:
-            return await BrowserAgent(llm, max_steps=max_steps, run_dir=trajectory_dir).run(session, task, url)
+    colors = {"explore": None, "generate": "cyan", "validate": "magenta"}
 
-    typer.secho(f"exploring: {task}", bold=True)
-    traj = asyncio.run(_run())
-    for s in traj.steps:
-        typer.secho(f" {s.n}. {s.kind} — {s.reasoning}", fg="red" if s.error else "green")
-    if not traj.success:
-        typer.secho(f"✗ exploration failed: {traj.stopped_reason or 'not completed'}", fg="red", err=True)
+    def listen(stage: str, text: str) -> None:
+        fg = "red" if "FAILED" in text or "failed" in text else colors[stage]
+        typer.secho(f"[{stage}] {text}", fg=fg)
+
+    result = asyncio.run(orchestrate(req, llm, listen))
+
+    if result.workflow is not None:
+        typer.echo(f"\nworkflow written to {out}")
+        typer.echo(f"replay: netgent run {out}" + "".join(f' --param "{p.name}=..."' for p in result.workflow.params))
+    if result.error:
+        typer.secho(f"✗ {result.error}", bold=True, fg="red", err=True)
         raise typer.Exit(1)
-
-    wf = compile_trajectory(traj, name=wf_name, params=params)
-    dump_workflow(wf, out)
-    typer.secho(f"\n✓ compiled {len(wf.transitions)} transitions, {len(wf.states)} states", bold=True, fg="green")
-    for p in wf.params:
-        typer.echo(f"  param {p.name} (default: {p.default!r})")
-    typer.echo(f"workflow written to {out}")
-    typer.echo(f"replay: netgent run {out}" + ("".join(f' --param "{p.name}=..."' for p in wf.params)))
-
-    if validate:  # the validation agent: a fresh zero-LLM replay proves the artifact
-        from netgent.agent.validation_agent import validate_workflow
-
-        typer.secho("\nvalidating: zero-LLM replay with defaults", bold=True)
-        report = asyncio.run(validate_workflow(wf, headless=headless))
-        for r in report.replays:
-            if r.success:
-                typer.secho(f"  ✓ replay ok ({r.edges_ok} edges)", fg="green")
-            else:
-                typer.secho(f"  ✗ replay failed at {r.failed_edge}: {r.error}", fg="red")
-        if report.validated:
-            typer.secho("✓ validated: every edge replayed with zero LLM calls", bold=True, fg="green")
-        else:
-            typer.secho("✗ NOT validated — artifact written but did not replay cleanly", bold=True, fg="red", err=True)
-            raise typer.Exit(1)
+    if result.report is not None:
+        typer.secho("✓ validated: every edge replayed with zero LLM calls", bold=True, fg="green")
