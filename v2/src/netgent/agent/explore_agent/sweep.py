@@ -34,6 +34,7 @@ class FormResult(BaseModel):
     steps: int
     stopped_reason: str = ""  # why the agent's run for this form ended
     last_error: str | None = None  # last action error seen, if any
+    steps_log: list[str] = Field(default_factory=list)  # "n. kind(index) reasoning [-> error]" per step
 
 
 class SweepResult(BaseModel):
@@ -109,6 +110,10 @@ async def sweep_forms(
                 steps=len(traj.steps) if traj else 0,
                 stopped_reason=traj.stopped_reason if traj else "",
                 last_error=last_error,
+                steps_log=[
+                    f"{s.n}. {s.kind} {s.reasoning[:120]}" + (f" -> FAILED: {s.error[:160]}" if s.error else "")
+                    for s in (traj.steps if traj else [])
+                ],
             )
         )
         result.submitted += int(verified)

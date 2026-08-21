@@ -93,7 +93,8 @@ ELEMENT_FACTS_JS = r"""
     // Display-only fallback when the accessible name is empty (icon links, thumbnails):
     // what a sighted user reads. Never used for the role locator.
     out.fallbackName = clean(el.getAttribute('title') || el.getAttribute('placeholder') ||
-      el.getAttribute('alt') || (tag === 'select' ? '' : el.innerText) || '').slice(0, 120);
+      el.getAttribute('alt') || (el.labels && el.labels[0] ? el.labels[0].textContent : '') ||
+      (tag === 'select' ? '' : el.innerText) || '').slice(0, 120);
     if (tag === 'details' || tag === 'summary') out.expanded = !!(el.closest('details') || {}).open;
   } catch (e) { /* partial facts are fine */ }
   return out;
