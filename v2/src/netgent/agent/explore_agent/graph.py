@@ -2,7 +2,7 @@
 
     START → observe → decide → act → observe → …
                  │        │
-                 │        ├─ done/stop ─► END
+                 │        ├─ done ──────► END
                  └─ stuck ───────────► END        (budget exhausted: observe ─► END)
 
 Three async nodes route with `Command`, so each node both updates state and picks the next
@@ -71,7 +71,7 @@ def build_agent_graph(
             no_progress = no_progress + 1 if observation == prev else 0
         if no_progress >= MAX_REPEAT:
             reason = f"stuck: {MAX_REPEAT} steps with no change on screen"
-            stop = AgentStep(n=n, kind="stop", reasoning=reason, url=snapshot.url, error=reason)
+            stop = AgentStep(n=n, kind="done", reasoning=reason, url=snapshot.url, error=reason)
             return Command(update={"n": n, "steps": [stop], "stopped_reason": reason}, goto=END)
         return Command(
             update={
@@ -94,12 +94,12 @@ def build_agent_graph(
             return Command(update={"prev_observation": None}, goto="observe")  # not a no-change step
         logger.info("step %d: %s — %s", n, decision.kind, decision.reasoning)
 
-        if decision.kind in ("done", "stop"):
+        if decision.kind == "done":
             step = AgentStep(n=n, kind=decision.kind, reasoning=decision.reasoning, url=state["snapshot"].url)
             return Command(
                 update={
                     "steps": [step],
-                    "success": decision.kind == "done" and decision.success,
+                    "success": decision.success,
                     "stopped_reason": decision.reasoning,
                 },
                 goto=END,

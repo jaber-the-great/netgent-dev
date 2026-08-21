@@ -7,7 +7,7 @@ Long-horizon safety: a step cap and observation-based stuck detection.
 
 This is also the seed of compile-time Discovery — a completed agent trajectory is what the
 Workflow Generator compiles into an NFA. CAPTCHA solving is out of scope: the prompt
-instructs the model to stop, and nothing here attempts a challenge.
+instructs the model to return done(success=false), and nothing here attempts a challenge.
 """
 
 import tempfile
@@ -32,7 +32,7 @@ class AgentStep(BaseModel):
     url: str
     screenshot: str | None = None
     error: str | None = None
-    # The resolved, durable-locator action that was dispatched (None for done/stop or
+    # The resolved, durable-locator action that was dispatched (None for done or
     # failed steps). This is what `netgent generate` compiles into a workflow transition.
     action: Action | None = None
 

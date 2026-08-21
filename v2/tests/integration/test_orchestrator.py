@@ -50,7 +50,7 @@ def test_orchestrate_explores_generates_and_validates(tmp_path):
 def test_orchestrate_stops_when_exploration_fails(tmp_path):
     page = tmp_path / "p.html"
     page.write_text(FIXTURE)
-    llm = FakeLLM([AgentDecision(reasoning="a CAPTCHA blocks the task", kind="stop", success=False)])
+    llm = FakeLLM([AgentDecision(reasoning="a CAPTCHA blocks the task", kind="done", success=False)])
     req = GenerateRequest(task="impossible", url=page.as_uri(), out=tmp_path / "never.yaml")
     result = asyncio.run(orchestrate(req, llm))
 

@@ -66,8 +66,8 @@ def test_agent_completes_a_form_with_scripted_llm(form_url, tmp_path):
 
 
 def test_agent_stops_on_captcha_signal(form_url, tmp_path):
-    # The model is instructed to `stop` on a CAPTCHA; the agent must not attempt anything.
-    script = [AgentDecision(reasoning="a CAPTCHA is blocking the task", kind="stop", success=False)]
+    # On a CAPTCHA the model returns done(success=False); the agent must not attempt anything.
+    script = [AgentDecision(reasoning="a CAPTCHA is blocking the task", kind="done", success=False)]
 
     async def _run():
         async with BrowserSession(headless=True) as s:
