@@ -46,6 +46,23 @@ from netgent.schema.triggers import SelectorHidden, SelectorVisible, TitleContai
 from netgent.schema.workflow import State
 
 POLL_INTERVAL_S = 0.1
+SNAPSHOT_RETRIES = 3  # re-observe after a navigation destroyed the context mid-snapshot
+NAVIGATION_SETTLE_MS = 5000
+
+
+def _is_navigation_error(exc: Exception) -> bool:
+    text = str(exc)
+    return any(
+        marker in text
+        for marker in (
+            "Execution context was destroyed",
+            "Frame was detached",
+            "frame was detached",
+            "Target closed",
+            "Cannot find context",
+            "Navigation interrupted",
+        )
+    )
 HOVER_SETTLE_MS = 1200
 
 # Key names models commonly emit that Playwright does not accept verbatim.
@@ -157,12 +174,27 @@ class BrowserSession:
         backend fails on a page it falls back to the DOM walk (logged) — observation must
         never abort an exploration step.
         """
-        if self.observation == "ax":
+        backend = self._snapshot_ax if self.observation == "ax" else self._snapshot_dom
+        last: Exception | None = None
+        for attempt in range(SNAPSHOT_RETRIES + 1):
             try:
-                return await self._snapshot_ax()
-            except Exception as exc:  # noqa: BLE001 — fall back rather than lose the step
-                logger.warning("ax snapshot failed (%s); falling back to the DOM walk", exc)
-        return await self._snapshot_dom()
+                return await backend()
+            except Exception as exc:  # noqa: BLE001
+                last = exc
+                if not _is_navigation_error(exc):
+                    break
+                # The page navigated under us (a click that submitted, a redirect): wait for
+                # the new document, then observe again. Bounded, so a thrashing page cannot
+                # hang a step.
+                logger.info("snapshot attempt %d hit a navigation (%s); retrying", attempt + 1, str(exc)[:80])
+                try:
+                    await self.page.wait_for_load_state("domcontentloaded", timeout=NAVIGATION_SETTLE_MS)
+                except Exception:  # noqa: BLE001 — still loading; retry anyway
+                    pass
+        if backend is self._snapshot_ax:
+            logger.warning("ax snapshot failed (%s); falling back to the DOM walk", last)
+            return await self._snapshot_dom()
+        raise last  # type: ignore[misc]
 
     async def _listener_probe(self, frame: Frame) -> dict | None:
         """Elements with DIRECT mouse/keyboard listeners (addEventListener), via DevTools'

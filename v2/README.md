@@ -23,3 +23,6 @@ the CDP-level automation leaks are closed at the binary level. Measured 31/31 on
 bot.sannysoft.com and "Normal" on browserscan.net bot-detection, headless and headed.
 
 Tests: `NETGENT_BROWSER_TESTS=1 uv run pytest -q` · Lint: `uv run ruff check src tests`
+
+Observation backend for exploration: `--observation dom|ax` (or `NETGENT_OBSERVATION`); `ax` reads the
+browser's accessibility tree (hybrid with DOM facts) — see `docs/research/accessibility-tree-observation.md`.
