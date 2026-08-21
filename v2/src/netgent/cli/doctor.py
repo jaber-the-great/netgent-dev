@@ -14,7 +14,7 @@ MIN_PYTHON = (3, 11)
 
 # Provider prefix in NETGENT_GENERATOR_MODEL -> env vars that can satisfy it.
 PROVIDER_KEYS: dict[str, tuple[str, ...]] = {
-    "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "gemini": ("GOOGLE_API_KEY", "GEMINI_API_KEY"),
     "openai": ("OPENAI_API_KEY",),
     "anthropic": ("ANTHROPIC_API_KEY",),
 }
@@ -94,7 +94,7 @@ def _check_llm_keys(env_file: dict[str, str]) -> CheckResult:
         "LLM API keys",
         "warn",
         "no provider keys set",
-        hint="only `netgent generate`/`eval` need one; set GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY",
+        hint="only `netgent generate`/`eval` need one; set GOOGLE_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY",
     )
 
 

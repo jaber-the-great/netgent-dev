@@ -4,9 +4,10 @@ This is the single source of truth for netgent's config surface (see .env.exampl
 environment variables win over .env — pydantic-settings' default precedence — so an export
 or a CI secret is never overridden by a checked-out .env.
 
-Provider keys use netgent's canonical names (GEMINI/OPENAI/ANTHROPIC). `sync_provider_keys()`
-copies them into the process environment under the names the LLM SDKs expect (e.g. langchain's
-Google integration reads GOOGLE_API_KEY), so the agent's model calls just work.
+Provider keys use the names the LLM SDKs themselves read (GOOGLE_API_KEY for Gemini via
+langchain-google-genai, OPENAI_API_KEY, ANTHROPIC_API_KEY); GEMINI_API_KEY is accepted as an
+alias because Google's own docs use it. `sync_provider_keys()` publishes the resolved keys into
+the process environment so the SDKs pick them up regardless of which name was set.
 """
 
 import os
@@ -24,9 +25,9 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ── LLM provider keys (canonical names; GOOGLE_API_KEY is a fallback for GEMINI) ──────
+    # ── LLM provider keys (GOOGLE_API_KEY is what langchain reads; GEMINI_API_KEY is an alias) ──
     gemini_api_key: str | None = Field(
-        default=None, validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY")
+        default=None, validation_alias=AliasChoices("GOOGLE_API_KEY", "GEMINI_API_KEY")
     )
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
@@ -57,8 +58,8 @@ class Settings(BaseSettings):
     def sync_provider_keys(self) -> None:
         """Publish provider keys into os.environ under the names the LLM SDKs read.
 
-        Only sets a var that isn't already present (real env wins). Gemini maps to
-        GOOGLE_API_KEY because langchain's Google integration reads that name.
+        Only sets a var that isn't already present (real env wins). The Gemini key is
+        published under both names so either convention works downstream.
         """
         for env_name, value in (
             ("GOOGLE_API_KEY", self.gemini_api_key),
