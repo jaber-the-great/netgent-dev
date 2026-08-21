@@ -15,6 +15,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from netgent.agent.decision import AgentDecision
+from netgent.agent.evidence import PageEvidence, capture_evidence, locator_of
 from netgent.agent.llm import LLM
 from netgent.agent.observation import format_observation, to_action
 from netgent.agent.prompt import SYSTEM_PROMPT
@@ -38,6 +39,10 @@ class AgentStep(BaseModel):
     # The resolved, durable-locator action that was dispatched (None for done/stop or
     # failed steps). This is what `netgent generate` compiles into a workflow transition.
     action: Action | None = None
+    # What the page looked like after this step settled (captured again right before the
+    # next action is dispatched, so it includes a probe of that action's target). Synthesis
+    # compares evidence across runs to derive state conditions.
+    evidence: PageEvidence | None = None
 
 
 class AgentTrajectory(BaseModel):
@@ -48,10 +53,18 @@ class AgentTrajectory(BaseModel):
 
 
 class BrowserAgent:
-    def __init__(self, llm: LLM, max_steps: int = 25, run_dir: Path | None = None, upload_file: Path | None = None):
+    def __init__(
+        self,
+        llm: LLM,
+        max_steps: int = 25,
+        run_dir: Path | None = None,
+        upload_file: Path | None = None,
+        evidence: bool = True,
+    ):
         self._llm = llm
         self._max_steps = max_steps
         self._run_dir = run_dir
+        self._evidence = evidence  # capture page evidence per step (Discovery); off = bare agent
         # File the agent offers to any file input via kind="upload". A default sample is
         # created on demand so uploads work autonomously without the caller supplying one.
         self._upload_file = upload_file
@@ -91,6 +104,7 @@ class BrowserAgent:
                     reasoning="starting URL",
                     url=session.page.url,
                     action=GotoAction(url=url),
+                    evidence=await self._observe(session),
                 )
             )
 
@@ -136,6 +150,11 @@ class BrowserAgent:
             try:
                 upload = self._upload_path() if decision.kind == "upload" else None
                 action = to_action(decision, snapshot, upload_path=upload)
+                # The previous step's evidence, settled: re-observe now (the page has had the
+                # LLM's think time to finish loading) and probe this action's target, so the
+                # previous state records "the element the next edge needs was visible".
+                if self._evidence and traj.steps and traj.steps[-1].action is not None:
+                    traj.steps[-1].evidence = await self._observe(session, probe=locator_of(action))
                 await session.dispatch(action)
             except (ExecutionError, ValueError) as exc:
                 error = str(exc)
@@ -144,6 +163,7 @@ class BrowserAgent:
             step = self._step(n, decision, session.page.url, error=error)
             if error is None:
                 step.action = action  # the compilable record of what actually ran
+                step.evidence = await self._observe(session)
             if self._run_dir is not None:
                 rel = f"screenshots/step-{n:02d}.png"
                 try:
@@ -164,6 +184,15 @@ class BrowserAgent:
             self._run_dir.mkdir(parents=True, exist_ok=True)
             (self._run_dir / "trajectory.json").write_text(traj.model_dump_json(indent=2) + "\n")
         return traj
+
+    async def _observe(self, session: BrowserSession, probe=None) -> PageEvidence | None:
+        if not self._evidence:
+            return None
+        try:
+            return await capture_evidence(session, probes=[probe] if probe else [])
+        except Exception as exc:  # noqa: BLE001 — evidence must never fail exploration
+            logger.warning("evidence capture failed: %s", exc)
+            return None
 
     @staticmethod
     def _step(n: int, decision: AgentDecision, url: str, error: str | None = None) -> AgentStep:
