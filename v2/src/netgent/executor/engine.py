@@ -8,6 +8,7 @@ state must be current, dispatch the action, await the target state's conditions.
 When `run_dir` is set the executor writes a trajectory bundle (record.json + per-edge screenshots).
 """
 
+import asyncio
 import time
 from pathlib import Path
 
@@ -20,6 +21,8 @@ from netgent.schema.records import ConditionCheck, EdgeRecord, RunRecord, utcnow
 from netgent.schema.workflow import Transition, Workflow
 
 logger = get_logger(__name__)
+
+BRANCH_POLL_S = 0.1
 
 
 class Executor:
@@ -108,12 +111,19 @@ class Executor:
             logger.warning("repeat: hit max_iterations=%d without `until` satisfied", limit)
 
     async def _run_branch(self, node: Branch) -> None:
-        for arm in node.arms:
-            report = await self._session.condition_report(self._workflow.state(arm.when))
-            if all(met for _, met in report):
-                logger.debug("branch: arm when=%s matched", arm.when)
-                await self._run_nodes(arm.then)
-                return
+        # Poll the arms within the bounded probe window (0 = evaluate once). The first
+        # arm whose guard holds wins; arms are ordered, so overlap resolves by order.
+        deadline = time.monotonic() + node.probe_ms / 1000
+        while True:
+            for arm in node.arms:
+                report = await self._session.condition_report(self._workflow.state(arm.when))
+                if all(met for _, met in report):
+                    logger.debug("branch: arm when=%s matched", arm.when)
+                    await self._run_nodes(arm.then)
+                    return
+            if time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(BRANCH_POLL_S)
         if node.else_ is not None:
             logger.debug("branch: no arm matched, taking else")
             await self._run_nodes(node.else_)

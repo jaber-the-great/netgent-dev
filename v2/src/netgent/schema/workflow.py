@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from netgent.schema.actions import Action
 from netgent.schema.control import Branch, ControlNode, EdgeStep, Milestone, Param, Repeat
+from netgent.schema.provenance import Provenance
 from netgent.schema.triggers import Trigger
 
 DEFAULT_STATE_TIMEOUT_MS = 10_000
@@ -90,6 +91,8 @@ class Workflow(BaseModel):
     # Empty = legacy behavior (success = every edge ok).
     accept_states: list[str] = Field(default_factory=list)
     milestones: list[Milestone] = Field(default_factory=list)
+    # How this artifact came to be: explorations, variations, validation outcome.
+    provenance: Provenance | None = None
 
     @model_validator(mode="after")
     def _validate_graph(self) -> Self:

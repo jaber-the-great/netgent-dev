@@ -31,10 +31,22 @@ from netgent.schema.actions import (
 )
 from netgent.schema.actions import Locator as LocatorChain
 from netgent.schema.control import ParamSource
-from netgent.schema.triggers import SelectorHidden, SelectorVisible, TitleContains, Trigger, UrlMatches
+from netgent.schema.triggers import (
+    ElementVisible,
+    SelectorHidden,
+    SelectorVisible,
+    TextVisible,
+    TitleContains,
+    Trigger,
+    UrlMatches,
+    VideoPlaying,
+)
 from netgent.schema.workflow import State
 
 POLL_INTERVAL_S = 0.1
+
+# currentTime of the first matching <video>, or null when there is none.
+VIDEO_TIME_JS = """(sel) => { const v = document.querySelector(sel); return v ? v.currentTime : null; }"""
 
 
 class BrowserSession:
@@ -206,6 +218,31 @@ class BrowserSession:
         except Exception as exc:
             raise ActionDispatchError(f"{action.type} failed: {exc}") from exc
 
+    async def is_visible(self, chain: LocatorChain) -> bool:
+        """Whether the element a durable locator chain addresses is visible right now.
+        Unresolvable chains count as not visible (a probe, never a crash)."""
+        try:
+            return await self._resolve(chain).first.is_visible()
+        except Exception:  # noqa: BLE001 — includes LocatorResolutionError and detached frames
+            return False
+
+    async def video_time(self, selector: str = "video") -> float | None:
+        """currentTime of the first <video> matching `selector`, or None if there is none."""
+        try:
+            value = await self.page.evaluate(VIDEO_TIME_JS, selector)
+        except Exception:  # noqa: BLE001 — a navigating page has no document to ask
+            return None
+        return float(value) if value is not None else None
+
+    async def video_playing(self, selector: str = "video", sample_ms: int = 300) -> bool:
+        """A <video> is present and its currentTime advanced across a `sample_ms` gap."""
+        first = await self.video_time(selector)
+        if first is None:
+            return False
+        await asyncio.sleep(sample_ms / 1000)
+        second = await self.video_time(selector)
+        return second is not None and second > first
+
     async def _holds(self, trigger: Trigger) -> bool:
         match trigger:
             case UrlMatches():
@@ -216,6 +253,15 @@ class BrowserSession:
                 return await self.page.locator(trigger.selector).first.is_visible()
             case SelectorHidden():
                 return not await self.page.locator(trigger.selector).first.is_visible()
+            case ElementVisible():
+                return await self.is_visible(trigger.locator)
+            case TextVisible():
+                try:
+                    return await self.page.get_by_text(trigger.text).first.is_visible()
+                except Exception:  # noqa: BLE001 — mid-navigation: not visible yet
+                    return False
+            case VideoPlaying():
+                return await self.video_playing(trigger.selector, trigger.sample_ms)
         return False
 
     async def extract_value(self, source: "ParamSource", timeout_ms: int = 5000) -> str | None:

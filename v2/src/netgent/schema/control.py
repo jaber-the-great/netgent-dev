@@ -56,6 +56,10 @@ class Branch(BaseModel):
     kind: Literal["branch"] = "branch"
     arms: list[BranchArm]
     else_: list[ControlNode] | None = Field(default=None, alias="else")
+    # Poll the arms for up to this long before concluding none matches. Interstitials
+    # (cookie walls, "continue?" dialogs) often appear a beat after the page does; a
+    # bounded probe window lets the guard see them without an unbounded wait.
+    probe_ms: int = Field(default=0, ge=0)
 
     model_config = {"populate_by_name": True}
 

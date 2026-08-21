@@ -37,8 +37,18 @@ from netgent.schema.control import (
     Repeat,
 )
 from netgent.schema.export import SCHEMAS, generate, render, write_all
+from netgent.schema.provenance import Provenance, ValidationResult
 from netgent.schema.records import EdgeRecord, RunRecord
-from netgent.schema.triggers import SelectorHidden, SelectorVisible, TitleContains, Trigger, UrlMatches
+from netgent.schema.triggers import (
+    ElementVisible,
+    SelectorHidden,
+    SelectorVisible,
+    TextVisible,
+    TitleContains,
+    Trigger,
+    UrlMatches,
+    VideoPlaying,
+)
 from netgent.schema.workflow import State, Transition, Workflow, dump_workflow, load_workflow, resolve_params
 
 __all__ = [
@@ -50,9 +60,11 @@ __all__ = [
     "ClickAction",
     "ControlNode",
     "EdgeRecord",
+    "ElementVisible",
     "EdgeStep",
     "Milestone",
     "Param",
+    "Provenance",
     "ParamSource",
     "Repeat",
     "resolve_params",
@@ -72,10 +84,13 @@ __all__ = [
     "SelectorHidden",
     "SelectorVisible",
     "State",
+    "TextVisible",
     "TitleContains",
     "Transition",
     "Trigger",
     "UrlMatches",
+    "ValidationResult",
+    "VideoPlaying",
     "Workflow",
     "dump_workflow",
     "generate",
