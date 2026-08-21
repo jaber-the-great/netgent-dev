@@ -58,7 +58,9 @@ agent-only: the schema and executor never see it.
    state where they occurred. Each distinct variant is an arm guarded by a state whose
    condition is `element_visible` on the variant's first target; the arm is an ε-transition
    (`noop`) into that interstitial state followed by the variant's own edges; the `else` arm is
-   a single ε-edge. Both converge on a join state `sNj`. `probe_ms` (3 s) bounds how long replay
+   a single ε-edge. Both converge on a join state `sNj`. Arms dispatch in order, so they are
+   sorted by how many runs took them, then by guard durability (`#id`/test-id/label, then
+   short role names, then content-like long names). `probe_ms` (3 s) bounds how long replay
    watches for a late interstitial. Variants whose leading steps have no locator (scroll, wait,
    bare key press) can't be guarded and are dropped as incidental — noted in provenance. If no
    run had an empty gap there is no `else`: an unmatched branch is new territory, a hard failure.
@@ -104,6 +106,13 @@ provenance:
 - Only *observed* variation is recorded. An interstitial that never appeared during the N
   explorations yields no branch; validation will catch it only if it appears then.
 - Failed exploration steps are not yet turned into recovery arms; they are excluded and counted.
+- A detour every run took (e.g. Haiku re-navigating to the YouTube home after misreading the
+  page) is, by construction, part of the core path: synthesis records what all runs did, it
+  does not judge whether it was necessary.
+- When runs click *different elements* for the same intent (a result's title link vs. its
+  thumbnail), synthesis sees distinct variants and emits one arm each; content-bound guards
+  (a specific video title) become dead arms behind the general one. Locator-equivalence
+  (same target element → merge) is future work.
 - No `Repeat` inference (pagination / scroll-feed loops) yet; the schema supports it.
 - `text_visible` needs ≥2 runs and picks one text; it is the most site-fragile condition and the
   first thing relaxation drops.

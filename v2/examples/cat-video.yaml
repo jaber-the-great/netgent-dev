@@ -60,14 +60,22 @@ states:
   conditions:
   - type: url_matches
     pattern: https://www\.youtube\.com/results
-  - type: text_visible
-    text: All
   timeout_ms: 10000
 - id: s7
   description: after scroll down 1
   conditions: []
   timeout_ms: 10000
 - id: s7b1
+  description: 'interstitial present: click #video-title'
+  conditions:
+  - type: element_visible
+    locator:
+    - fn: locator
+      args:
+      - '#video-title'
+      kwargs: {}
+  timeout_ms: 10000
+- id: s7b2
   description: 'interstitial present: click link {''name'': ''Ranking MOST Adorable
     ${query}''}'
   conditions:
@@ -78,16 +86,6 @@ states:
       - link
       kwargs:
         name: Ranking MOST Adorable ${query}
-  timeout_ms: 10000
-- id: s7b2
-  description: 'interstitial present: click #video-title'
-  conditions:
-  - type: element_visible
-    locator:
-    - fn: locator
-      args:
-      - '#video-title'
-      kwargs: {}
   timeout_ms: 10000
 - id: s7b3
   description: "interstitial present: click link {'name': 'Top 5 Funny Dog Fails Moment\
@@ -103,11 +101,15 @@ states:
   timeout_ms: 10000
 - id: s7j
   description: s7, interstitial resolved
-  conditions: []
+  conditions:
+  - type: selector_visible
+    selector: video
   timeout_ms: 10000
 - id: s8
   description: after wait
-  conditions: []
+  conditions:
+  - type: selector_visible
+    selector: video
   timeout_ms: 10000
 transitions:
 - id: t1
@@ -190,11 +192,10 @@ transitions:
     timeout_ms: 5000
     type: click
     locator:
-    - fn: get_by_role
+    - fn: locator
       args:
-      - link
-      kwargs:
-        name: Ranking MOST Adorable ${query}
+      - '#video-title'
+      kwargs: {}
 - id: t7b2_eps
   source: s7
   target: s7b2
@@ -208,10 +209,11 @@ transitions:
     timeout_ms: 5000
     type: click
     locator:
-    - fn: locator
+    - fn: get_by_role
       args:
-      - '#video-title'
-      kwargs: {}
+      - link
+      kwargs:
+        name: Ranking MOST Adorable ${query}
 - id: t7b3_eps
   source: s7
   target: s7b3
@@ -285,7 +287,7 @@ accept_states:
 - s8
 milestones: []
 provenance:
-  generated_at: '2026-08-21T17:55:23+00:00'
+  generated_at: '2026-08-21T18:01:11+00:00'
   generator: anthropic/claude-haiku-4-5-20251001
   runs: 3
   successful_runs: 3
@@ -295,20 +297,6 @@ provenance:
   validation:
   - params:
       query: cat videos
-    success: false
-    edges_ok: 8
-    failed_edge: t7b1_1
-    failed_state: s7j
-    unmet:
-    - selector_visible
-    error: 'state ''s7j'' not recognized within 10000ms; unmet conditions: [''selector_visible'']'
-  - params:
-      query: dog videos
-    success: true
-    edges_ok: 10
-    unmet: []
-  - params:
-      query: cat videos
     success: true
     edges_ok: 10
     unmet: []
@@ -317,14 +305,13 @@ provenance:
     success: true
     edges_ok: 10
     unmet: []
-  relaxed:
-  - 's7j: selector_visible'
-  - 's8: selector_visible'
+  relaxed: []
   notes:
   - 'run 1: dropped click on a field that is filled next (click combobox {''name'':
     ''Search''})'
   - 'run 1: dropped click on a field that is filled next (click combobox {''name'':
     ''Search''})'
+  - 'run 1: dropped scroll that changed no page evidence'
   - 'run 2: dropped click on a field that is filled next (click combobox {''name'':
     ''Search''})'
   - 'run 2: dropped click on a field that is filled next (click combobox {''name'':
@@ -334,9 +321,8 @@ provenance:
   - 'run 3: dropped click on a field that is filled next (click combobox {''name'':
     ''Search''})'
   - 'core path: 8 action(s) common to all 3 successful run(s)'
-  - 'state s3: dropped 1 incidental step(s) seen in some runs (not guardable)'
+  - "state s7: optional step(s) seen in some runs \u2192 guarded branch: click #video-title"
   - "state s7: optional step(s) seen in some runs \u2192 guarded branch: click link\
     \ {'name': 'Ranking MOST Adorable ${query}'}"
-  - "state s7: optional step(s) seen in some runs \u2192 guarded branch: click #video-title"
   - "state s7: optional step(s) seen in some runs \u2192 guarded branch: click link\
     \ {'name': 'Top 5 Funny Dog Fails Moment You Must See \U0001F436\u2764\uFE0F'}"
