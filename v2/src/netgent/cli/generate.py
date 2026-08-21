@@ -66,6 +66,7 @@ def generate(
         validate_replay=validate,
     )
     llm = make_llm(model or get_settings().generator_model)
+    usage = getattr(llm, "usage", None)
 
     colors = {"explore": None, "generate": "cyan", "validate": "magenta"}
 
@@ -74,6 +75,11 @@ def generate(
         typer.secho(f"[{stage}] {text}", fg=fg)
 
     result = asyncio.run(orchestrate(req, llm, listen))
+    if usage:
+        typer.echo(
+            f"[usage] llm calls={usage['calls']} input_tokens={usage['input_tokens']} "
+            f"output_tokens={usage['output_tokens']} observation_chars={usage['observation_chars']}"
+        )
 
     if result.workflow is not None:
         typer.echo(f"\nworkflow written to {out}")

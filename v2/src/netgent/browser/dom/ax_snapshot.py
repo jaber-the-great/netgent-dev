@@ -90,6 +90,10 @@ ELEMENT_FACTS_JS = r"""
     out.testId = el.getAttribute('data-testid') || el.getAttribute('data-test-id') || null;
     out.hasLabel = !!(el.labels && el.labels.length);
     out.editable = !!el.isContentEditable;
+    // Display-only fallback when the accessible name is empty (icon links, thumbnails):
+    // what a sighted user reads. Never used for the role locator.
+    out.fallbackName = clean(el.getAttribute('title') || el.getAttribute('placeholder') ||
+      el.getAttribute('alt') || (tag === 'select' ? '' : el.innerText) || '').slice(0, 120);
     if (tag === 'details' || tag === 'summary') out.expanded = !!(el.closest('details') || {}).open;
   } catch (e) { /* partial facts are fine */ }
   return out;
@@ -331,7 +335,7 @@ def build_elements(
             DomElement(
                 tag=tag,
                 role=role if role != tag else None,
-                name=n.name,
+                name=n.name or (f.get("fallbackName") or ""),
                 type=f.get("type"),
                 checked=checked,
                 disabled=bool(f.get("disabled")) or n.attrs.get("disabled") is True,

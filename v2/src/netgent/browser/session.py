@@ -331,6 +331,36 @@ class BrowserSession:
             # context — this fires framework listeners a synthetic input click misses.
             await first.evaluate("el => (el.labels && el.labels[0] ? el.labels[0] : el).click()")
 
+    async def _upload(self, locator: Locator, paths: list[str], timeout_ms: int) -> None:
+        """set_input_files on the element — or on the file input it stands for.
+
+        Frameworks (MUI, Bootstrap custom-file) render the visible "Upload" control as a
+        <label role=button> or <button> with the real <input type=file> hidden beside it; the
+        agent picks the visible control. Retarget to the label's control, a descendant file
+        input, or the nearest one in the same fieldset/form.
+        """
+        first = locator.first
+        try:
+            await first.set_input_files(paths, timeout=timeout_ms)
+            return
+        except Exception as exc:  # noqa: BLE001 — retarget below
+            err = exc
+        handle = await first.element_handle(timeout=timeout_ms)
+        found = await handle.evaluate_handle(
+            """el => {
+              if (el.matches('input[type=file]')) return el;
+              if (el.control && el.control.type === 'file') return el.control;
+              const inside = el.querySelector('input[type=file]');
+              if (inside) return inside;
+              const scope = el.closest('form, fieldset, .form-group, div') || document;
+              return scope.querySelector('input[type=file]') || document.querySelector('input[type=file]');
+            }"""
+        )
+        target = found.as_element()
+        if target is None:
+            raise err
+        await target.set_input_files(paths, timeout=timeout_ms)
+
     async def dispatch(self, action: Action) -> None:
         try:
             match action:
@@ -363,7 +393,7 @@ class BrowserSession:
                     pixels = int(action.pages * viewport) * (1 if action.down else -1)
                     await self.page.mouse.wheel(0, pixels)
                 case UploadFileAction():
-                    await self._resolve(action.locator).set_input_files(action.paths, timeout=action.timeout_ms)
+                    await self._upload(self._resolve(action.locator), action.paths, action.timeout_ms)
                 case GoBackAction():
                     await self.page.go_back(timeout=action.timeout_ms)
                 case WaitAction():
