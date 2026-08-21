@@ -95,6 +95,10 @@ class ScrollAction(_ActionBase):
     type: Literal["scroll"] = "scroll"
     down: bool = True
     pages: float = 1.0
+    # Optional target: scroll INSIDE this element (a scrollable box such as a terms-of-service
+    # pane) instead of the page. Dispatched as hover + wheel, so nested scroll containers
+    # receive the same events a human's wheel would.
+    locator: Locator | None = None
 
 
 class UploadFileAction(_ActionBase):

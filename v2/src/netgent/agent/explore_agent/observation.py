@@ -109,17 +109,25 @@ def _locator_for(el: DomElement) -> list[LocatorStep]:
             and not _VOLATILE_ID.search(c.value)
         ):
             return css(c.value)
-    # 2. role with a genuine accessible name (skip <select>: its name is an option dump)
-    if el.tag != "select":
-        for c in cands:
-            if c.kind == "role" and c.role and c.name:
-                return chain + [LocatorStep(fn="get_by_role", args=[c.role], kwargs={"name": c.name})]
+    # 2. role with a genuine accessible name. The DOM walk's heuristic name for <select> is an
+    #    option dump, so it is skipped there; the accessibility backend's name (exact=True) is
+    #    the browser-computed label and is used as-is. Exact names may carry `.nth(k)` when
+    #    several same-frame elements share role+name.
+    for c in cands:
+        if c.kind == "role" and c.role and c.name and (el.tag != "select" or c.exact):
+            kwargs: dict[str, str | bool] = {"name": c.name}
+            if c.exact:
+                kwargs["exact"] = True
+            steps = chain + [LocatorStep(fn="get_by_role", args=[c.role], kwargs=kwargs)]
+            return steps + [LocatorStep(fn="nth", args=[c.nth])] if c.nth is not None else steps
     # 3. test-id, 4. label
     for c in cands:
         if c.kind == "test_id" and c.value:
             return chain + [LocatorStep(fn="get_by_test_id", args=[c.value])]
         if c.kind == "label" and c.value:
-            return chain + [LocatorStep(fn="get_by_label", args=[c.value])]
+            kwargs = {"exact": True} if c.exact else {}
+            steps = chain + [LocatorStep(fn="get_by_label", args=[c.value], kwargs=kwargs)]
+            return steps + [LocatorStep(fn="nth", args=[c.nth])] if c.nth is not None else steps
     # 5. any css path
     for c in cands:
         if c.kind == "css" and c.value:
@@ -179,7 +187,10 @@ def to_action(decision: AgentDecision, snapshot: DomSnapshot, upload_path: str |
                     raise ValueError(
                         f"do not scroll yet — fill the [required]/[invalid] fields in view first: {pending[:8]}"
                     )
-            return ScrollAction(down=down, pages=decision.pages if decision.pages is not None else 1.0)
+            pages = decision.pages if decision.pages is not None else 1.0
+            if decision.index is not None:  # scroll inside a scrollable box (role=scrollable)
+                return ScrollAction(down=down, pages=pages, locator=_locator_for(element()))
+            return ScrollAction(down=down, pages=pages)
         case "go_back":
             return GoBackAction()
         case "wait":

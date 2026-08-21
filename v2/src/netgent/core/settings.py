@@ -12,6 +12,7 @@ so the SDKs see them.
 
 import os
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -38,6 +39,10 @@ class Settings(BaseSettings):
     headless: bool = Field(default=True, validation_alias="NETGENT_HEADLESS")
     browser_executable: str | None = Field(default=None, validation_alias="NETGENT_BROWSER_EXECUTABLE")
     browser_storage_dir: str | None = Field(default=None, validation_alias="NETGENT_BROWSER_STORAGE_DIR")
+    # Observation backend for the compile-time agent: "dom" (injected DOM walk, default) or
+    # "ax" (browser accessibility tree, hybrid with DOM facts). An A/B flag — see
+    # docs/research/accessibility-tree-observation.md.
+    observation: Literal["dom", "ax"] = Field(default="dom", validation_alias="NETGENT_OBSERVATION")
 
     # ── Site credentials + ops ───────────────────────────────────────────────────────────
     credentials_file: str | None = Field(default=None, validation_alias="NETGENT_CREDENTIALS_FILE")

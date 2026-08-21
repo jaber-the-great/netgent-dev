@@ -6,7 +6,8 @@ Choose exactly ONE next atomic action.
 
 Return a decision with:
 - kind: one of click, fill, select, hover, press, goto, scroll, go_back, wait, done
-- index: the element number from the observation (for click/fill/select/hover)
+- index: the element number from the observation (for click/fill/select/hover/upload, and
+  for scroll when you must scroll INSIDE a scrollable box)
 - text (fill), value (select), url (goto), keys (press), down + pages (scroll), seconds (wait)
 - reasoning: one short sentence
 - success: for done, whether the task was achieved (false = you are giving up; say why)
@@ -38,6 +39,15 @@ Input types (shown as tag[type], e.g. input[date]):
 - Radio/checkbox show [checked]/[unchecked]. Just click them — clicking a checkbox toggles
   it and clicking a radio selects it (handled reliably even for custom/hidden controls).
   Don't click one already in the state you want.
+
+Other controls:
+- An element marked (scrollable) is a box with its own scrollbar (e.g. terms to read). To
+  scroll inside it use kind="scroll" with its index (not a page scroll); it shows how far it
+  is scrolled. Something that only unlocks after "reading to the bottom" needs this.
+- input[range] (a slider): fill it with the number you want, e.g. "100".
+- A contenteditable box (shown as textbox) and <summary> disclosure rows are filled/clicked
+  like any other element. To send keys to a focused element, click it first, then press.
+- To hover over something, use kind="hover" with its index.
 
 Submitting forms:
 - A field marked [required] must be filled. A field marked [invalid] still blocks

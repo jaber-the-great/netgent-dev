@@ -20,9 +20,12 @@ except ImportError:  # pragma: no cover — plain Playwright fallback
 
     PATCHED_BROWSER = False
 
+from netgent.browser.dom import ax_snapshot as ax
 from netgent.browser.dom.snapshot import DOM_SNAPSHOT_JS, FRAME_SELECTOR_JS, DomElement, DomSnapshot, TextBlock
 from netgent.browser.dom.stealth import StealthProfile
 from netgent.core.errors import ActionDispatchError, LocatorResolutionError, TriggerTimeoutError
+from netgent.core.logger import get_logger
+from netgent.core.settings import get_settings
 from netgent.schema.actions import (
     Action,
     ClickAction,
@@ -44,10 +47,36 @@ from netgent.schema.workflow import State
 
 POLL_INTERVAL_S = 0.1
 
+# Evaluated through CDP with includeCommandLineAPI so `getEventListeners` exists. Lists the
+# document-order index of every element with a direct mouse/keyboard listener.
+LISTENER_PROBE_JS = """(() => {
+  const want = new Set(['click','dblclick','mousedown','mouseup','pointerdown','pointerup',
+    'mouseenter','mouseover','keydown','keyup','keypress','touchstart']);
+  const out = {};
+  const all = document.querySelectorAll('*');
+  for (let i = 0; i < all.length; i++) {
+    try {
+      const types = Object.keys(getEventListeners(all[i])).filter(t => want.has(t));
+      if (types.length) out[i] = types.join(',');
+    } catch (e) {}
+  }
+  return {n: all.length, m: out};
+})()"""
+
+logger = get_logger(__name__)
+
 
 class BrowserSession:
-    def __init__(self, headless: bool = True, stealth: bool | StealthProfile = True):
+    def __init__(
+        self,
+        headless: bool = True,
+        stealth: bool | StealthProfile = True,
+        observation: str | None = None,
+    ):
         self._headless = headless
+        # Observation backend: "dom" (injected DOM walk) or "ax" (accessibility tree, hybrid).
+        # None → NETGENT_OBSERVATION (default "dom"). Both produce the same DomSnapshot.
+        self.observation = observation or get_settings().observation
         # stealth=True → default profile; a StealthProfile → that profile; False → vanilla.
         # With a patched binary the best stealth is to spoof NOTHING in JS (spoofs are
         # themselves detectable) and run real Chrome with its native UA/headers.
@@ -105,18 +134,56 @@ class BrowserSession:
     async def snapshot(self) -> DomSnapshot:
         """Observe interactive elements + text across ALL frames (same- and cross-origin).
 
-        The DOM walk runs inside each frame's own context (Playwright evaluates it there
-        via CDP, bypassing the same-origin policy that limits in-page contentDocument access).
-        Element bbox.y is normalized to TOP-viewport coordinates so the observation can be
-        paged by scroll position.
+        Dispatches to the configured backend. Both normalize element bbox.y to TOP-viewport
+        coordinates so the observation can be paged by scroll position. If the accessibility
+        backend fails on a page it falls back to the DOM walk (logged) — observation must
+        never abort an exploration step.
         """
+        if self.observation == "ax":
+            try:
+                return await self._snapshot_ax()
+            except Exception as exc:  # noqa: BLE001 — fall back rather than lose the step
+                logger.warning("ax snapshot failed (%s); falling back to the DOM walk", exc)
+        return await self._snapshot_dom()
+
+    async def _listener_probe(self, frame: Frame) -> dict | None:
+        """Elements with DIRECT mouse/keyboard listeners (addEventListener), via DevTools'
+        command-line `getEventListeners` — the only way to see a plain <div> that reacts to
+        hover/click without a role, onclick attribute, tabindex or pointer cursor
+        (browser-use does the same). Needs a CDP session: available for the main frame and
+        out-of-process (cross-origin) iframes; same-process child frames return None.
+        Returns {n: element count, m: {index: "click,mouseenter"}} or None.
+        """
+        target = self.page if frame is self.page.main_frame else frame
+        try:
+            cdp = await self.page.context.new_cdp_session(target)
+        except Exception:  # noqa: BLE001 — same-process child frame: no session of its own
+            return None
+        try:
+            result = await cdp.send(
+                "Runtime.evaluate",
+                {"expression": LISTENER_PROBE_JS, "includeCommandLineAPI": True, "returnByValue": True},
+            )
+            value = result.get("result", {}).get("value")
+            return value if isinstance(value, dict) else None
+        except Exception:  # noqa: BLE001
+            return None
+        finally:
+            try:
+                await cdp.detach()
+            except Exception:  # noqa: BLE001
+                pass
+
+    async def _walk_frames(self, extras_only: bool = False) -> tuple[list[DomElement], list[TextBlock]]:
+        """Run the DOM walk in every frame's own context (Playwright evaluates it there via
+        CDP, bypassing the same-origin policy that limits in-page contentDocument access)."""
         elements: list[DomElement] = []
         texts: list[TextBlock] = []
-        viewport_height = await self.page.evaluate("() => window.innerHeight")
         for frame in self.page.frames:
             try:
                 frame_path, offset_y = await self._frame_info(frame)
-                raw = await frame.evaluate(DOM_SNAPSHOT_JS)
+                listeners = await self._listener_probe(frame)
+                raw = await frame.evaluate(DOM_SNAPSHOT_JS, {"extrasOnly": extras_only, "listeners": listeners})
             except Exception:  # a detached/unreachable frame is skipped, not fatal
                 continue
             for element in raw["elements"]:
@@ -126,10 +193,62 @@ class BrowserSession:
             for t in raw["texts"]:
                 t["frame_path"] = frame_path
                 texts.append(TextBlock.model_validate(t))
+        return elements, texts
+
+    async def _snapshot_dom(self) -> DomSnapshot:
+        viewport_height = await self.page.evaluate("() => window.innerHeight")
+        elements, texts = await self._walk_frames()
         return DomSnapshot(
             url=self.page.url,
             title=await self.page.title(),
             elements=elements,
+            texts=texts,
+            viewport_height=int(viewport_height),
+        )
+
+    async def _snapshot_ax(self) -> DomSnapshot:
+        """Accessibility-tree backend (see browser/dom/ax_snapshot.py).
+
+        1. One `aria_snapshot(mode="ai", boxes=True)` for the whole page (all frames).
+        2. Per interactive node, DOM facts via its `aria-ref` (gathered concurrently);
+           per iframe node, its CSS selector for the frame_locator chain.
+        3. DOM-structural extras (tabindex/onclick/contenteditable/summary/scrollable) from
+           the DOM walk in extrasOnly mode, merged by frame + bbox.
+        """
+        viewport_height = await self.page.evaluate("() => window.innerHeight")
+        text = await self.page.locator("body").aria_snapshot(mode="ai", boxes=True)
+        nodes = ax.parse_aria_snapshot(text)
+        interactives, texts_with_frames, iframe_refs = ax.collect(nodes)
+
+        async def facts(ref: str) -> dict | None:
+            try:
+                return await self.page.locator(f"aria-ref={ref}").evaluate(ax.ELEMENT_FACTS_JS)
+            except Exception:  # noqa: BLE001 — a vanished node just loses its DOM facts
+                return None
+
+        async def frame_selector(ref: str) -> str | None:
+            try:
+                return await self.page.locator(f"aria-ref={ref}").evaluate(FRAME_SELECTOR_JS)
+            except Exception:  # noqa: BLE001
+                return None
+
+        refs = [it.node.ref for it in interactives if it.node.ref]
+        fact_list, selector_list = await asyncio.gather(
+            asyncio.gather(*(facts(r) for r in refs)),
+            asyncio.gather(*(frame_selector(r) for r in iframe_refs)),
+        )
+        frame_selectors = {r: sel for r, sel in zip(iframe_refs, selector_list, strict=True) if sel}
+        elements = ax.build_elements(interactives, dict(zip(refs, fact_list, strict=True)), frame_selectors)
+        texts = []
+        for chain, block in texts_with_frames:
+            if all(r in frame_selectors for r in chain):
+                block.frame_path = [frame_selectors[r] for r in chain]
+                texts.append(block)
+        extras, _ = await self._walk_frames(extras_only=True)
+        return DomSnapshot(
+            url=self.page.url,
+            title=await self.page.title(),
+            elements=ax.merge_extras(elements, extras),
             texts=texts,
             viewport_height=int(viewport_height),
         )
@@ -208,7 +327,15 @@ class BrowserSession:
                 case SelectAction():
                     await self._resolve(action.locator).select_option(action.value, timeout=action.timeout_ms)
                 case ScrollAction():
-                    viewport = await self.page.evaluate("() => window.innerHeight")
+                    if action.locator is not None:
+                        # Scroll INSIDE a scrollable box: hover it, then wheel — exactly the
+                        # events a human's wheel delivers, so nested containers and their
+                        # scroll listeners behave.
+                        target = self._resolve(action.locator).first
+                        await target.hover(timeout=action.timeout_ms)
+                        viewport = await target.evaluate("el => el.clientHeight || window.innerHeight")
+                    else:
+                        viewport = await self.page.evaluate("() => window.innerHeight")
                     pixels = int(action.pages * viewport) * (1 if action.down else -1)
                     await self.page.mouse.wheel(0, pixels)
                 case UploadFileAction():
