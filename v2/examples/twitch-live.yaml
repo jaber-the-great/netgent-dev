@@ -7,38 +7,61 @@ states:
   conditions: []
   timeout_ms: 10000
 - id: s1
-  description: ''
+  description: after goto
   conditions:
   - type: url_matches
     pattern: https://www\.twitch\.tv/
+  - type: element_visible
+    locator:
+    - fn: get_by_role
+      args:
+      - searchbox
+      kwargs:
+        name: Search Input
+  - type: selector_visible
+    selector: video
+  - type: text_visible
+    text: Cookies and Advertising Choices
   timeout_ms: 10000
 - id: s2
-  description: ''
+  description: 'after fill searchbox {''name'': ''Search Input''}'
   conditions: []
+  timeout_ms: 10000
+- id: s2b1
+  description: 'interstitial present: click link {''name'': ''${channel} Channel''}'
+  conditions:
+  - type: element_visible
+    locator:
+    - fn: get_by_role
+      args:
+      - link
+      kwargs:
+        name: ${channel} Channel
+  timeout_ms: 10000
+- id: s2b2
+  description: 'interstitial present: click link {''name'': ''Go to ${channel}''}'
+  conditions:
+  - type: element_visible
+    locator:
+    - fn: get_by_role
+      args:
+      - link
+      kwargs:
+        name: Go to ${channel}
+  timeout_ms: 10000
+- id: s2j
+  description: s2, interstitial resolved
+  conditions:
+  - type: selector_visible
+    selector: video
   timeout_ms: 10000
 - id: s3
-  description: ''
-  conditions: []
-  timeout_ms: 10000
-- id: s4
-  description: ''
-  conditions:
-  - type: url_matches
-    pattern: https://www\.twitch\.tv/search
-  timeout_ms: 10000
-- id: s5
-  description: ''
-  conditions: []
-  timeout_ms: 10000
-- id: s6
-  description: ''
+  description: after wait
   conditions:
   - type: url_matches
     pattern: https://www\.twitch\.tv/${channel}
-  timeout_ms: 10000
-- id: s7
-  description: ''
-  conditions: []
+  - type: selector_visible
+    selector: video
   timeout_ms: 10000
 transitions:
 - id: t1
@@ -53,18 +76,6 @@ transitions:
   target: s2
   action:
     timeout_ms: 5000
-    type: click
-    locator:
-    - fn: get_by_role
-      args:
-      - searchbox
-      kwargs:
-        name: Search Input
-- id: t3
-  source: s2
-  target: s3
-  action:
-    timeout_ms: 5000
     type: fill
     locator:
     - fn: get_by_role
@@ -73,29 +84,15 @@ transitions:
       kwargs:
         name: Search Input
     text: ${channel}
-- id: t4
-  source: s3
-  target: s4
+- id: t2b1_eps
+  source: s2
+  target: s2b1
   action:
     timeout_ms: 5000
-    type: click
-    locator:
-    - fn: get_by_role
-      args:
-      - button
-      kwargs:
-        name: Search Button
-- id: t5
-  source: s4
-  target: s5
-  action:
-    timeout_ms: 5000
-    type: scroll
-    down: true
-    pages: 1.0
-- id: t6
-  source: s5
-  target: s6
+    type: noop
+- id: t2b1_1
+  source: s2b1
+  target: s2j
   action:
     timeout_ms: 5000
     type: click
@@ -104,10 +101,28 @@ transitions:
       args:
       - link
       kwargs:
-        name: ${channel}
-- id: t7
-  source: s6
-  target: s7
+        name: ${channel} Channel
+- id: t2b2_eps
+  source: s2
+  target: s2b2
+  action:
+    timeout_ms: 5000
+    type: noop
+- id: t2b2_1
+  source: s2b2
+  target: s2j
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - link
+      kwargs:
+        name: Go to ${channel}
+- id: t3
+  source: s2j
+  target: s3
   action:
     timeout_ms: 5000
     type: wait
@@ -118,13 +133,60 @@ params:
   required: true
   default: monstercat
   secret: false
-control_sequence:
-- t1
-- t2
-- t3
-- t4
-- t5
-- t6
-- t7
-accept_states: []
+control:
+- kind: edge
+  edge: t1
+- kind: edge
+  edge: t2
+- kind: branch
+  arms:
+  - when: s2b1
+    then:
+    - kind: edge
+      edge: t2b1_eps
+    - kind: edge
+      edge: t2b1_1
+  - when: s2b2
+    then:
+    - kind: edge
+      edge: t2b2_eps
+    - kind: edge
+      edge: t2b2_1
+  probe_ms: 3000
+- kind: edge
+  edge: t3
+accept_states:
+- s3
 milestones: []
+provenance:
+  generated_at: '2026-08-21T17:47:28+00:00'
+  generator: anthropic/claude-haiku-4-5-20251001
+  runs: 3
+  successful_runs: 3
+  variations:
+  - channel: bobross
+  validated: true
+  validation:
+  - params:
+      channel: monstercat
+    success: true
+    edges_ok: 5
+    unmet: []
+  - params:
+      channel: bobross
+    success: true
+    edges_ok: 5
+    unmet: []
+  relaxed: []
+  notes:
+  - 'run 1: dropped click on a field that is filled next (click searchbox {''name'':
+    ''Search Input''})'
+  - 'run 2: dropped click on a field that is filled next (click searchbox {''name'':
+    ''Search Input''})'
+  - 'run 3: dropped click on a field that is filled next (click searchbox {''name'':
+    ''Search Input''})'
+  - 'core path: 3 action(s) common to all 3 successful run(s)'
+  - "state s2: optional step(s) seen in some runs \u2192 guarded branch: click link\
+    \ {'name': '${channel} Channel'}"
+  - "state s2: optional step(s) seen in some runs \u2192 guarded branch: click link\
+    \ {'name': 'Go to ${channel}'}"
