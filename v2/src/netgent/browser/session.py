@@ -10,7 +10,15 @@ import re
 import time
 from pathlib import Path
 
-from playwright.async_api import Browser, BrowserContext, Frame, Locator, Page, Playwright, async_playwright
+try:  # Patchright: a patched Playwright that closes the CDP-level leaks (Runtime.enable,
+    # Console.enable, automation flags). Same API, so it is a drop-in when installed.
+    from patchright.async_api import Browser, BrowserContext, Frame, Locator, Page, Playwright, async_playwright
+
+    PATCHED_BROWSER = True
+except ImportError:  # pragma: no cover — plain Playwright fallback
+    from playwright.async_api import Browser, BrowserContext, Frame, Locator, Page, Playwright, async_playwright
+
+    PATCHED_BROWSER = False
 
 from netgent.browser.dom.snapshot import DOM_SNAPSHOT_JS, FRAME_SELECTOR_JS, DomElement, DomSnapshot, TextBlock
 from netgent.browser.dom.stealth import StealthProfile
@@ -53,8 +61,11 @@ class BrowserSession:
     def __init__(self, headless: bool = True, stealth: bool | StealthProfile = True):
         self._headless = headless
         # stealth=True → default profile; a StealthProfile → that profile; False → vanilla.
+        # With a patched binary the best stealth is to spoof NOTHING in JS (spoofs are
+        # themselves detectable) and run real Chrome with its native UA/headers.
+        default_profile = StealthProfile.native() if PATCHED_BROWSER else StealthProfile()
         self._stealth: StealthProfile | None = (
-            (stealth if isinstance(stealth, StealthProfile) else StealthProfile()) if stealth else None
+            (stealth if isinstance(stealth, StealthProfile) else default_profile) if stealth else None
         )
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
@@ -65,9 +76,20 @@ class BrowserSession:
         self._playwright = await async_playwright().start()
         profile = self._stealth
         launch_kwargs = profile.launch_kwargs(self._headless) if profile else {"headless": self._headless}
-        self._browser = await self._playwright.chromium.launch(**launch_kwargs)
-        self._context = await self._browser.new_context(**(profile.context_kwargs() if profile else {}))
-        if profile:
+        try:
+            self._browser = await self._playwright.chromium.launch(**launch_kwargs)
+        except Exception:  # noqa: BLE001 — e.g. channel="chrome" but Chrome isn't installed
+            if "channel" not in launch_kwargs:
+                raise
+            launch_kwargs.pop("channel")
+            self._browser = await self._playwright.chromium.launch(**launch_kwargs)
+        context_kwargs = profile.context_kwargs() if profile else {}
+        if profile and profile.user_agent is None and self._headless:
+            # Headless Chrome stamps "HeadlessChrome/<ver>" into its own UA — the one native
+            # tell worth overriding. Use the REAL version so the UA never drifts from the binary.
+            context_kwargs["user_agent"] = profile.headless_user_agent(self._browser.version)
+        self._context = await self._browser.new_context(**context_kwargs)
+        if profile and profile.init_script:
             await self._context.add_init_script(profile.init_script)
         self._page = await self._context.new_page()
         return self

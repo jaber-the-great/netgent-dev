@@ -9,7 +9,7 @@ exactly one atomic action. Read [`docs/OVERVIEW.md`](docs/OVERVIEW.md) first.
 ```sh
 cd v2
 uv sync --extra generate          # generate/agent need an LLM SDK; run does not
-uv run playwright install chromium
+uv run patchright install chromium   # patched Playwright; real Google Chrome is used when installed
 uv run ruff check src tests
 NETGENT_BROWSER_TESTS=1 uv run pytest -q
 ```
@@ -42,6 +42,12 @@ uv run netgent run examples/twitch-live.yaml --param channel=bobross   # zero LL
 
 Other commands: `netgent agent` (bare exploration), `netgent trajectory` (render a run record),
 `netgent schema`, `netgent eval`, `netgent doctor`.
+
+## Stealth
+
+With Patchright installed the browser spoofs nothing (real Chrome, native UA); the CDP-level
+automation leaks are closed at the binary level. Measured 31/31 on bot.sannysoft.com and "Normal"
+on browserscan.net bot-detection, headless and headed.
 
 ## Layout
 

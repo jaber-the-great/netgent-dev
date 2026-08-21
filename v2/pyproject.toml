@@ -9,6 +9,7 @@ authors = [
     { name = "SNL-UCSB" },
 ]
 dependencies = [
+    "patchright>=1.62.1",
     "playwright>=1.50",
     "pydantic>=2.9",
     "pydantic-settings>=2.5",
