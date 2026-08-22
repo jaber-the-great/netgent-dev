@@ -300,7 +300,46 @@ Coverage differences (same page, matched by frame + tag + coarse bbox):
 `uv run python evals/stress_ab.py sweep --backend dom|ax` (`sweep_forms`, `max_steps_per_form=30`,
 `retries=1`, one agent with continuous memory, verified by the form's own success marker).
 
-SWEEP_RESULTS
+`uv run python evals/stress_ab.py sweep --backend dom|ax` — `sweep_forms`, one agent (continuous
+memory) walked through all 21 forms, each attempted up to 2× (`retries=1`), `max_steps_per_form=30`,
+verified by the form's own `dumbledore` success marker (not the agent's self-report). Haiku.
+
+Final code (v3, with the navigation guard of §3):
+
+| backend | forms submitted (of 21) | LLM calls | input tokens | output tokens | wall |
+|---|---|---|---|---|---|
+| dom | **11/21** | 346 | 1,025,717 | 36,266 | 860s |
+| ax | **5/21** | 407 | 1,231,313 | 41,813 | 1113s |
+
+Per-form (v3): dom OK = [3, 4, 6, 8, 10, 12, 14, 17, 18, 19, 20]; ax OK = [3, 4, 6, 16, 19].
+
+**This is a model+widget number, not an observation-quality number, and it is noisy.** Across
+three runs on final code the counts were dom 8 / 8 / 11 and ax 4 / 1 / 5. The 1/21 outlier
+(sweep-ax-v2) was a real bug, now fixed: the agent issued a `goto` during one form, the whole
+page left `forms-comparison.html` for `about:blank`, and every later form saw an empty scoped
+observation and flailed — one stray navigation poisoned the rest of the sweep. The §3 guard
+(re-assert the base URL before each form; FORM_TASK forbids `goto`/`go_back`) removed the cascade
+(no wandered forms in v3).
+
+The remaining gap between backends is dominated by the page's deliberately hostile widgets and by
+model behaviour, not by what the observation shows:
+
+* The recurring failure in BOTH backends is *fill every field → click Submit → nothing happens →
+  scroll-thrash until the stuck detector fires*. The form's client-side validation silently
+  rejects a field the model believes it filled (a custom date picker, a Select2 whose hidden
+  `<select>` never received the value, a contenteditable email host that times out on `.fill`).
+  These are widget/model problems; the observation lists the field and a resolving locator in
+  both backends (§4 `forms` row: dom unique 100 %, ax 99.5 %).
+* Where the counts diverge run-to-run, it is because the ax names for custom controls (e.g. a
+  radio exposed with `role=button`, a Select2 combobox duplicated as two nodes) sometimes lead
+  the model down a different path than the DOM walk's heuristic names — not because a control is
+  missing. Neither backend clears this page; browser-use's own agent does not either.
+
+The observation-layer fixes the sweep *did* surface and that are now general (contenteditable
+host de-duplication, hidden file inputs behind a styled label/button, `data-placeholder` names)
+are in §3 and covered by tests; they moved specific forms (10, 16) from "field not observable" to
+"observed and fillable".
+
 
 ## 6. Challenge game — browser-use/stress-tests/challenge.html, Haiku, both backends
 
@@ -373,4 +412,50 @@ is what was compiled and replayed).
 
 ## 8. Recommendation and honest limitations
 
-RECOMMENDATION
+**Switch the default to `ax`.** The hybrid accessibility backend is strictly better on the one
+axis that matters for a *compiler* whose output is `get_by_role` chains: element identity. Its
+names are the browser's own accessible names, so a compiled `get_by_role(name=…, exact=True)`
+resolves to exactly one element far more often than the DOM heuristic's guess (Reddit 51 → 87 %,
+Twitch 49 → 79 %, todomvc 75 → 100 %), and where names repeat it disambiguates with `.nth(k)`.
+It names controls the heuristic cannot (radios/checkboxes labelled by following text, icon
+buttons, `<select>` by its label). Observation size and token cost are within ±5 % of the DOM
+walk; snapshot latency is higher on large pages (per-element `aria-ref` fact fetches) but still
+a fraction of one LLM call. Iframe (same- and cross-origin) and open-shadow coverage match the
+DOM walk because both lean on Playwright's frame stitching.
+
+Keep `dom` as the fallback the session already performs automatically when the aria snapshot
+raises, and keep the flag: `ax` depends on Playwright's `aria_snapshot(mode="ai")` (a semi-internal
+API) and on `getEventListeners` via CDP, so a Playwright upgrade or a hostile page could regress it.
+Flip the default in `Settings.observation` when the team is ready; this branch leaves it at `dom`
+so nothing changes without a decision.
+
+The end-to-end numbers (challenge, sweep) are **within noise between backends** — because at
+Haiku's level the bottleneck is the model's planning (hallucinated "already submitted", scroll
+hunting, custom-widget confusion), not the observation's element identity. The ax backend's
+advantage is latent until the compiled artifact is *replayed*: a role+name locator survives a
+page redesign that shifts DOM structure, where a css-path fallback does not. That is the whole
+point for NetGent — the observation feeds a compiler, and the compiler's job is durable locators.
+
+### Honest limitations
+
+* **Poor ARIA hygiene.** The ax backend is only as good as the page's roles/names. A `<div onclick>`
+  with no role and no text is invisible to the aria tree; we recover the common cases (cursor
+  pointer with text, direct event listeners, `<summary>`, scrollables) via the DOM `extrasOnly`
+  merge, but a genuinely unlabelled custom widget still has only a css-path locator, same as the
+  DOM walk. The 21-form sweep is deliberately adversarial (Select2, MUI, contenteditable rich-text,
+  RTL Arabic labels) and neither backend clears it — custom radios rendered as `<button>` that
+  don't toggle on a plain click, and submits silently blocked by client-side validation, are model
+  and widget problems, not observation problems.
+* **Localized / duplicate names.** `get_by_role(name=…, exact=True)` is language- and
+  whitespace-sensitive: an Arabic or emoji-laden name round-trips fine (it is the browser's own
+  string) but is opaque to the model, and two truly identical controls are only separable by
+  `.nth(k)`, which is positional and brittle if the page reorders them between explore and replay.
+* **Canvas / pixel-only content.** Text drawn on a `<canvas>` (the challenge CAPTCHA) is in neither
+  tree. That needs a vision input — an agent change, not an observation-backend one.
+* **Cost on huge pages.** Per-element fact fetches make the ax snapshot ~2× slower than the DOM
+  walk on 200+ element pages (still < 1 s). Batching the facts into one `evaluate` over all refs
+  would remove this; left as future work.
+* **Semi-internal API.** `aria_snapshot(mode="ai", boxes=True)` is not a stability-guaranteed
+  surface. The parser is defensive and the session falls back to the DOM walk on any error, but a
+  Playwright upgrade could change the YAML shape; the fixture-based parser tests would catch it.
+

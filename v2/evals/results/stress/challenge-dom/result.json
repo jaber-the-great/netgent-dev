@@ -1,0 +1,41 @@
+{
+  "kind": "challenge",
+  "backend": "dom",
+  "model": "anthropic/claude-haiku-4-5-20251001",
+  "max_steps": 60,
+  "score": 13,
+  "completed": [
+    "simple-button",
+    "radio-selection",
+    "checkbox-check",
+    "search-squash",
+    "date-time-input",
+    "hover-element",
+    "iframe-slider",
+    "scroll-accept",
+    "arrow-key-presses",
+    "file-upload",
+    "expand-details",
+    "dropdown-selections",
+    "contenteditable-div"
+  ],
+  "missed": [
+    "slider-drag",
+    "canvas-captcha"
+  ],
+  "steps": 38,
+  "agent_success": false,
+  "stopped_reason": "stuck: 6 steps with no change on screen",
+  "errors": [
+    "8. fill: fill failed: Locator.fill: Error: Malformed value\nCall log:\n  - waiting for locator(\"#date-picker\")\n    - locator resolved to <input type=\"date\" id=\"date-picker\"/>\n    - fill(\"12:00\")\n  - attempting fill action\n    - waiting for element to be visible, enabled and editable\n",
+    "14. click: click failed: Locator.click: Timeout 5000ms exceeded.\nCall log:\n  - waiting for locator(\"#accept-button\").first\n    - locator resolved to <button disabled id=\"accept-button\">I accept</button>\n  - attempting click action\n    2 \u00d7 waiting for element to be visible, enabled and stable\n      - element is not enabled\n    - retrying click action\n    - waiting 20ms\n    2 \u00d7 waiting for element to be visible, enabled and stable\n      - element is not enabled\n    - retrying click action\n      - waiting 100ms\n    9 \u00d7 waiting for element to be visible, enabled and stable\n      - element is not enabled\n    - retrying click action\n      - waiting 500ms\n    - waiting for element to be visible, enabled and stable\n",
+    "37. done: stuck: 6 steps with no change on screen"
+  ],
+  "wall_s": 70.7,
+  "usage": {
+    "calls": 36,
+    "input_tokens": 127698,
+    "output_tokens": 3868,
+    "observation_chars": 80740
+  }
+}
