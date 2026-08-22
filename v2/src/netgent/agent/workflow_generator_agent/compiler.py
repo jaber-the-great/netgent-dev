@@ -83,7 +83,14 @@ def compile_trajectory(
             if isinstance(node, list):
                 return [sub(x) for x in node]
             if isinstance(node, dict):
-                return {k: sub(v) for k, v in node.items()}
+                out = {k: sub(v) for k, v in node.items()}
+                # A role/label name that now carries a ${param} must not be matched exactly:
+                # the replay value differs in case/wording from the accessible name the site
+                # renders ("NEW Funny Cat Videos" vs query="cat videos"). Playwright's default
+                # (non-exact) match is case-insensitive substring, which is what we want here.
+                if out.get("exact") is True and "${" in str(out.get("name", "")):
+                    out["exact"] = False
+                return out
             return node
 
         data = sub(data)

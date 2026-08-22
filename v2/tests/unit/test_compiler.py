@@ -50,3 +50,21 @@ def test_sample_values_become_params():
 def test_empty_trajectory_rejected():
     with pytest.raises(ValueError, match="no successful action steps"):
         compile_trajectory(AgentTrajectory(task="t"), name="empty")
+
+
+def test_parameterized_role_name_drops_exact_match():
+    """An accessible name containing the sample value becomes ${param}; exact=True would then
+    fail on replay when the site renders the value in another case ("Cat Videos" vs "cat videos")."""
+    from netgent.agent.explore_agent.browser_agent import AgentStep, AgentTrajectory
+    from netgent.agent.workflow_generator_agent.compiler import compile_trajectory
+    from netgent.schema.actions import ClickAction, LocatorStep
+
+    traj = AgentTrajectory(task="t", success=True)
+    traj.steps.append(AgentStep(n=1, kind="click", reasoning="", url="https://x/", action=ClickAction(locator=[
+        LocatorStep(fn="get_by_role", args=["link"], kwargs={"name": "NEW Funny Cat Videos 2026", "exact": True}),
+        LocatorStep(fn="filter", kwargs={"visible": True}),
+    ])))
+    wf = compile_trajectory(traj, name="w", params={"query": "cat videos"})
+    step = wf.transitions[0].action.locator[0]
+    assert step.kwargs["name"] == "NEW Funny ${query} 2026"
+    assert step.kwargs["exact"] is False
