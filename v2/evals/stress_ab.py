@@ -94,19 +94,23 @@ async def main() -> None:
     ap.add_argument("--backend", choices=["dom", "ax", "hybrid", "hybrid_on_stuck"], required=True)
     ap.add_argument("--max-steps", type=int, default=None)
     ap.add_argument("--tag", default="")
+    ap.add_argument("--runs", type=int, default=1)
     args = ap.parse_args()
     get_settings().sync_provider_keys()  # publish .env keys to the SDKs
-    out_dir = Path("evals/results/stress") / f"{args.kind}-{args.backend}{args.tag}"
-    if args.kind == "challenge":
-        result = await run_challenge(args.backend, args.max_steps or 60, out_dir)
-    else:
-        result = await run_sweep(args.backend, args.max_steps or 30, out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "result.json").write_text(json.dumps(result, indent=2) + "\n")
-    print(json.dumps({k: v for k, v in result.items() if k != "forms"}, indent=2))
-    if "forms" in result:
-        for f in result["forms"]:
-            print(f"  form {f['form']:2d} {'OK ' if f['submitted'] else 'FAIL'} steps={f['steps']} {f['frame_path']}")
+    scores = []
+    for run in range(args.runs):
+        out_dir = Path("evals/results/stress") / f"{args.kind}-{args.backend}{args.tag}-r{run}"
+        if args.kind == "challenge":
+            result = await run_challenge(args.backend, args.max_steps or 60, out_dir)
+            metric = result["score"]
+        else:
+            result = await run_sweep(args.backend, args.max_steps or 30, out_dir)
+            metric = result["submitted"]
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+        scores.append(metric)
+        print(f"[run {run}] {args.kind} {args.backend}: metric={metric} usage={result.get('usage')}", flush=True)
+    print(f"SUMMARY {args.kind} {args.backend}: runs={scores} mean={sum(scores)/len(scores):.2f}")
 
 
 if __name__ == "__main__":

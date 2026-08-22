@@ -27,7 +27,7 @@ SITES = {
     "challenge": "https://browser-use.github.io/stress-tests/challenge.html",
     "todomvc-spa": "https://demo.playwright.dev/todomvc",
 }
-BACKENDS = ("dom", "ax")
+BACKENDS = ("dom", "ax", "hybrid")
 
 
 def _key(e) -> tuple:
@@ -81,8 +81,33 @@ async def measure(s: BrowserSession, backend: str, repeats: int = 3) -> dict:
              "key": json.dumps(_key(e))}
         )
     obs = format_observation(snap)
+    img_bytes = img_tokens = render_ms = 0
+    if backend == "hybrid":
+        import io as _io
+        import time as _t
+
+        from PIL import Image
+
+        from netgent.agent.explore_agent.marks import marks_for, render_set_of_marks
+        from netgent.agent.explore_agent.observation import shown_elements
+
+        _, shown, _ = shown_elements(snap)
+        vw, vh = await s.viewport_size()
+        marks = marks_for(shown, vw, vh)
+        png = await s.capture_viewport_png()
+        _st = _t.perf_counter()
+        drawn = [(m.index, next(el for i, el in shown if i == m.index)) for m in marks]
+        covered = {i for i, ok in (await s.mark_hits(drawn)).items() if not ok}
+        out = render_set_of_marks(png, marks, vw, vh, covered=covered)
+        render_ms = round((_t.perf_counter() - _st) * 1000, 1)
+        img_bytes = len(out)
+        im = Image.open(_io.BytesIO(out))
+        img_tokens = round(im.width * im.height / 750)
     return {
         "backend": backend,
+        "image_bytes": img_bytes,
+        "image_tokens_est": img_tokens,
+        "image_render_ms": render_ms,
         "url": url,
         "elements": len(elements),
         "named_pct": round(100 * named / len(elements), 1) if elements else 0.0,
@@ -106,11 +131,12 @@ def table(rows: list[dict]) -> str:
         ("site", "site"), ("backend", "backend"), ("elements", "elements"), ("named %", "named_pct"),
         ("role loc %", "role_locator_pct"), ("unique %", "unique_pct"), ("resolves %", "resolves_pct"),
         ("obs chars", "obs_chars"), ("~tokens", "obs_tokens_est"), ("texts", "texts"),
-        ("snapshot s", "snapshot_s"), ("frames", "frames"), ("in iframes", "in_iframe"),
-        ("iframes w/ elems", "iframes_with_elements"),
+        ("snapshot s", "snapshot_s"), ("img KB", "image_kb"), ("img tokens", "image_tokens_est"),
+        ("img render ms", "image_render_ms"), ("frames", "frames"),
     ]
     out = ["| " + " | ".join(c for c, _ in cols) + " |", "|" + "---|" * len(cols)]
     for r in rows:
+        r = {**r, "image_kb": round(r.get("image_bytes", 0) / 1024, 1)}
         out.append("| " + " | ".join(str(r.get(k, "")) for _, k in cols) + " |")
     return "\n".join(out)
 
