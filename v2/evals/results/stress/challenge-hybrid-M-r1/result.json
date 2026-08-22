@@ -1,0 +1,37 @@
+{
+  "kind": "challenge",
+  "backend": "hybrid",
+  "model": "anthropic/claude-haiku-4-5-20251001",
+  "max_steps": 60,
+  "score": 15,
+  "completed": [
+    "simple-button",
+    "radio-selection",
+    "checkbox-check",
+    "search-squash",
+    "date-time-input",
+    "slider-drag",
+    "hover-element",
+    "canvas-captcha",
+    "iframe-slider",
+    "scroll-accept",
+    "arrow-key-presses",
+    "file-upload",
+    "expand-details",
+    "dropdown-selections",
+    "contenteditable-div"
+  ],
+  "missed": [],
+  "steps": 40,
+  "agent_success": true,
+  "stopped_reason": "All 15 tasks have been completed successfully. The score shows 15/17 (the page header's '/17' is a typo as mentioned in the task instructions). Task 15 (the final contenteditable div task) is complete with \"banana\" typed into it. All visible tasks have been attempted in order from top to bottom.",
+  "errors": [],
+  "wall_s": 87.0,
+  "usage": {
+    "calls": 39,
+    "input_tokens": 198639,
+    "output_tokens": 4149,
+    "observation_chars": 107936,
+    "images": 39
+  }
+}

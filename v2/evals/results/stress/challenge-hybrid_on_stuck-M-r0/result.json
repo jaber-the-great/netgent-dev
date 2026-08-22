@@ -1,0 +1,37 @@
+{
+  "kind": "challenge",
+  "backend": "hybrid_on_stuck",
+  "model": "anthropic/claude-haiku-4-5-20251001",
+  "max_steps": 60,
+  "score": 15,
+  "completed": [
+    "simple-button",
+    "radio-selection",
+    "checkbox-check",
+    "search-squash",
+    "date-time-input",
+    "slider-drag",
+    "hover-element",
+    "canvas-captcha",
+    "iframe-slider",
+    "scroll-accept",
+    "arrow-key-presses",
+    "file-upload",
+    "expand-details",
+    "dropdown-selections",
+    "contenteditable-div"
+  ],
+  "missed": [],
+  "steps": 36,
+  "agent_success": true,
+  "stopped_reason": "All 15 cards have been completed successfully. Score shows 15/17 (the page's /17 is a typo as mentioned in the task). Task 15 (the final contenteditable task) is done with \"banana\" typed in. All tasks from top to bottom have been attempted and completed.",
+  "errors": [],
+  "wall_s": 69.4,
+  "usage": {
+    "calls": 35,
+    "input_tokens": 138254,
+    "output_tokens": 3568,
+    "observation_chars": 92341,
+    "images": 8
+  }
+}

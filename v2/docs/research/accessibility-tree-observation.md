@@ -576,7 +576,39 @@ i.e. +1.4k tokens on top of a 200–1,400-token text observation, per step.
 
 ## H4. Matrix — ax vs hybrid vs hybrid_on_stuck (Haiku, same prompts and budgets as §5–§7)
 
-HYBRID_MATRIX
+Same harness, prompts and budgets as §5–§7 (`evals/stress_ab.py … --runs 3`, Haiku 4.5, challenge
+`max_steps=60`, sweep `max_steps_per_form=30`, `retries=1`). 3 runs per cell; mean with per-run
+values. Token columns are the API's reported usage; `image tokens` = images × 1,365 (1280×800) and
+is already included in the per-step cost. Prices: Haiku list ($1/M in, $5/M out).
+
+| task | backend | result mean (per run) | LLM calls | text tokens | image tokens | output tokens | wall | cost/run | cost/step |
+|---|---|---|---|---|---|---|---|---|---|
+| challenge | ax | **13.3**/15 (13, 13, 14) | 32 | 118,478 | 0 (0 imgs) | 3,520 | 64s | $0.136 | $0.43¢ |
+| challenge | hybrid | **15.0**/15 (15, 15, 15) | 33 | 124,013 | 45,500 (33 imgs) | 3,600 | 82s | $0.188 | $0.56¢ |
+| challenge | hybrid_on_stuck | **12.7**/15 (15, 10, 13) | 31 | 114,889 | 10,920 (8 imgs) | 3,276 | 61s | $0.142 | $0.46¢ |
+| sweep | ax | **5.3**/21 (5, 6, 5) | 388 | 1,195,296 | 0 (0 imgs) | 39,613 | 1219s | $1.393 | $0.36¢ |
+| sweep | hybrid | **3.3**/21 (4, 3, 3) | 402 | 1,232,036 | 548,275 (402 imgs) | 41,737 | 1336s | $1.989 | $0.50¢ |
+| sweep | hybrid_on_stuck | **5.0**/21 (5, 5, 5) | 392 | 1,194,828 | 261,625 (192 imgs) | 40,520 | 1273s | $1.659 | $0.42¢ |
+
+Per-step wall clock: ax ≈2.0 s, hybrid ≈2.5 s (screenshot + identity check + larger request),
+hybrid_on_stuck ≈2.1 s. `challenge` = cards cleared of 15 (the page's own counter says /17);
+`sweep` = forms verified submitted of 21.
+
+Reading it:
+
+* **Challenge — hybrid 15/15 ×3 vs ax 13.3.** The two cards ax misses are exactly the ones that
+  need pixels or spatial confirmation: `canvas-captcha` (text only in a `<canvas>`, read off the
+  screenshot and typed via `fill` — every hybrid run) and the iframe slider that the text-only
+  agent intermittently skipped. +38 % tokens per step, +28 % wall.
+* **Sweep — no vision benefit (ax 5.3, hybrid_on_stuck 5.0, hybrid 3.3).** All three are inside the
+  run-to-run band measured for ax alone in §5 (4–11). The forms fail on silent validation and
+  custom widgets a picture does not explain, and the picture adds a failure of its own: the model
+  read `mm/dd/yyyy` off the date picker and sent it (six times, then stuck) until the dispatch
+  normaliser was added. +43 % tokens per step for hybrid, +17 % for on-stuck.
+* **hybrid_on_stuck** sends an image on ~25 % of steps (8 of 31 on the challenge, 192 of 392 in the
+  sweep — "stuck" is frequent on the forms) and is the most variable cell (15/10/13): the image
+  arrives after the agent has already committed to a wrong reading.
+
 
 ### Generate + validate (YouTube, Twitch) — ax vs hybrid, same session window
 
@@ -597,4 +629,32 @@ The hybrid runs cost more input tokens per call (the screenshot) but did not tak
 
 ## H5. Recommendation
 
-HYBRID_REC
+**Default: `ax`. Offer `hybrid` as an opt-in for tasks that need pixels.** The evidence splits
+cleanly by what the task demands:
+
+* Where perception is the bottleneck, vision is decisive. The challenge game went from 13.3/15
+  (ax, 3 runs, never the canvas card) to **15/15 on every hybrid run** — the CAPTCHA text is read
+  off the screenshot and typed through the ordinary `fill` action, and the slider/iframe cards
+  that ax skipped intermittently were never skipped with the picture in front of the model.
+* Where the bottleneck is widget semantics and validation (the 21-form sweep), the picture does
+  not help and slightly hurts: ax 5.3, hybrid_on_stuck 5.0, hybrid 3.3 out of 21
+  (3 runs each, all within the run-to-run noise we measured earlier for ax alone). The sweep's
+  failures are silent client-side validation and custom widgets that a screenshot does not
+  explain; and vision introduces a new failure of its own — the model trusts the *displayed*
+  format (`mm/dd/yyyy`) over the programmatic one, which we now normalise at dispatch.
+* Cost: a 1280×800 screenshot is ≈1,365 image tokens per step on top of a 2–4k text observation
+  — **+40–45 % input tokens per step** (challenge 0.43¢ → 0.56¢ per step; sweep ≈ +50 %), plus
+  ~25 % wall time (screenshot + identity check). `hybrid_on_stuck` sends an image on roughly a
+  quarter of the steps and costs ≈ +10 %, but its results are the most variable of the three
+  (challenge 15/10/13): the image arrives only after the agent has already committed to a wrong
+  reading, and a single late picture rarely undoes that.
+* `generate` validated for both backends on YouTube and Twitch; step counts are within noise.
+
+So: keep `ax` (text-only hybrid AX+DOM) as the default observation for the compile-time agent —
+it delivers the locator-durability win of §4 at no image cost — and expose `hybrid` for workloads
+with pixel-only information (canvas, image captchas, charts, icon-only toolbars). Do not make
+`hybrid_on_stuck` the default: it buys little and adds variance. The Set-of-Marks renderer is
+correct enough to be the *only* way we ever attach pictures (identity ≥92 % on every page checked,
+100 % on five, 0 unmarked, 0 label overlaps; never touches the live DOM), so switching a task to
+`hybrid` is a one-flag decision with no change to the action space or the compiled artifacts.
+

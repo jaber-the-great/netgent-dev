@@ -1,0 +1,42 @@
+{
+  "kind": "challenge",
+  "backend": "hybrid",
+  "model": "anthropic/claude-haiku-4-5-20251001",
+  "max_steps": 60,
+  "score": 4,
+  "completed": [
+    "simple-button",
+    "radio-selection",
+    "checkbox-check",
+    "search-squash"
+  ],
+  "missed": [
+    "date-time-input",
+    "slider-drag",
+    "hover-element",
+    "canvas-captcha",
+    "iframe-slider",
+    "scroll-accept",
+    "arrow-key-presses",
+    "file-upload",
+    "expand-details",
+    "dropdown-selections",
+    "contenteditable-div"
+  ],
+  "steps": 19,
+  "agent_success": false,
+  "stopped_reason": "stuck: 6 steps with no change on screen",
+  "errors": [
+    "13. fill: fill failed: Locator.fill: Error: Malformed value\nCall log:\n  - waiting for locator(\"#date-picker\")\n    - locator resolved to <input type=\"date\" id=\"date-picker\"/>\n    - fill(\"12/19/2024\")\n  - attempting fill action\n    - waiting for element to be visible, enabled and editable\n",
+    "14. fill: fill failed: Locator.fill: Error: Malformed value\nCall log:\n  - waiting for locator(\"#date-picker\")\n    - locator resolved to <input type=\"date\" id=\"date-picker\"/>\n    - fill(\"12/19/2024\")\n  - attempting fill action\n    - waiting for element to be visible, enabled and editable\n",
+    "18. done: stuck: 6 steps with no change on screen"
+  ],
+  "wall_s": 44.8,
+  "usage": {
+    "calls": 17,
+    "input_tokens": 90304,
+    "output_tokens": 1740,
+    "observation_chars": 61953,
+    "images": 17
+  }
+}

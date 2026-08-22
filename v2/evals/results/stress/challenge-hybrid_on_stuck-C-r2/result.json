@@ -1,0 +1,40 @@
+{
+  "kind": "challenge",
+  "backend": "hybrid_on_stuck",
+  "model": "anthropic/claude-haiku-4-5-20251001",
+  "max_steps": 60,
+  "score": 10,
+  "completed": [
+    "simple-button",
+    "radio-selection",
+    "checkbox-check",
+    "search-squash",
+    "date-time-input",
+    "slider-drag",
+    "hover-element",
+    "canvas-captcha",
+    "iframe-slider",
+    "scroll-accept"
+  ],
+  "missed": [
+    "arrow-key-presses",
+    "file-upload",
+    "expand-details",
+    "dropdown-selections",
+    "contenteditable-div"
+  ],
+  "steps": 28,
+  "agent_success": false,
+  "stopped_reason": "stuck: 6 steps with no change on screen",
+  "errors": [
+    "27. done: stuck: 6 steps with no change on screen"
+  ],
+  "wall_s": 48.4,
+  "usage": {
+    "calls": 26,
+    "input_tokens": 108448,
+    "output_tokens": 2852,
+    "observation_chars": 81093,
+    "images": 7
+  }
+}
