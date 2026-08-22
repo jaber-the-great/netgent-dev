@@ -1,0 +1,159 @@
+name: twitch-live-hybrid-G
+version: '1'
+start_state: init
+states:
+- id: init
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s1
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.twitch\.tv/
+  timeout_ms: 10000
+- id: s2
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s3
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s4
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.twitch\.tv/search
+  timeout_ms: 10000
+- id: s5
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s6
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.twitch\.tv/${channel}
+  timeout_ms: 10000
+- id: s7
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+transitions:
+- id: t1
+  source: init
+  target: s1
+  action:
+    timeout_ms: 30000
+    type: goto
+    url: https://www.twitch.tv
+- id: t2
+  source: s1
+  target: s2
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - searchbox
+      kwargs:
+        name: Search Input
+        exact: true
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+- id: t3
+  source: s2
+  target: s3
+  action:
+    timeout_ms: 5000
+    type: fill
+    locator:
+    - fn: get_by_role
+      args:
+      - searchbox
+      kwargs:
+        name: Search Input
+        exact: true
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+    text: ${channel}
+- id: t4
+  source: s3
+  target: s4
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: Search Button
+        exact: true
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+- id: t5
+  source: s4
+  target: s5
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: Proceed
+        exact: true
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+- id: t6
+  source: s5
+  target: s6
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - link
+      kwargs:
+        name: ${channel}
+        exact: false
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+- id: t7
+  source: s6
+  target: s7
+  action:
+    timeout_ms: 5000
+    type: wait
+    seconds: 10.0
+params:
+- name: channel
+  description: exploration used 'monstercat'
+  required: true
+  default: monstercat
+  secret: false
+control_sequence:
+- t1
+- t2
+- t3
+- t4
+- t5
+- t6
+- t7
+accept_states: []
+milestones: []

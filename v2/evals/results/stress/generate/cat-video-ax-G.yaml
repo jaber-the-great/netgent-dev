@@ -1,0 +1,138 @@
+name: cat-video-ax-G
+version: '1'
+start_state: init
+states:
+- id: init
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s1
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/
+  timeout_ms: 10000
+- id: s2
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s3
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s4
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/results
+  timeout_ms: 10000
+- id: s5
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s6
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/watch
+  timeout_ms: 10000
+transitions:
+- id: t1
+  source: init
+  target: s1
+  action:
+    timeout_ms: 30000
+    type: goto
+    url: https://www.youtube.com
+- id: t2
+  source: s1
+  target: s2
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - combobox
+      kwargs:
+        name: Search
+        exact: true
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+- id: t3
+  source: s2
+  target: s3
+  action:
+    timeout_ms: 5000
+    type: fill
+    locator:
+    - fn: get_by_role
+      args:
+      - combobox
+      kwargs:
+        name: Search
+        exact: true
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+    text: ${query}
+- id: t4
+  source: s3
+  target: s4
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: Search
+        exact: true
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+- id: t5
+  source: s4
+  target: s5
+  action:
+    timeout_ms: 5000
+    type: wait
+    seconds: 2.0
+- id: t6
+  source: s5
+  target: s6
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - link
+      kwargs:
+        name: "These Cats Can't Control Themselves! \U0001F923 NEW Funny ${query}\
+          \ 2026 10 minutes, 22 seconds"
+        exact: false
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+params:
+- name: query
+  description: exploration used 'cat videos'
+  required: true
+  default: cat videos
+  secret: false
+control_sequence:
+- t1
+- t2
+- t3
+- t4
+- t5
+- t6
+accept_states: []
+milestones: []

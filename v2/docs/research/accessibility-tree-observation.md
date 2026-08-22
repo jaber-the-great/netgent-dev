@@ -578,6 +578,23 @@ i.e. +1.4k tokens on top of a 200–1,400-token text observation, per step.
 
 HYBRID_MATRIX
 
+### Generate + validate (YouTube, Twitch) — ax vs hybrid, same session window
+
+| site | backend | validated | edges | LLM calls | text tokens | image tokens | output tokens |
+|---|---|---|---|---|---|---|---|
+| youtube | ax | ✓ | 6 | 6 | 17,436 | 0 (0 imgs) | 608 |
+| youtube | hybrid | ✓ | 7 | 9 | 32,856 | 12,285 (9 imgs) | 893 |
+| twitch | ax | ✓ | 9 | 14 | 53,844 | 0 (0 imgs) | 1,637 |
+| twitch | hybrid | ✓ | 7 | 7 | 22,924 | 9,555 (7 imgs) | 703 |
+
+All four validated with zero-LLM replay. Two earlier attempts (both backends) failed replay at the
+same edge — the compiled `get_by_role("link", name="…NEW Funny ${query} 2026…", exact=True)`: the
+compiler had parameterised the sample value inside an accessible name and `exact=True` (added by
+the ax backend) then rejected the replay value's different casing. Fixed in the compiler (a name
+carrying `${param}` drops `exact`); it affected every backend equally and is covered by a unit test.
+The hybrid runs cost more input tokens per call (the screenshot) but did not take fewer steps here.
+
+
 ## H5. Recommendation
 
 HYBRID_REC

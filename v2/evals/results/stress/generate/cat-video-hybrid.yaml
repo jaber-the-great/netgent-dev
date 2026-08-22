@@ -1,0 +1,218 @@
+name: cat-video-hybrid
+version: '1'
+start_state: init
+states:
+- id: init
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s1
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/
+  timeout_ms: 10000
+- id: s2
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s3
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s4
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/results
+  timeout_ms: 10000
+- id: s5
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s6
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/watch
+  timeout_ms: 10000
+- id: s7
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s8
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s9
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s10
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s11
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+transitions:
+- id: t1
+  source: init
+  target: s1
+  action:
+    timeout_ms: 30000
+    type: goto
+    url: https://www.youtube.com
+- id: t2
+  source: s1
+  target: s2
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - combobox
+      kwargs:
+        name: Search
+        exact: true
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+- id: t3
+  source: s2
+  target: s3
+  action:
+    timeout_ms: 5000
+    type: fill
+    locator:
+    - fn: get_by_role
+      args:
+      - combobox
+      kwargs:
+        name: Search
+        exact: true
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+    text: ${query}
+- id: t4
+  source: s3
+  target: s4
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: Search
+        exact: true
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+- id: t5
+  source: s4
+  target: s5
+  action:
+    timeout_ms: 5000
+    type: wait
+    seconds: 2.0
+- id: t6
+  source: s5
+  target: s6
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - link
+      kwargs:
+        name: "These Cats Can't Control Themselves! \U0001F923 NEW Funny ${query}\
+          \ 2026 10 minutes, 22 seconds"
+        exact: true
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+- id: t7
+  source: s6
+  target: s7
+  action:
+    timeout_ms: 5000
+    type: press
+    keys: k
+- id: t8
+  source: s7
+  target: s8
+  action:
+    timeout_ms: 5000
+    type: wait
+    seconds: 3.0
+- id: t9
+  source: s8
+  target: s9
+  action:
+    timeout_ms: 5000
+    type: press
+    keys: Escape
+- id: t10
+  source: s9
+  target: s10
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: Play (k)
+        exact: true
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+- id: t11
+  source: s10
+  target: s11
+  action:
+    timeout_ms: 5000
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: Play keyboard shortcut k
+        exact: true
+    - fn: filter
+      args: []
+      kwargs:
+        visible: true
+params:
+- name: query
+  description: exploration used 'cat videos'
+  required: true
+  default: cat videos
+  secret: false
+control_sequence:
+- t1
+- t2
+- t3
+- t4
+- t5
+- t6
+- t7
+- t8
+- t9
+- t10
+- t11
+accept_states: []
+milestones: []
