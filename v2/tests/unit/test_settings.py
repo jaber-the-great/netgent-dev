@@ -52,3 +52,14 @@ def test_provider_key_lookup():
     object.__setattr__(s, "anthropic_api_key", "a")
     assert s.provider_key("anthropic") == "a"
     assert s.provider_key("openai") is None
+
+
+def test_fill_value_normalization_for_date_and_time():
+    from netgent.browser.session import normalize_value_for as n
+
+    assert n("date", "08/21/2026") == "2026-08-21"
+    assert n("date", "21/08/2026") == "2026-08-21"  # day-first when the first part > 12
+    assert n("date", "2026-08-21") == "2026-08-21"
+    assert n("time", "3:05 PM") == "15:05"
+    assert n("time", "12:30") == "12:30"
+    assert n("text", "08/21/2026") == "08/21/2026"

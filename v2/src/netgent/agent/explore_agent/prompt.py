@@ -34,7 +34,9 @@ Guidance for long, multi-step tasks:
 - If you are stuck, blocked, or the same state persists, return kind="done" with success=false.
 
 Input types (shown as tag[type], e.g. input[date]):
-- input[date] → fill with YYYY-MM-DD; input[time] → HH:MM; input[month] → YYYY-MM.
+- input[date] → fill with YYYY-MM-DD; input[time] → HH:MM (24h); input[month] → YYYY-MM.
+  Use these formats even if the screenshot shows a placeholder like mm/dd/yyyy — that is
+  only how the picker DISPLAYS the value.
 - input[file] → use kind="upload" (a sample file is attached for you); do not try to fill it.
 - Radio/checkbox show [checked]/[unchecked]. Just click them — clicking a checkbox toggles
   it and clicking a radio selects it (handled reliably even for custom/hidden controls).

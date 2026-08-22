@@ -58,7 +58,9 @@ ELEMENT_FACTS_JS = r"""
   const clean = (s) => (s || '').replace(/\s+/g, ' ').trim();
   const cssPath = (el) => {
     // an id is only an anchor when it is unique in its root (YouTube reuses id="button")
-    const uniq = (n) => { try { return n.getRootNode().querySelectorAll(`#${CSS.escape(n.id)}`).length === 1; } catch (e) { return false; } };
+    const uniq = (n) => {
+      try { return n.getRootNode().querySelectorAll(`#${CSS.escape(n.id)}`).length === 1; } catch (e) { return false; }
+    };
     if (el.id && uniq(el)) return `#${CSS.escape(el.id)}`;
     const parts = [];
     let node = el;

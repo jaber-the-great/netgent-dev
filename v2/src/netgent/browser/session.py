@@ -72,6 +72,35 @@ KEY_ALIASES = {
 }
 
 
+_DATE_RES = (
+    re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$"),  # MM/DD/YYYY (what a date picker DISPLAYS)
+    re.compile(r"^(\d{1,2})-(\d{1,2})-(\d{4})$"),
+    re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})$"),
+)
+
+
+def normalize_value_for(input_type: str | None, text: str) -> str:
+    """Programmatic value for a typed input. A vision model reads the picker's displayed
+    format (mm/dd/yyyy, 12-hour time); the DOM wants YYYY-MM-DD / HH:MM. Converting here
+    keeps the agent's action replayable regardless of which channel it read."""
+    t = text.strip()
+    if input_type == "date":
+        for rx in _DATE_RES:
+            m = rx.match(t)
+            if m:
+                a, b, y = m.groups()
+                mm, dd = (a, b) if int(a) <= 12 else (b, a)
+                return f"{y}-{int(mm):02d}-{int(dd):02d}"
+    if input_type == "time":
+        m = re.match(r"^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])?$", t)
+        if m:
+            h, mi, ap = int(m.group(1)), m.group(2), m.group(3)
+            if ap:
+                h = h % 12 + (12 if ap.lower() == "pm" else 0)
+            return f"{h:02d}:{mi}"
+    return text
+
+
 def normalize_keys(keys: str) -> str:
     """'Return' → 'Enter', 'ctrl+a' → 'Control+a': each chord part through the alias table."""
     modifiers = {"ctrl": "Control", "cmd": "Meta", "option": "Alt"}
@@ -401,7 +430,15 @@ class BrowserSession:
                 case ClickAction():
                     await self._click(self._resolve(action.locator), action.timeout_ms)
                 case FillAction():
-                    await self._resolve(action.locator).fill(action.text, timeout=action.timeout_ms)
+                    target = self._resolve(action.locator).first
+                    text = action.text
+                    try:
+                        input_type = await target.get_attribute("type", timeout=action.timeout_ms)
+                    except Exception:  # noqa: BLE001 — not an input; fill as-is
+                        input_type = None
+                    if input_type in ("date", "time"):
+                        text = normalize_value_for(input_type, text)
+                    await target.fill(text, timeout=action.timeout_ms)
                 case PressAction():
                     # "ArrowRight ArrowRight ArrowRight" is a sequence of presses; each item
                     # may be a chord ("Control+a"). Aliases like Return/Esc are normalized.
@@ -551,7 +588,8 @@ class BrowserSession:
             frame = await handles[0].owner_frame()
             try:
                 results = await frame.evaluate(
-                    "(els) => els.map(el => { try { return (" + self._HIT_JS + ")(el); } catch (e) { return 'miss'; } })",
+                    "(els) => els.map(el => { try { return (" + self._HIT_JS + ")(el); }"
+                    " catch (e) { return 'miss'; } })",
                     handles,
                 )
             except Exception:  # noqa: BLE001 — whole-frame failure: treat as miss
