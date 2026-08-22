@@ -52,7 +52,8 @@ DOM_SNAPSHOT_JS = r"""
     const role = el.getAttribute('role');
     if (role && INTERACTIVE_ROLES.has(role)) return true;
     if (el.hasAttribute('onclick')) return true;
-    if (el.isContentEditable) return true;
+    // only the editing HOST — every descendant of a rich-text editor inherits isContentEditable
+    if (el.isContentEditable && !(el.parentElement && el.parentElement.isContentEditable)) return true;
     const ti = el.getAttribute && el.getAttribute('tabindex');
     if (ti !== null && ti !== '-1') return true;
     return isScrollable(el);
@@ -66,6 +67,7 @@ DOM_SNAPSHOT_JS = r"""
   const clean = (s) => (s || '').replace(/\s+/g, ' ').trim().slice(0, 120);
   const accName = (el) => clean(
     el.getAttribute('aria-label') ||
+    el.getAttribute('data-placeholder') ||
     (el.labels && el.labels.length ? el.labels[0].childNodes[0]?.textContent : '') ||
     el.getAttribute('placeholder') ||
     el.getAttribute('name') ||
@@ -162,19 +164,28 @@ DOM_SNAPSHOT_JS = r"""
         // A listener-only element counts when it is a self-contained target: named, not a
         // wrapper around other controls (delegation roots like YouTube's <ytd-app>), and
         // not page-sized.
+        // A hidden <input type=file> behind a visible <label for=…>/wrapping label is the
+        // page's upload control; list the input (upload dispatch targets it directly).
+        const hiddenFile = el.tagName === 'INPUT' && el.type === 'file' && !visible(el);
+        const fileProxy = hiddenFile
+          ? ((el.labels && el.labels.length && visible(el.labels[0])) ? el.labels[0]
+             : (el.parentElement && visible(el.parentElement) ? el.parentElement : null))
+          : null;
+        const labelledFile = !!fileProxy;
         const listening = root === document && listenerOf(el, i) && !isInteractive(el)
           && el !== document.documentElement && el !== document.body
           && !el.querySelector(INTERACTIVE_QUERY) && accName(el)
           && !isPageSized(el);
         if (isInteractive(el) || listening) {
-          if (!visible(el)) continue;
-          if (extrasOnly && hasAriaInteractive(el)) continue;
-          const r = el.getBoundingClientRect();
+          if (!visible(el) && !labelledFile) continue;
+          if (extrasOnly && hasAriaInteractive(el) && !labelledFile) continue;
+          const r = (labelledFile ? fileProxy : el).getBoundingClientRect();
           const scrollable = !hasAriaInteractive(el) && isScrollable(el);
           results.push({
             tag: el.tagName.toLowerCase(),
             role: el.getAttribute('role') || (scrollable ? 'scrollable' : null),
-            name: scrollable ? clean(el.innerText).slice(0, 60) : accName(el),
+            name: scrollable ? clean(el.innerText).slice(0, 60)
+                : (labelledFile ? clean(fileProxy.innerText).slice(0, 80) || accName(el) : accName(el)),
             type: el.getAttribute('type') || null,
             checked: (el.type === 'checkbox' || el.type === 'radio') ? !!el.checked : null,
             disabled: !!el.disabled,

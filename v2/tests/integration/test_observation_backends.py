@@ -157,3 +157,36 @@ def test_ax_backend_falls_back_to_dom_walk_on_failure(monkeypatch):
 
     snap = asyncio.run(_run())
     assert [e.name for e in snap.elements] == ["Go"]
+
+
+import pytest as _pytest  # noqa: E402
+
+
+@_pytest.mark.parametrize("backend", ["dom", "ax"])
+def test_contenteditable_host_and_hidden_file_input(tmp_path, backend):
+    """A rich-text editor exposes ONE textbox (the host, not every nested node), and a
+    hidden <input type=file> behind a visible label/wrapper is listed as an upload target."""
+    page = tmp_path / "rt.html"
+    page.write_text(
+        "<!doctype html><title>RT</title>"
+        "<div id=ed contenteditable=true data-placeholder='Write here'>"
+        "  <p><span>existing</span></p></div>"
+        "<label id=lbl>Choose file <input type=file hidden id=f></label>"
+        "<div class=wrap><input type=file style='display:none' id=f2>"
+        "  <button type=button id=b>Click to select a file</button></div>"
+    )
+
+    async def _run():
+        async with BrowserSession(headless=True, observation=backend) as s:
+            await s.page.goto(page.as_uri())
+            snap = await s.snapshot()
+            return snap
+
+    snap = asyncio.run(_run())
+    files = [e for e in snap.elements if e.type == "file"]
+    assert len(files) >= 2, (
+        f"{backend}: hidden file inputs not surfaced: {[(e.tag, e.type, e.name) for e in snap.elements]}"
+    )
+    # the rich-text editor is ONE textbox host, not one interactive node per nested <p>/<span>
+    hosts = [e for e in snap.elements if e.tag == "div" and e.name == "Write here"]
+    assert len(hosts) == 1, f"{backend}: contenteditable host count {len(hosts)} (should be 1, not per nested node)"

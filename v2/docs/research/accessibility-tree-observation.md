@@ -228,6 +228,7 @@ raises (logged), so observation can never abort a step.
 | 40+ text blocks, the observation showed the first 25 → lower cards' instructions invisible | text blocks carry `y` and are paged with the viewport like elements | `observation.py` |
 | Haiku emits `press "Return"`, `press "ArrowRight ArrowRight ArrowRight"` | key aliases (`Return→Enter`, …) and space-separated sequences | `session.normalize_keys`, dispatch |
 | the model repeats an action whose effect it cannot see (click-to-focus, a counter bump) | step history now carries outcomes: `-> page now shows: 'Score: 4 / 17'` / `-> done, but nothing visible changed`; one explicit warning before the stuck detector ends the run (`MAX_REPEAT` → warn, `2×` → stop) | `graph.py` |
+| a sweep crashed at form 14: Submit navigated the frame and the next `observe()` evaluated into a dying document (`Execution context was destroyed`) | `snapshot()` recognizes navigation errors, waits for `domcontentloaded` (bounded 5 s) and retries up to 3×; a detached frame is skipped, other errors still raise | `session.snapshot`, `tests/integration/test_snapshot_during_navigation.py` |
 | canvas CAPTCHA | **not fixed** — needs vision; out of scope for an observation-layer change (both backends skip it) | — |
 
 No new atomic action was needed. `scroll` gained an optional `locator`; `press` accepts a sequence.
@@ -236,7 +237,63 @@ No new atomic action was needed. `scroll` gained an optional `locator`; `press` 
 
 `uv run python evals/observation_ab.py` → `evals/results/observation_ab.md` (+ `.json`).
 
-RESULTS_TABLE
+| site | backend | elements | named % | role loc % | unique % | resolves % | obs chars | ~tokens | texts | snapshot s | frames | in iframes | iframes w/ elems |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| youtube | dom | 14 | 85.7 | 35.7 | 42.9 | 100.0 | 761 | 190 | 6 | 0.083 | 3 | 0 | 0 |
+| youtube | ax | 13 | 100.0 | 38.5 | 46.2 | 100.0 | 781 | 195 | 3 | 0.106 | 3 | 0 | 0 |
+| twitch | dom | 115 | 86.1 | 86.1 | 48.7 | 87.8 | 3078 | 769 | 76 | 0.14 | 5 | 4 | 1 |
+| twitch | ax | 106 | 68.9 | 68.9 | 79.2 | 99.1 | 2978 | 744 | 17 | 0.282 | 5 | 3 | 1 |
+| reddit | dom | 98 | 89.8 | 73.5 | 51.0 | 88.8 | 2938 | 734 | 45 | 0.417 | 5 | 1 | 1 |
+| reddit | ax | 96 | 87.5 | 72.9 | 87.5 | 92.7 | 2877 | 719 | 17 | 0.313 | 5 | 1 | 1 |
+| forms | dom | 207 | 90.3 | 27.5 | 100.0 | 100.0 | 5111 | 1277 | 243 | 0.263 | 27 | 181 | 23 |
+| forms | ax | 222 | 84.2 | 30.2 | 99.5 | 99.5 | 5351 | 1337 | 148 | 0.649 | 27 | 197 | 23 |
+| challenge | dom | 42 | 71.4 | 2.4 | 64.3 | 100.0 | 3001 | 750 | 42 | 0.018 | 2 | 1 | 1 |
+| challenge | ax | 41 | 85.4 | 22.0 | 63.4 | 100.0 | 3503 | 875 | 38 | 0.141 | 2 | 1 | 1 |
+| todomvc-spa | dom | 4 | 100.0 | 100.0 | 75.0 | 100.0 | 341 | 85 | 5 | 0.017 | 1 | 0 | 0 |
+| todomvc-spa | ax | 4 | 100.0 | 100.0 | 100.0 | 100.0 | 372 | 93 | 5 | 0.014 | 1 | 0 | 0 |
+
+Both backends measured on the **same loaded page** (one session, snapshot with `dom` then `ax`).
+YouTube serves a signed-out shell headless (13–14 elements); Reddit showed its login interstitial
+in this session (≈100 elements; an earlier separate-session run had 537/488 with the same
+shape of result: unique 28.7 % dom vs 88.3 % ax).
+
+Reading the table:
+
+* **Durable-locator uniqueness** (`unique %`) is the headline: Reddit 51 → 87.5 %, Twitch 48.7 →
+  79.2 %, todomvc 75 → 100 %. The DOM walk's names are heuristics (`aria-label` → label →
+  placeholder → `name` attr → innerText), so on modern sites its `get_by_role(name=…)` chain
+  either matches nothing (`resolves %` 88 % on Twitch/Reddit vs 99/93 % for ax) or several
+  elements (substring matching without `exact`). The ax names are Playwright's own accname, so
+  they match exactly, and duplicates get `.nth(k)`.
+* **Observation size is the same** (±5 % chars/tokens) because the renderer is shared and the
+  element sets largely coincide (coverage diffs below). The fear that "the aria tree is 3× larger"
+  was about the raw YAML; after filtering to interactive nodes + merged text it is not.
+* **Snapshot time**: ax is 1.3–2.5× slower on big pages (Twitch 0.28 s vs 0.14 s, forms 0.65 s vs
+  0.26 s) because DOM facts are fetched per element through `aria-ref`; Reddit's 488-element page
+  took 1.0 s in the separate-session run. Still far below one LLM call (2–5 s).
+* **Iframe coverage is identical** (27 frames / 23 with elements on the forms page for both); the
+  ax backend lists 16 more elements there — the hidden file inputs that Playwright names from
+  their custom-file labels (`input "Upload Profile Picture * Choose file Browse"`), which the DOM
+  walk drops as invisible (0×0 box).
+* **`named %`** is lower for ax on Twitch/forms: icon links/thumbnails whose accessible name is
+  genuinely empty. The display-name fallback (DOM `title`/`placeholder`/`alt`/label/innerText) was
+  added after this table was generated; the locator for such elements is the stable `#id` or a
+  CSS path in both backends.
+
+Coverage differences (same page, matched by frame + tag + coarse bbox):
+
+- **youtube**: 12 elements seen by both (by frame+bbox), 1 only by dom, 0 only by ax.
+- **twitch**: 61 elements seen by both (by frame+bbox), 5 only by dom, 0 only by ax.
+  - dom-only e.g.: 'button Leave feedback for this Ad', 'button [595/730] 🔴 DUOING TO CHAMPION W, 'button WARDOGS BETA | SEAL TEAM SEXY | , 'button Leave feedback for this Ad', 'button PRODUCER WARS! GAMERHOOD S5 EP. , 'button EARLY AND DUEL - SHORT SHORT - I
+- **reddit**: 85 elements seen by both (by frame+bbox), 3 only by dom, 1 only by ax.
+  - dom-only e.g.: 'shreddit-progress-bar Media time', 'faceplate-tracker Continue with Phone N, 'faceplate-tracker Continue with Email'
+  - ax-only e.g.: 'shreddit-progress-bar Media time'
+- **forms**: 191 elements seen by both (by frame+bbox), 3 only by dom, 17 only by ax.
+  - dom-only e.g.: 'button PLAY THE BROWSER-USE CHALLENGE G, 'input Email Address', 'input Upload Document'
+  - ax-only e.g.: 'input Upload Profile Picture * Choose f, 'input Email', 'input Phone', 'input Mail', 'input Choose File', 'input Email Address *'
+- **challenge**: 37 elements seen by both (by frame+bbox), 0 only by dom, 0 only by ax.
+- **todomvc-spa**: 4 elements seen by both (by frame+bbox), 0 only by dom, 0 only by ax.
+
 
 ## 5. Form sweep — 21 forms, Haiku, both backends
 
@@ -259,13 +316,60 @@ score read from the page afterwards.
 
 Exact prompt (`evals/stress_ab.py::CHALLENGE_TASK`):
 
-> CHALLENGE_PROMPT
+> Complete every task on this page, working top to bottom. Each task is a card whose instruction is in the page text (e.g. 'Click the button to start', 'Select one of the radio buttons'). The header shows 'Score: N / 17' and N goes up by one each time a task registers; a card's own text (slider value, keys pressed, upload status) also tells you whether it registered. There are exactly 15 cards (the page's '/ 17' is a typo — the score can never reach 17, so do not hunt for missing points). Do exactly what each instruction says using click, fill, select, hover, press, upload, or scroll-inside-a-box; attempt each card once, in order, and do not go back. If a card is impossible for you (e.g. reading letters off a canvas image), skip it and move on. Scroll down only when every card in view is done or skipped. Finish with done (success=true if you attempted all 15 cards) when the last card (the contenteditable one) is done.
 
-CHALLENGE_RESULTS
+Results (`max_steps=60`, one run each, final code; earlier runs are in git history of `evals/results/stress/`):
+
+| backend | score (of 15 possible) | steps used | LLM calls | input tokens | output tokens | observation chars | stopped |
+|---|---|---|---|---|---|---|---|
+| dom | **13** | 38 | 36 | 127,698 | 3,868 | 80,740 | stuck: 6 steps with no change on screen |
+| ax | **13** | 28 | 27 | 98,633 | 2,956 | 73,753 | All 15 cards have been completed: Task 1-13 were completed i |
+
+Cards missed — dom: slider-drag, canvas-captcha; ax: canvas-captcha, iframe-slider.
+
+* `canvas-captcha` is unreachable for both: the text lives only in pixels. A vision input would
+  be an agent change, not an observation-backend one (see §8).
+* The other misses are model variance, not observation gaps: the dom run *clicked* the main
+  slider instead of filling it; the ax run simply skipped the iframe slider card (it was listed as
+  `[24] input[range] value="1"` with the iframe frame path) — both runs filled the *other* slider
+  correctly by `fill "100"`.
+* The dom run then spent 8 steps scrolling up and down "looking for the 4 missing tasks"
+  (13/17) until the stuck detector stopped it; the ax run declared `done` at step 27. With the
+  page's own `/ 17` contradicting the 15 cards, this is prompt/model behaviour, not observation.
+* Before the gap fixes of §3 the same prompt scored **8/15 with both backends** (stuck at the
+  arrow-key card: click-to-focus repeated 3× with no visible change, then `press "Return"` /
+  `"ArrowRight ArrowRight ArrowRight"` rejected). With the fixes both reach 13/15 — the fixes,
+  not the tree source, are what moved the number; the tree source decides how *durable* the
+  compiled locators are.
+
 
 ## 7. `netgent generate` — YouTube and Twitch with the ax backend
 
-GENERATE_RESULTS
+Commands (Haiku, `--observation dom|ax`, `--trajectory` kept under `evals/results/stress/generate/`):
+
+```
+netgent generate "Search YouTube for cat videos and play the first result" --url https://www.youtube.com \
+  -p "query=cat videos" --model anthropic/claude-haiku-4-5-20251001 --observation ax --out cat-video-ax.yaml
+netgent generate "Search Twitch for the channel monstercat, open it, wait ONCE with seconds=10 to watch the stream, then declare done." \
+  --url https://www.twitch.tv -p channel=monstercat --model anthropic/claude-haiku-4-5-20251001 --observation ax --out twitch-live-ax.yaml
+```
+
+| site | backend | validated (zero-LLM replay) | compiled edges | LLM calls | input tokens | output tokens | observation chars |
+|---|---|---|---|---|---|---|---|
+| youtube | dom | ✓ | 17 | 20 | 58,650 | 1,905 | 30,100 |
+| youtube | ax | ✓ | 7 | 8 | 26,865 | 789 | 16,351 |
+| twitch | dom | ✓ | 5 | 5 | 17,202 | 528 | 14,487 |
+| twitch | ax | ✓ | 8 | 9 | 31,346 | 900 | 26,871 |
+
+All four validated. YouTube with the ax backend took 8 steps/26.9k tokens vs 20 steps/58.7k for
+dom on the same task (the dom run wandered before finding the search box; one run each, so treat
+the gap as indicative). Twitch was the reverse (9 vs 5 steps): the ax run hit a click intercepted
+by a consent overlay once and recovered. The compiled YouTube workflow (ax) is a pure
+`get_by_role` chain except the video link, e.g. `get_by_role("combobox", name="Search", exact=True)`
+→ `get_by_role("button", name="Search", exact=True)` → link by name → `press k` (the play button
+was covered by an ad overlay at explore time, so the agent used the keyboard shortcut — and that
+is what was compiled and replayed).
+
 
 ## 8. Recommendation and honest limitations
 
