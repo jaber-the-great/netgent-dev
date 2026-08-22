@@ -104,6 +104,7 @@ def format_observation(snapshot: DomSnapshot, limit: int = 60, text_limit: int =
 
 
 _VOLATILE_ID = re.compile(r"\d{4,}|[0-9a-f]{8,}|^#(tw|ember|react|:)")
+_VISIBLE = LocatorStep(fn="filter", kwargs={"visible": True})
 
 
 def _locator_for(el: DomElement) -> list[LocatorStep]:
@@ -141,6 +142,9 @@ def _locator_for(el: DomElement) -> list[LocatorStep]:
             if c.exact:
                 kwargs["exact"] = True
             steps = chain + [LocatorStep(fn="get_by_role", args=[c.role], kwargs=kwargs)]
+            # Role matching ignores zero-size duplicates (a collapsed drawer's "Guide" button is
+            # DOM-first); keep only visible matches so .first/.nth address what the user sees.
+            steps.append(_VISIBLE)
             return steps + [LocatorStep(fn="nth", args=[c.nth])] if c.nth is not None else steps
     # 3. test-id, 4. label
     for c in cands:
@@ -148,7 +152,7 @@ def _locator_for(el: DomElement) -> list[LocatorStep]:
             return chain + [LocatorStep(fn="get_by_test_id", args=[c.value])]
         if c.kind == "label" and c.value:
             kwargs = {"exact": True} if c.exact else {}
-            steps = chain + [LocatorStep(fn="get_by_label", args=[c.value], kwargs=kwargs)]
+            steps = chain + [LocatorStep(fn="get_by_label", args=[c.value], kwargs=kwargs), _VISIBLE]
             return steps + [LocatorStep(fn="nth", args=[c.nth])] if c.nth is not None else steps
     # 5. any css path
     for c in cands:

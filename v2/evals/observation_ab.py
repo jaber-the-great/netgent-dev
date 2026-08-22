@@ -97,7 +97,7 @@ async def measure(s: BrowserSession, backend: str, repeats: int = 3) -> dict:
         png = await s.capture_viewport_png()
         _st = _t.perf_counter()
         drawn = [(m.index, next(el for i, el in shown if i == m.index)) for m in marks]
-        covered = {i for i, ok in (await s.mark_hits(drawn)).items() if not ok}
+        covered = {i for i, res in (await s.mark_hits(drawn)).items() if res != "hit"}
         out = render_set_of_marks(png, marks, vw, vh, covered=covered)
         render_ms = round((_t.perf_counter() - _st) * 1000, 1)
         img_bytes = len(out)
@@ -132,7 +132,7 @@ def table(rows: list[dict]) -> str:
         ("role loc %", "role_locator_pct"), ("unique %", "unique_pct"), ("resolves %", "resolves_pct"),
         ("obs chars", "obs_chars"), ("~tokens", "obs_tokens_est"), ("texts", "texts"),
         ("snapshot s", "snapshot_s"), ("img KB", "image_kb"), ("img tokens", "image_tokens_est"),
-        ("img render ms", "image_render_ms"), ("frames", "frames"),
+        ("img hits+render ms", "image_render_ms"), ("frames", "frames"),
     ]
     out = ["| " + " | ".join(c for c, _ in cols) + " |", "|" + "---|" * len(cols)]
     for r in rows:

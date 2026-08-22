@@ -22,7 +22,7 @@ import json
 import time
 from pathlib import Path
 
-from netgent.agent.explore_agent.marks import LABEL_H, LABEL_PAD, marks_for, render_set_of_marks
+from netgent.agent.explore_agent.marks import layout_marks, marks_for, render_set_of_marks
 from netgent.agent.explore_agent.observation import shown_elements
 from netgent.browser.session import BrowserSession
 
@@ -71,39 +71,37 @@ LIVE = {
 }
 
 
-def _label_rect(m, scale):
-    b = m.bbox
-    x0 = int(b.x * scale)
-    y0 = int(b.y * scale)
-    return (x0, max(0, y0 - LABEL_H), x0 + 12 + 2 * LABEL_PAD, max(0, y0 - LABEL_H) + LABEL_H)
-
-
-def _overlap(a, b):
-    return not (a[2] <= b[0] or a[0] >= b[2] or a[3] <= b[1] or a[1] >= b[3])
-
-
 async def check(session: BrowserSession, name: str, out_dir: Path) -> dict:
     snap = await session.snapshot()
     _, shown, _ = shown_elements(snap)
     vw, vh = await session.viewport_size()
     marks = marks_for(shown, vw, vh)
     png = await session.capture_viewport_png()
-    t = time.perf_counter()
-    annotated = render_set_of_marks(png, marks, vw, vh)
-    render_ms = round((time.perf_counter() - t) * 1000, 1)
-    (out_dir / f"{name}.png").write_bytes(annotated)
-
     drawn = {m.index for m in marks}
     hits = await session.mark_hits([(i, el) for i, el in shown if i in drawn])
-    identity = sum(1 for v in hits.values() if v)
-    # label overlap: compare label rects at the image scale the renderer uses
+    covered = {i for i, res in hits.items() if res == "covered"}
+    t = time.perf_counter()
+    annotated = render_set_of_marks(png, marks, vw, vh, covered={i for i, r in hits.items() if r != "hit"})
+    render_ms = round((time.perf_counter() - t) * 1000, 1)
+    (out_dir / f"{name}.png").write_bytes(annotated)
+    n_hit = sum(1 for v in hits.values() if v == "hit")
+    n_cov = len(covered)
+    n_miss = sum(1 for v in hits.values() if v == "miss")
+    identity = n_hit + n_cov  # a hollow mark on a covered element is the correct outcome
+    # label overlap: the renderer's ACTUAL placements (labels that had to fall back onto an
+    # already-occupied slot, i.e. the density fallback fired)
     import io as _io
 
-    from PIL import Image
-    img_w = Image.open(_io.BytesIO(png)).width
-    sc = img_w / vw if vw else 1.0
-    rects = [_label_rect(m, sc) for m in marks]
-    overlaps = sum(1 for i in range(len(rects)) for j in range(i + 1, len(rects)) if _overlap(rects[i], rects[j]))
+    from PIL import Image, ImageDraw, ImageFont
+    im = Image.open(_io.BytesIO(png))
+    sc = im.width / vw if vw else 1.0
+    try:
+        font = ImageFont.truetype("Arial.ttf", 13)
+    except Exception:  # noqa: BLE001
+        font = ImageFont.load_default()
+    d = ImageDraw.Draw(im)
+    layout = layout_marks(marks, sc, im.width, im.height, lambda t: int(d.textlength(t, font=font)))
+    overlaps = sum(1 for pl in layout if pl.collided)
 
     def _visible(el):
         return not (el.bbox.x + el.bbox.w < 0 or el.bbox.x > vw or el.bbox.y + el.bbox.h < 0 or el.bbox.y > vh)
@@ -117,6 +115,9 @@ async def check(session: BrowserSession, name: str, out_dir: Path) -> dict:
         "in_viewport": len(in_view),
         "marks": len(marks),
         "identity_pct": round(100 * identity / len(drawn), 1) if drawn else 0.0,
+        "hit": n_hit,
+        "covered": n_cov,
+        "miss": n_miss,
         "label_overlaps": overlaps,
         "unmarked_in_view": len(unmarked),
         "render_ms": render_ms,
@@ -159,7 +160,8 @@ async def main(out: Path) -> "tuple[str, list]":
         print(r, flush=True)
 
     cols = [("site", "site"), ("viewport", "viewport"), ("listed", "listed"), ("in view", "in_viewport"),
-            ("marks", "marks"), ("identity %", "identity_pct"), ("label overlaps", "label_overlaps"),
+            ("marks", "marks"), ("identity %", "identity_pct"), ("hit", "hit"), ("covered", "covered"),
+            ("miss", "miss"), ("label overlaps", "label_overlaps"),
             ("unmarked in view", "unmarked_in_view"), ("render ms", "render_ms")]
     lines = ["| " + " | ".join(c for c, _ in cols) + " |", "|" + "---|" * len(cols)]
     for r in rows:
@@ -167,9 +169,11 @@ async def main(out: Path) -> "tuple[str, list]":
     md = [
         "# Set-of-Marks geometry check",
         "",
-        "`evals/som_check.py`, headless Chromium. `identity %` = drawn marks whose box center hits the "
-        "intended element (elementFromPoint per frame, occlusion- and iframe-aware). Annotated PNGs "
-        "in `evals/results/som/`.",
+        "`evals/som_check.py`, headless Chromium. For each drawn mark, elementFromPoint at the box center "
+        "(in the element's own frame, composed-tree/shadow aware): `hit` = lands on the element; "
+        "`covered` = a larger element sits on top (modal/backdrop/fixed header) and the mark is drawn "
+        "hollow — the correct outcome; `miss` = a geometry error. `identity %` = (hit + covered) / marks. "
+        "Annotated PNGs in `evals/results/som/`.",
         "",
         "\n".join(lines),
         "",

@@ -493,19 +493,35 @@ class BrowserSession:
 
     _HIT_JS = """el => {
       const r = el.getBoundingClientRect();
-      if (r.width === 0 && r.height === 0) return false;
+      if (r.width === 0 && r.height === 0) return 'miss';
       const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-      const hit = el.ownerDocument.elementFromPoint(cx, cy);
-      if (!hit) return false;
-      if (hit === el || el.contains(hit) || hit.contains(el)) return true;
-      const lbl = el.labels && el.labels[0];  // clicking the control's own <label> counts
-      return !!(lbl && (hit === lbl || lbl.contains(hit)));
+      // composed-tree containment: walk up through shadow hosts, so a hit on a shadow host
+      // (what document.elementFromPoint returns for shadow content) still matches.
+      // flat-tree walk: slotted light-DOM nodes climb through their slot into the shadow tree
+      const within = (outer, node) => {
+        for (let n = node; n; n = n.assignedSlot || n.parentNode || n.host) if (n === outer) return true;
+        return false;
+      };
+      // look up from the element's own root (a ShadowRoot has elementFromPoint too)
+      const root = el.getRootNode();
+      let hit = (root.elementFromPoint ? root.elementFromPoint(cx, cy) : null)
+             || el.ownerDocument.elementFromPoint(cx, cy);
+      if (!hit) return 'miss';
+      if (hit === el || within(el, hit) || within(hit, el)) return 'hit';
+      const lbl = el.labels && el.labels[0];
+      if (lbl && (hit === lbl || within(lbl, hit))) return 'hit';
+      // not us: is the thing on top an OVERLAY (bigger than the element — a modal, backdrop,
+      // fixed header, cookie banner) or a sibling/mis-placed box (a geometry miss)?
+      const hr = hit.getBoundingClientRect();
+      return (hr.width * hr.height > r.width * r.height * 1.5) ? 'covered' : 'miss';
     }"""
 
-    async def mark_hits(self, shown: list[tuple[int, "DomElement"]]) -> dict[int, bool]:
-        """For each shown element, does elementFromPoint at its box CENTER (in the element's own
-        frame) land on that element (or its label/child/ancestor)? True = the drawn mark sits on
-        the intended, un-occluded element; False = covered by an overlay/modal or mis-placed.
+    async def mark_hits(self, shown: list[tuple[int, "DomElement"]]) -> dict[int, str]:
+        """For each shown element, what does elementFromPoint at its box CENTER (in the element's
+        own frame, composed-tree aware) land on? 'hit' = the element itself (or its label/child/
+        ancestor, through shadow hosts); 'covered' = a larger element on top (modal, backdrop,
+        fixed header) — a correct "present but behind something"; 'miss' = something else
+        (a geometry error).
 
         Batched ONE evaluate per frame (not per element) so it is cheap enough to run each step.
         Elements are located by durable locator, so nothing is stamped on the page.
@@ -516,7 +532,7 @@ class BrowserSession:
         for idx, el in shown:
             by_frame.setdefault(tuple(el.frame_path), []).append((idx, el))
 
-        hits: dict[int, bool] = {}
+        hits: dict[int, str] = {}
         for group in by_frame.values():
             handles = []
             idxs = []
@@ -526,7 +542,7 @@ class BrowserSession:
                 except Exception:  # noqa: BLE001
                     h = None
                 if h is None:
-                    hits[idx] = False
+                    hits[idx] = "miss"
                 else:
                     handles.append(h)
                     idxs.append(idx)
@@ -535,13 +551,13 @@ class BrowserSession:
             frame = await handles[0].owner_frame()
             try:
                 results = await frame.evaluate(
-                    "(els) => els.map(el => { try { return (" + self._HIT_JS + ")(el); } catch (e) { return false; } })",
+                    "(els) => els.map(el => { try { return (" + self._HIT_JS + ")(el); } catch (e) { return 'miss'; } })",
                     handles,
                 )
-            except Exception:  # noqa: BLE001 — whole-frame failure: treat as not-hit
-                results = [False] * len(idxs)
-            for idx, ok in zip(idxs, results, strict=False):
-                hits[idx] = bool(ok)
+            except Exception:  # noqa: BLE001 — whole-frame failure: treat as miss
+                results = ["miss"] * len(idxs)
+            for idx, res in zip(idxs, results, strict=False):
+                hits[idx] = res if res in ("hit", "covered") else "miss"
         return hits
 
     async def wait_for_state(self, state: State) -> float:

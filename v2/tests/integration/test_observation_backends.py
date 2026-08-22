@@ -141,7 +141,9 @@ def test_ax_backend_names_controls_the_dom_heuristic_misses():
     # and the ax names replay as exact role locators
     free = next(e for e in axs.elements if e.name == "Free")
     chain = _locator_for(free)
-    assert chain[-1].fn == "get_by_role" and chain[-1].kwargs == {"name": "Free", "exact": True}
+    role = next(st for st in chain if st.fn == "get_by_role")
+    assert role.kwargs == {"name": "Free", "exact": True}
+    assert chain[-1].fn == "filter" and chain[-1].kwargs == {"visible": True}
 
 
 def test_ax_backend_falls_back_to_dom_walk_on_failure(monkeypatch):

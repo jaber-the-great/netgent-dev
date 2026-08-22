@@ -75,13 +75,15 @@ DOM_SNAPSHOT_JS = r"""
     el.getAttribute('value') || ''
   );
   const cssPath = (el) => {
-    if (el.id) return `#${CSS.escape(el.id)}`;
+    // an id is only an anchor when it is unique in its root (YouTube reuses id="button")
+    const uniq = (n) => { try { return n.getRootNode().querySelectorAll(`#${CSS.escape(n.id)}`).length === 1; } catch (e) { return false; } };
+    if (el.id && uniq(el)) return `#${CSS.escape(el.id)}`;
     const parts = [];
     let node = el;
     while (node && node.nodeType === 1 && parts.length < 5) {
       let sel = node.tagName.toLowerCase();
       // anchor at the nearest ancestor with a stable-looking id: shorter, survives layout churn
-      if (node !== el && node.id && !/\d{4,}|[0-9a-f]{8,}/.test(node.id)) {
+      if (node !== el && node.id && !/\d{4,}|[0-9a-f]{8,}/.test(node.id) && uniq(node)) {
         parts.unshift(`#${CSS.escape(node.id)}`); break;
       }
       if (node.classList && node.classList.length) sel += '.' + [...node.classList].map(c => CSS.escape(c)).join('.');

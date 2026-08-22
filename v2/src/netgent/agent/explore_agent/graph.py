@@ -55,7 +55,7 @@ async def _render_marks(session: BrowserSession, snapshot) -> "bytes | None":
         # index set, but visibly "behind something") rather than a solid number on dead pixels.
         drawn_idx = [(m.index, next(el for i, el in shown if i == m.index)) for m in marks]
         hits = await session.mark_hits(drawn_idx)
-        covered = {i for i, ok in hits.items() if not ok}
+        covered = {i for i, res in hits.items() if res != "hit"}
         return render_set_of_marks(png, marks, vw, vh, covered=covered)
     except Exception as exc:  # noqa: BLE001
         logger.warning("set-of-marks render failed (%s); sending text only", exc)

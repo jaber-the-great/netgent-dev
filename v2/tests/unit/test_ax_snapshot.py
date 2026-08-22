@@ -97,8 +97,9 @@ def test_build_elements_joins_dom_facts_and_disambiguates_duplicates():
     # duplicate role+name in the same frame → .nth(k); exact=True because names are accname
     submits = [e for e in elements if e.name == "Submit"]
     chains = [_locator_for(e) for e in submits]
-    assert chains[0][0].kwargs == {"name": "Submit", "exact": True} and chains[0][1].fn == "nth"
-    assert chains[0][1].args == [0] and chains[1][1].args == [1]
+    assert chains[0][0].kwargs == {"name": "Submit", "exact": True}
+    assert chains[0][1].fn == "filter" and chains[0][1].kwargs == {"visible": True}  # hidden duplicates skipped
+    assert chains[0][2].fn == "nth" and chains[0][2].args == [0] and chains[1][2].args == [1]
 
     radio = by_name[("input", "AI")]
     assert radio.checked is True and radio.type == "radio"
