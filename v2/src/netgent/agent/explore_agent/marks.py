@@ -90,9 +90,17 @@ def _overlaps(a, b) -> bool:
     return not (a[2] <= b[0] or a[0] >= b[2] or a[3] <= b[1] or a[1] >= b[3])
 
 
-def render_set_of_marks(png: bytes, marks: list[Mark], viewport_w: int, viewport_h: int) -> bytes:
+def render_set_of_marks(
+    png: bytes, marks: list[Mark], viewport_w: int, viewport_h: int, covered: set[int] | None = None
+) -> bytes:
     """Draw numbered boxes onto a copy of `png` (a viewport screenshot). Pure Pillow; the input
-    image is never mutated in place and the live page is never touched."""
+    image is never mutated in place and the live page is never touched.
+
+    `covered` = indices whose box center is occluded (from BrowserSession.mark_hits). They are
+    still drawn — so the image and the text list share the same index set — but with a thin
+    dotted outline and an unfilled label, signalling "present but currently behind something".
+    """
+    covered = covered or set()
     from PIL import Image, ImageDraw, ImageFont
 
     img = Image.open(io.BytesIO(png)).convert("RGBA")
@@ -123,7 +131,15 @@ def render_set_of_marks(png: bytes, marks: list[Mark], viewport_w: int, viewport
         y0 = max(0, min(y0, img.height - 1))
         y1 = max(0, min(y1, img.height - 1))
         color = color_for(m.index)
-        draw.rectangle([x0, y0, x1, y1], outline=(*color, 255), width=2)
+        if m.index in covered:  # occluded: faint dotted box, no solid fill
+            for seg in range(int(x0), int(x1), 6):
+                draw.line([seg, y0, min(seg + 3, x1), y0], fill=(*color, 160), width=1)
+                draw.line([seg, y1, min(seg + 3, x1), y1], fill=(*color, 160), width=1)
+            for seg in range(int(y0), int(y1), 6):
+                draw.line([x0, seg, x0, min(seg + 3, y1)], fill=(*color, 160), width=1)
+                draw.line([x1, seg, x1, min(seg + 3, y1)], fill=(*color, 160), width=1)
+        else:
+            draw.rectangle([x0, y0, x1, y1], outline=(*color, 255), width=2)
 
     for m in sorted(marks, key=lambda m: -(m.bbox.w * m.bbox.h)):
         b = m.bbox
@@ -131,18 +147,19 @@ def render_set_of_marks(png: bytes, marks: list[Mark], viewport_w: int, viewport
         x1, y1 = (b.x + b.w) * scale, (b.y + b.h) * scale
         color = color_for(m.index)
         label = str(m.index)
+        fill_a = 120 if m.index in covered else 235  # dim the label of covered marks
         tw = int(draw.textlength(label, font=font)) + 2 * LABEL_PAD
         boxpx = (int(x0), int(y0), int(x1), int(y1))
         for lx0, ly0, lx1, ly1 in _label_positions(boxpx, tw, img.width, img.height):
             if not any(_overlaps((lx0, ly0, lx1, ly1), p) for p in placed_labels):
                 placed_labels.append((lx0, ly0, lx1, ly1))
-                draw.rectangle([lx0, ly0, lx1, ly1], fill=(*color, 235))
+                draw.rectangle([lx0, ly0, lx1, ly1], fill=(*color, fill_a))
                 draw.text((lx0 + LABEL_PAD, ly0 + 1), label, fill=(255, 255, 255, 255), font=font)
                 break
         else:  # every candidate collided — place at the first anyway (density fallback)
             lx0, ly0, lx1, ly1 = _label_positions(boxpx, tw, img.width, img.height)[0]
             placed_labels.append((lx0, ly0, lx1, ly1))
-            draw.rectangle([lx0, ly0, lx1, ly1], fill=(*color, 235))
+            draw.rectangle([lx0, ly0, lx1, ly1], fill=(*color, fill_a))
             draw.text((lx0 + LABEL_PAD, ly0 + 1), label, fill=(255, 255, 255, 255), font=font)
 
     out = Image.alpha_composite(img, overlay).convert("RGB")

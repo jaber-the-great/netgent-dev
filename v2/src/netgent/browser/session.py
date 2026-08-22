@@ -491,40 +491,57 @@ class BrowserSession:
         size = await self.page.evaluate("() => [window.innerWidth, window.innerHeight]")
         return int(size[0]), int(size[1])
 
-    async def mark_hits(self, shown: list[tuple[int, "DomElement"]]) -> dict[int, bool]:
-        """For each shown element, does document.elementFromPoint at its box CENTER (in the
-        element's own frame) land on that element (or its label/child/ancestor)? True = the drawn
-        mark sits on the intended, un-occluded element; False = covered by an overlay/modal or
-        mis-placed. Used by evals/som_check.py and (optionally) to drop covered marks at runtime.
+    _HIT_JS = """el => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 && r.height === 0) return false;
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const hit = el.ownerDocument.elementFromPoint(cx, cy);
+      if (!hit) return false;
+      if (hit === el || el.contains(hit) || hit.contains(el)) return true;
+      const lbl = el.labels && el.labels[0];  // clicking the control's own <label> counts
+      return !!(lbl && (hit === lbl || lbl.contains(hit)));
+    }"""
 
-        The element is located by its durable locator, so nothing is stamped on the page.
+    async def mark_hits(self, shown: list[tuple[int, "DomElement"]]) -> dict[int, bool]:
+        """For each shown element, does elementFromPoint at its box CENTER (in the element's own
+        frame) land on that element (or its label/child/ancestor)? True = the drawn mark sits on
+        the intended, un-occluded element; False = covered by an overlay/modal or mis-placed.
+
+        Batched ONE evaluate per frame (not per element) so it is cheap enough to run each step.
+        Elements are located by durable locator, so nothing is stamped on the page.
         """
         from netgent.agent.explore_agent.observation import _locator_for
 
-        hits: dict[int, bool] = {}
+        by_frame: dict[tuple[str, ...], list[tuple[int, DomElement]]] = {}
         for idx, el in shown:
-            try:
-                handle = await self._resolve(_locator_for(el)).first.element_handle(timeout=1000)
-                if handle is None:
+            by_frame.setdefault(tuple(el.frame_path), []).append((idx, el))
+
+        hits: dict[int, bool] = {}
+        for group in by_frame.values():
+            handles = []
+            idxs = []
+            for idx, el in group:
+                try:
+                    h = await self._resolve(_locator_for(el)).first.element_handle(timeout=1000)
+                except Exception:  # noqa: BLE001
+                    h = None
+                if h is None:
                     hits[idx] = False
-                    continue
-                hits[idx] = bool(
-                    await handle.evaluate(
-                        """el => {
-                          const r = el.getBoundingClientRect();
-                          const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-                          if (r.width === 0 && r.height === 0) return false;
-                          const hit = el.ownerDocument.elementFromPoint(cx, cy);
-                          if (!hit) return false;
-                          if (hit === el || el.contains(hit) || hit.contains(el)) return true;
-                          // a <label> for the control, or the control's label, counts as landing on it
-                          const lbl = el.labels && el.labels[0];
-                          return !!(lbl && (hit === lbl || lbl.contains(hit)));
-                        }"""
-                    )
+                else:
+                    handles.append(h)
+                    idxs.append(idx)
+            if not handles:
+                continue
+            frame = await handles[0].owner_frame()
+            try:
+                results = await frame.evaluate(
+                    "(els) => els.map(el => { try { return (" + self._HIT_JS + ")(el); } catch (e) { return false; } })",
+                    handles,
                 )
-            except Exception:  # noqa: BLE001 — an element that vanished is simply not a hit
-                hits[idx] = False
+            except Exception:  # noqa: BLE001 — whole-frame failure: treat as not-hit
+                results = [False] * len(idxs)
+            for idx, ok in zip(idxs, results, strict=False):
+                hits[idx] = bool(ok)
         return hits
 
     async def wait_for_state(self, state: State) -> float:

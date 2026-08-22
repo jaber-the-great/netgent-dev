@@ -91,7 +91,7 @@ async def run_sweep(backend: str, max_steps: int, out_dir: Path) -> dict:
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("kind", choices=["challenge", "sweep"])
-    ap.add_argument("--backend", choices=["dom", "ax"], required=True)
+    ap.add_argument("--backend", choices=["dom", "ax", "hybrid", "hybrid_on_stuck"], required=True)
     ap.add_argument("--max-steps", type=int, default=None)
     ap.add_argument("--tag", default="")
     args = ap.parse_args()

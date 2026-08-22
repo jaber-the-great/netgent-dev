@@ -51,7 +51,12 @@ async def _render_marks(session: BrowserSession, snapshot) -> "bytes | None":
         vw, vh = await session.viewport_size()
         marks = marks_for(shown, vw, vh)
         png = await session.capture_viewport_png()
-        return render_set_of_marks(png, marks, vw, vh)
+        # occlusion-aware: elements covered by an overlay/modal are drawn hollow (present in the
+        # index set, but visibly "behind something") rather than a solid number on dead pixels.
+        drawn_idx = [(m.index, next(el for i, el in shown if i == m.index)) for m in marks]
+        hits = await session.mark_hits(drawn_idx)
+        covered = {i for i, ok in hits.items() if not ok}
+        return render_set_of_marks(png, marks, vw, vh, covered=covered)
     except Exception as exc:  # noqa: BLE001
         logger.warning("set-of-marks render failed (%s); sending text only", exc)
         return None
