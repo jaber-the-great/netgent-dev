@@ -459,3 +459,125 @@ point for NetGent — the observation feeds a compiler, and the compiler's job i
   surface. The parser is defensive and the session falls back to the DOM walk on any error, but a
   Playwright upgrade could change the YAML shape; the fixture-based parser tests would catch it.
 
+
+
+---
+
+# Hybrid text+vision — the same `ax` text observation plus a Set-of-Marks screenshot
+
+**Flag:** `NETGENT_OBSERVATION=hybrid` (screenshot every step) or `hybrid_on_stuck` (screenshot
+only once the agent has stalled); `--observation hybrid` on `netgent agent` / `generate`.
+Action space unchanged: the model still answers with an element index that resolves to a
+durable locator; the image is perception only. No coordinate actions were added (they would not
+compile to replayable locators).
+
+## H1. Prior art — what the vision-capable agents actually send (source read, paths cited)
+
+Clones under `/tmp/ax-refs/` (browser-use 0.13.8, stagehand @ `a21633d`, skyvern @ `888348d`,
+WebVoyager @ `5a78967`).
+
+* **browser-use** — the LLM screenshot is a **clean, unannotated PNG**; the text list carries the
+  indices. `AgentMessagePrompt.get_user_message` appends `ContentPartImageParam(data:image/png;
+  base64…)` after the `<browser_state>` text (`browser_use/agent/prompts.py:444-474`). Two
+  Set-of-Marks painters exist but neither reaches the model: a Pillow painter
+  (`browser_use/browser/python_highlights.py:341-460`, labels = selector-map keys, DPR from
+  `Page.getLayoutMetrics` `:474-489`, label above small boxes / inside big ones `:182-188`) is
+  referenced nowhere else; the live-DOM overlay `add_highlights` (`browser/session.py:3165-3320`,
+  `<div id="browser-use-debug-highlights">`, `z-index 2147483647`, `pointer-events:none`) is gated by
+  `dom_highlight_elements=False` "only for debugging" (`browser/profile.py:687-690`) and is removed
+  *before* the screenshot (`watchdogs/screenshot_watchdog.py:55-62`). `use_vision` defaults True,
+  tri-state with `'auto'` (`agent/views.py:62`, `message_manager/service.py:461-478`); only the
+  current step's screenshot is kept (`:450,474-475`); optional LANCZOS resize to `(1400, 850)` for
+  Claude (`agent/service.py:244-249`). Indices are primary; x/y clicks are an opt-in fallback for a
+  model allow-list, rescaled by the resize ratio (`agent/service.py:326-332`, `tools/service.py:610-627`).
+  Notable: its system prompt still promises "bounding boxes around interactive elements" that the
+  default configuration never draws (`system_prompts/system_prompt.md:21,65-67`).
+* **Stagehand** — `observe()`/`act()` are **text-only** (the hybrid a11y outline, no image):
+  `packages/extension/inference.ts:174-247`, `prompt.ts:179-185`. The only multimodal path is
+  `extract({screenshot:true})` — a viewport PNG appended as a second content block
+  (`services/extractService.ts:96-144`, `prompt.ts:102-105`), cache-bypassed because "cache keys
+  contain DOM state, not screenshot pixels" (`:67-69`). No Set-of-Marks anywhere; the only overlays
+  are a cosmetic cursor (`dom/locatorScripts/cursorOverlay.ts`) and privacy masks
+  (`understudy/screenshotUtils.ts:188-215`). Screenshots can be taken in CSS pixels (`scale:"css"` →
+  `1/devicePixelRatio`, `screenshotUtils.ts:41-59`) and the viewport is pinned with
+  `Emulation.setDeviceMetricsOverride` (`page.ts:1404-1424`). `DOM.getNodeForLocation` maps a
+  coordinate *into* the tree (`a11y/snapshot/coordinateResolver.ts:11,71`) — coordinates flow in, not
+  images out. No CUA loop in the tree.
+* **Skyvern** (phase-1 reading) — split, scrolled screenshots are paired with the `unique_id`-stamped
+  HTML tree; `drawBoundingBoxes` is marked DEPRECATED (`webeye/scraper/domUtils.js:2712`,
+  `scraper.py:265-268`): it too moved to clean screenshots + text ids.
+* **WebVoyager** (the original web SoM) — one injected `markPage()` (`utils.py:46-175`): selects by
+  tag/`onclick`/`cursor:pointer` (`:52-93`), keeps only rects whose centre `elementFromPoint` is the
+  element or a descendant and clamps them to the viewport (`:58-76`), appends `position:fixed`
+  `<div>`s with a dashed outline, `pointer-events:none`, `z-index 2147483647` and a numeric
+  `<span>` at the top-left corner (`:131-165`), sends screenshot + `[3]: <button> "Search";` list
+  (`:179-209`), and **removes the overlay divs before acting** (`run.py:384-389`). Same-document
+  only: no iframe descent, no shadow DOM; indices are recomputed every step.
+* **Magnitude** — its browser stack no longer exists in the repo (pivoted to a coding agent); not
+  compared.
+
+**What converged.** (1) Nobody ships a painted SoM to the model by default any more — browser-use
+and Skyvern both deprecated theirs and send a clean screenshot with the indices in the text;
+WebVoyager is the one that does paint, and it removes the marks before acting. (2) Everyone who
+paints hit-tests with `elementFromPoint` at the box centre (WebVoyager) and scales by DPR
+(browser-use). (3) Live-DOM overlays are treated as hazardous (removed before screenshot/action,
+`pointer-events:none`, debug-only). Our renderer therefore paints on a PIL copy — never the page —
+and verifies identity per mark with a composed-tree `elementFromPoint`.
+
+## H2. What was built
+
+* `agent/explore_agent/marks.py` — `marks_for` (viewport clip; only the elements the text list
+  shows, from the shared `shown_elements()`), `layout_marks` (DPR scale, min 12px box for tiny
+  targets, 9 candidate label slots chosen to avoid already-placed labels, largest boxes first so
+  small ones win the front), `render_set_of_marks` (PIL overlay on a copy of the clean viewport PNG;
+  per-index colour; **covered** marks drawn dotted with a dimmed label so the image and the text
+  list keep the same index set while signalling "behind something").
+* `BrowserSession.capture_viewport_png / viewport_size / mark_hits` — `mark_hits` resolves each
+  shown element by its durable locator (nothing is stamped on the page), then ONE
+  `elementFromPoint` evaluate per frame classifies the box centre as `hit` (the element, or its
+  label/child/ancestor walking the **flat tree** through `assignedSlot`/shadow hosts), `covered`
+  (a larger element on top: modal, backdrop, fixed header) or `miss`.
+* `agent/llm.py` — `decide(..., image=)` builds one `HumanMessage` with a text block and an
+  `image_url` data-URL block; `FakeLLM` ignores the image; `usage.images` counts sends.
+* `graph.py` — `hybrid` renders every step; `hybrid_on_stuck` only once `no_progress ≥ 1`.
+* Two locator fixes the identity check exposed (they affect *actions*, not just marks):
+  `get_by_role/get_by_label` chains now end in `filter(visible=True)` (YouTube's collapsed drawer
+  holds a DOM-first, zero-size twin of "Guide"/"Settings"), and `#id` anchors require the id to be
+  unique in its root (YouTube reuses `id="button"`). Elements with no addressable candidate are no
+  longer listed. A `fill` on `input[date|time]` normalises `mm/dd/yyyy` / 12-hour values — the
+  vision model reads the picker's *displayed* format off the screenshot.
+
+## H3. Set-of-Marks geometry check (`evals/som_check.py`)
+
+| site | viewport | listed | in view | marks | identity % | hit | covered | miss | label overlaps | unmarked in view | render ms |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| youtube | 1280x800 | 12 | 12 | 12 | 100.0 | 12 | 0 | 0 | 0 | 0 | 51.0 |
+| twitch | 1280x800 | 60 | 45 | 45 | 97.8 | 41 | 3 | 1 | 0 | 0 | 53.3 |
+| reddit | 1280x800 | 60 | 52 | 52 | 98.1 | 46 | 5 | 1 | 0 | 0 | 41.5 |
+| forms | 1280x800 | 60 | 27 | 27 | 100.0 | 26 | 1 | 0 | 0 | 0 | 22.6 |
+| challenge | 1280x800 | 41 | 14 | 14 | 92.9 | 13 | 0 | 1 | 0 | 0 | 24.9 |
+| fixed+modal | 1280x800 | 7 | 6 | 6 | 100.0 | 2 | 4 | 0 | 0 | 0 | 47.8 |
+| rtl | 1280x800 | 4 | 4 | 4 | 100.0 | 4 | 0 | 0 | 0 | 0 | 12.0 |
+| canvas | 1280x800 | 2 | 2 | 2 | 100.0 | 2 | 0 | 0 | 0 | 0 | 15.9 |
+| forms-mobile | 390x844 | 60 | 13 | 13 | 92.3 | 12 | 0 | 1 | 0 | 0 | 8.8 |
+
+`identity %` = (hit + covered) / marks. `covered` is the correct outcome for an element under an
+overlay: on `fixed+modal` the four buttons behind the backdrop are drawn hollow and the two modal
+buttons solid (100 %); on Reddit the login interstitial covers 5. The two residual misses are a
+link badge that overhangs its card (challenge) and one mobile-layout control (forms-mobile).
+Before the flat-tree walk Reddit scored 45 % (every shadow-DOM control "missed" because
+`document.elementFromPoint` returns the shadow host); before the unique-id rule YouTube's
+"Guide" resolved to its hidden twin. Render cost: 10–60 ms; the per-step identity check is one
+evaluate per frame.
+
+Image cost (`evals/results/observation_ab_vision.md`): a 1280×800 viewport PNG is 28–660 KB and
+≈1,365 Anthropic image tokens regardless of content (tokens scale with pixel area, ≈ w·h/750) —
+i.e. +1.4k tokens on top of a 200–1,400-token text observation, per step.
+
+## H4. Matrix — ax vs hybrid vs hybrid_on_stuck (Haiku, same prompts and budgets as §5–§7)
+
+HYBRID_MATRIX
+
+## H5. Recommendation
+
+HYBRID_REC
