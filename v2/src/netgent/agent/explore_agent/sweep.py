@@ -22,7 +22,9 @@ FORM_TASK = (
     "Fill in THIS form completely with plausible values and submit it: text/email fields, "
     "dates as YYYY-MM-DD, dropdowns from their options, click radios/checkboxes, upload "
     "for file inputs. Fix any [required]/[invalid] field, then click this form's Submit. "
-    "Stop with done when this form shows a success/confirmation message."
+    "Stop with done when this form shows a success/confirmation message. Everything you need "
+    "is in THIS form — never use goto or go_back, and do not scroll looking for other forms; "
+    "if you already submitted and see a success message, return done immediately."
 )
 
 
@@ -84,6 +86,7 @@ async def sweep_forms(
     `retries + 1` times (LLM runs vary, and a later attempt has more budget), stopping as
     soon as a success marker is verified.
     """
+    base_url = session.page.url
     frame_paths = await _form_frame_paths(session)
     result = SweepResult(total=len(frame_paths))
     logger.info("sweep: %d forms found", len(frame_paths))
@@ -93,6 +96,15 @@ async def sweep_forms(
         verified = False
         traj = None
         for attempt in range(retries + 1):
+            # A stray goto/go_back during an earlier form can leave the page off the forms
+            # document; then every scoped observation is empty and the agent flails. Re-assert
+            # the base page before each attempt so one bad navigation can't poison the sweep.
+            if session.page.url.split("#")[0] != base_url.split("#")[0]:
+                logger.info("sweep: page wandered to %s; restoring %s", session.page.url, base_url)
+                try:
+                    await session.page.goto(base_url, wait_until="domcontentloaded")
+                except Exception:  # noqa: BLE001 — best effort; the snapshot will show what's there
+                    pass
             budget = max_steps_per_form + attempt * (max_steps_per_form // 2)  # more room each retry
             agent.note(f"--- now working form {i + 1} of {len(frame_paths)} (attempt {attempt + 1}) ---")
             traj = await agent.run(session, FORM_TASK, frame_filter=frame_path, max_steps=budget)
