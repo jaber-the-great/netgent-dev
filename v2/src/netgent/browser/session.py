@@ -174,7 +174,7 @@ class BrowserSession:
         backend fails on a page it falls back to the DOM walk (logged) — observation must
         never abort an exploration step.
         """
-        backend = self._snapshot_ax if self.observation == "ax" else self._snapshot_dom
+        backend = self._snapshot_ax if self.observation in ("ax", "hybrid", "hybrid_on_stuck") else self._snapshot_dom
         last: Exception | None = None
         for attempt in range(SNAPSHOT_RETRIES + 1):
             try:
@@ -482,6 +482,50 @@ class BrowserSession:
     async def screenshot(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         await self.page.screenshot(path=str(path))
+
+    async def capture_viewport_png(self) -> bytes:
+        """Clean viewport screenshot (no full-page) as PNG bytes — the base for Set-of-Marks."""
+        return await self.page.screenshot(full_page=False)
+
+    async def viewport_size(self) -> tuple[int, int]:
+        size = await self.page.evaluate("() => [window.innerWidth, window.innerHeight]")
+        return int(size[0]), int(size[1])
+
+    async def mark_hits(self, shown: list[tuple[int, "DomElement"]]) -> dict[int, bool]:
+        """For each shown element, does document.elementFromPoint at its box CENTER (in the
+        element's own frame) land on that element (or its label/child/ancestor)? True = the drawn
+        mark sits on the intended, un-occluded element; False = covered by an overlay/modal or
+        mis-placed. Used by evals/som_check.py and (optionally) to drop covered marks at runtime.
+
+        The element is located by its durable locator, so nothing is stamped on the page.
+        """
+        from netgent.agent.explore_agent.observation import _locator_for
+
+        hits: dict[int, bool] = {}
+        for idx, el in shown:
+            try:
+                handle = await self._resolve(_locator_for(el)).first.element_handle(timeout=1000)
+                if handle is None:
+                    hits[idx] = False
+                    continue
+                hits[idx] = bool(
+                    await handle.evaluate(
+                        """el => {
+                          const r = el.getBoundingClientRect();
+                          const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+                          if (r.width === 0 && r.height === 0) return false;
+                          const hit = el.ownerDocument.elementFromPoint(cx, cy);
+                          if (!hit) return false;
+                          if (hit === el || el.contains(hit) || hit.contains(el)) return true;
+                          // a <label> for the control, or the control's label, counts as landing on it
+                          const lbl = el.labels && el.labels[0];
+                          return !!(lbl && (hit === lbl || lbl.contains(hit)));
+                        }"""
+                    )
+                )
+            except Exception:  # noqa: BLE001 — an element that vanished is simply not a hit
+                hits[idx] = False
+        return hits
 
     async def wait_for_state(self, state: State) -> float:
         """Poll until every condition of `state` holds; return recognition latency in ms.

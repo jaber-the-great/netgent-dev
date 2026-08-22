@@ -33,10 +33,28 @@ class AgentState(TypedDict, total=False):
     observation: str
     prev_observation: str | None
     no_progress: int
+    image: Any  # Set-of-Marks PNG bytes for the current step (hybrid backends), else None
     decision: Any  # AgentDecision for the current step
     steps: Annotated[list[AgentStep], operator.add]  # the trajectory, appended per step
     success: bool
     stopped_reason: str
+
+
+async def _render_marks(session: BrowserSession, snapshot) -> "bytes | None":
+    """A viewport screenshot with numbered boxes at each shown element (indices = the text
+    list). Best-effort: any failure returns None so a step never dies for lack of an image."""
+    from netgent.agent.explore_agent.marks import marks_for, render_set_of_marks
+    from netgent.agent.explore_agent.observation import shown_elements
+
+    try:
+        _, shown, _ = shown_elements(snapshot)
+        vw, vh = await session.viewport_size()
+        marks = marks_for(shown, vw, vh)
+        png = await session.capture_viewport_png()
+        return render_set_of_marks(png, marks, vw, vh)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("set-of-marks render failed (%s); sending text only", exc)
+        return None
 
 
 def build_agent_graph(
@@ -91,6 +109,14 @@ def build_agent_graph(
                 f"!! The last {MAX_REPEAT} actions changed NOTHING on screen. Do something different "
                 "(another element, another action kind, press keys, or skip this task and move on)."
             )
+
+        # Set-of-Marks screenshot for the vision backends. "hybrid" sends one every step;
+        # "hybrid_on_stuck" only once the agent has stalled (the cheap variant the libraries use).
+        image = None
+        if session.observation in ("hybrid", "hybrid_on_stuck"):
+            send = session.observation == "hybrid" or no_progress >= 1
+            if send:
+                image = await _render_marks(session, snapshot)
         return Command(
             update={
                 "n": n,
@@ -98,6 +124,7 @@ def build_agent_graph(
                 "observation": observation,
                 "prev_observation": observation,
                 "no_progress": no_progress,
+                "image": image,
             },
             goto="decide",
         )
@@ -105,7 +132,7 @@ def build_agent_graph(
     async def decide(state: AgentState) -> Command[Literal["act", "observe", "__end__"]]:
         n = state["n"]
         try:
-            decision = await llm.decide(SYSTEM_PROMPT, task, state["observation"], history)
+            decision = await llm.decide(SYSTEM_PROMPT, task, state["observation"], history, state.get("image"))
         except Exception as exc:  # noqa: BLE001 — a bad LLM response shouldn't crash the run
             logger.warning("step %d: LLM decision failed: %s", n, exc)
             history.append(f"{n}. (your last response was invalid: {exc}) — return a valid decision")

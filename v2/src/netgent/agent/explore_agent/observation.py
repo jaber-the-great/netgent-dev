@@ -25,12 +25,11 @@ from netgent.schema.actions import (
 )
 
 
-def format_observation(snapshot: DomSnapshot, limit: int = 60, text_limit: int = 25) -> str:
-    """Render the near-viewport slice of the page. Elements keep their original snapshot
-    index (what the agent references); scrolling shifts which slice is shown."""
-    lines = [f"URL: {snapshot.url}", f"TITLE: {snapshot.title}"]
+def shown_elements(snapshot: DomSnapshot, limit: int = 60) -> tuple[int, list[tuple[int, DomElement]], int]:
+    """The (above_count, [(index, element), …], below_count) the observation paging shows.
 
-    # Page the elements by top-viewport position so scroll reveals the next batch.
+    Single source of truth for WHICH elements and indices are on screen, so the Set-of-Marks
+    renderer draws the same numbers the text list uses."""
     vh = snapshot.viewport_height or 0
     indexed = list(enumerate(snapshot.interactive()))
     if vh:
@@ -39,7 +38,17 @@ def format_observation(snapshot: DomSnapshot, limit: int = 60, text_limit: int =
     else:  # viewport unknown → show in document order, no paging
         above, visible = 0, indexed
     shown = visible[:limit]
-    below = len(visible) - len(shown)
+    return above, shown, len(visible) - len(shown)
+
+
+def format_observation(snapshot: DomSnapshot, limit: int = 60, text_limit: int = 25) -> str:
+    """Render the near-viewport slice of the page. Elements keep their original snapshot
+    index (what the agent references); scrolling shifts which slice is shown."""
+    lines = [f"URL: {snapshot.url}", f"TITLE: {snapshot.title}"]
+
+    # Page the elements by top-viewport position so scroll reveals the next batch.
+    vh = snapshot.viewport_height or 0
+    above, shown, below = shown_elements(snapshot, limit)
     if vh:
         if not above and below:
             lines.append("POSITION: top of page. The elements below are the first ones — act on them.")

@@ -27,6 +27,7 @@ generate = [
     "langchain-google-genai>=4.3.4",
     "langchain-openai>=1.5.1",
     "langgraph>=1.2.11",
+    "pillow>=10.0",
 ]
 
 [dependency-groups]
