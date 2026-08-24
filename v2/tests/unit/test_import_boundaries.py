@@ -13,6 +13,7 @@ FORBIDDEN = {
     "netgent.core": ["playwright", "langchain", "langgraph", "langchain_core"],
     "netgent.browser": ["langchain", "langgraph", "langchain_core"],
     "netgent.executor": ["langchain", "langgraph", "langchain_core"],
+    "netgent.report": ["playwright", "langchain", "langgraph", "langchain_core"],
 }
 
 

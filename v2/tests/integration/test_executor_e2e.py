@@ -85,7 +85,7 @@ def test_trajectory_bundle_written(fixture_url, tmp_path):
         assert edge.screenshot is not None
         assert (run_dir / edge.screenshot).is_file()
     # the saved record renders to a self-contained HTML page
-    from netgent.trajectory import load_record, render_html
+    from netgent.report import load_record, render_html
 
     doc = render_html(load_record(run_dir / "record.json"))
     assert "screenshots/open.png" in doc

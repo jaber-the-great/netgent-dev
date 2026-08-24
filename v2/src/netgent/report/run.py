@@ -1,4 +1,4 @@
-"""Render a run trajectory (RunRecord) for viewing — text timeline or a self-contained HTML page.
+"""Render a replay run record (RunRecord) — text timeline or a self-contained HTML page.
 
 Imports only the record schema (no Playwright), so `netgent trajectory` stays fast and works
 without the browser installed.
@@ -10,7 +10,7 @@ from pathlib import Path
 
 from netgent.schema.records import RunRecord
 
-_SYMBOL = {"ok": "✓", "trigger_timeout": "✗", "action_error": "✗"}
+_SYMBOL = {"ok": "✓", "trigger_timeout": "✗", "action_error": "✗", "param_error": "✗"}
 
 
 def load_record(path: Path) -> RunRecord:

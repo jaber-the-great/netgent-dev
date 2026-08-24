@@ -1,7 +1,7 @@
 """Trajectory rendering (text + HTML) from a RunRecord — no browser needed."""
 
+from netgent.report import load_record, render_html, render_text
 from netgent.schema.records import ConditionCheck, EdgeRecord, RunRecord, utcnow
-from netgent.trajectory import load_record, render_html, render_text
 
 
 def _record() -> RunRecord:
