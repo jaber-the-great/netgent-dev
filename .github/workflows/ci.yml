@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["v2/**", ".github/workflows/ci.yml"]
+  pull_request:
+    paths: ["v2/**", ".github/workflows/ci.yml"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: lint + tests (v2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: v2
+    env:
+      NETGENT_BROWSER_TESTS: "1"   # the suite includes real-browser tests on local fixtures (no LLM, no live sites)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "v2/uv.lock"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --extra generate
+
+      - name: Install browser (Patchright Chromium + system deps)
+        run: uv run patchright install --with-deps chromium
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Import boundaries + unit tests
+        run: uv run pytest -q tests/unit
+
+      - name: Integration tests (real browser, local fixtures)
+        run: uv run pytest -q tests/integration
+
+      - name: Replay benchmark (netgent eval dataset)
+        run: uv run netgent eval dataset evals/datasets/forms --out /tmp/eval-forms
+
+      - name: Upload eval results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-forms
+          path: /tmp/eval-forms
+          if-no-files-found: ignore
