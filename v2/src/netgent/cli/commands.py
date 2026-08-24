@@ -21,7 +21,7 @@ cli_app = typer.Typer(
 
 cli_app.command("run")(run.run)
 cli_app.command("generate")(generate.generate)
-cli_app.command("eval")(evaluate.evaluate)
+cli_app.add_typer(evaluate.eval_app, name="eval")
 cli_app.command("doctor")(doctor.doctor)
 cli_app.command("schema")(schema_command.schema)
 cli_app.command("trajectory")(trajectory_command.trajectory)
