@@ -12,7 +12,8 @@ def test_exploration_timeline(tmp_path):
         "success": True,
         "stopped_reason": "done",
         "steps": [
-            {"n": 0, "kind": "goto", "reasoning": "starting URL", "url": "https://x/", "action": {"type": "goto", "url": "https://x/"}},
+            {"n": 0, "kind": "goto", "reasoning": "starting URL", "url": "https://x/",
+             "action": {"type": "goto", "url": "https://x/"}},
             {"n": 1, "kind": "fill", "reasoning": "type", "url": "https://x/", "error": "timeout"},
             {"n": 2, "kind": "done", "reasoning": "finished", "url": "https://x/watch"},
         ],
