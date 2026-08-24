@@ -43,7 +43,8 @@ netgent run workflow.yaml --param name=value        # deterministic, zero LLM
 | `browser/` | Playwright session (Patchright when installed), stealth profile, DOM snapshot across frames/shadow DOM, trigger evaluation, action dispatch |
 | `executor/` | control-program interpreter + parameter resolution (static + page-extracted, with guards) |
 | `agent/` | the compile-time agents, one package each: `explore_agent/` (LangGraph observe→decide→act loop, observation, sweep), `workflow_generator_agent/` (trajectories → NFA), `validation_agent/` (zero-LLM replay check); `orchestrator.py` chains them (the entry behind `netgent generate`, itself a LangGraph); shared LLM seam in `llm.py` |
-| `cli/` | Typer commands: `run`, `generate`, `agent`, `eval`, `trajectory`, `schema`, `doctor` |
+| `cli/` | Typer commands: `run`, `generate`, `agent`, `trajectory`, `schema`, `doctor`, and the `eval` sub-app (`eval dataset` replay benchmark, `eval observation` DOM/AX/hybrid A/B, `eval som` Set-of-Marks check, `eval stress {sweep,challenge}`, `eval matrix`) |
+| `evals/` | the runners behind `netgent eval` (importable functions, no `sys.exit`); `v2/evals/*.py` are shims |
 | `core/` | settings (pydantic-settings, `.env`), errors, logger |
 
 ## Dev commands

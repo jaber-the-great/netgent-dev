@@ -235,7 +235,7 @@ No new atomic action was needed. `scroll` gained an optional `locator`; `press` 
 
 ## 4. Observation A/B — measurements (no LLM)
 
-`uv run python evals/observation_ab.py` → `evals/results/observation_ab.md` (+ `.json`).
+`netgent eval observation` → `evals/results/observation/observation_ab.md` (+ `.json`).
 
 | site | backend | elements | named % | role loc % | unique % | resolves % | obs chars | ~tokens | texts | snapshot s | frames | in iframes | iframes w/ elems |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -297,10 +297,10 @@ Coverage differences (same page, matched by frame + tag + coarse bbox):
 
 ## 5. Form sweep — 21 forms, Haiku, both backends
 
-`uv run python evals/stress_ab.py sweep --backend dom|ax` (`sweep_forms`, `max_steps_per_form=30`,
+`netgent eval stress sweep --backend dom|ax` (`sweep_forms`, `max_steps_per_form=30`,
 `retries=1`, one agent with continuous memory, verified by the form's own success marker).
 
-`uv run python evals/stress_ab.py sweep --backend dom|ax` — `sweep_forms`, one agent (continuous
+`netgent eval stress sweep --backend dom|ax` — `sweep_forms`, one agent (continuous
 memory) walked through all 21 forms, each attempted up to 2× (`retries=1`), `max_steps_per_form=30`,
 verified by the form's own `dumbledore` success marker (not the agent's self-report). Haiku.
 
@@ -353,7 +353,7 @@ equal to `CAPTCHA123`). Completion: the `.score` span counts completed cards; `.
 classes list them. One `netgent agent`-style run per backend (`BrowserAgent.run`, `max_steps=60`),
 score read from the page afterwards.
 
-Exact prompt (`evals/stress_ab.py::CHALLENGE_TASK`):
+Exact prompt (`netgent.evals.stress.CHALLENGE_TASK`):
 
 > Complete every task on this page, working top to bottom. Each task is a card whose instruction is in the page text (e.g. 'Click the button to start', 'Select one of the radio buttons'). The header shows 'Score: N / 17' and N goes up by one each time a task registers; a card's own text (slider value, keys pressed, upload status) also tells you whether it registered. There are exactly 15 cards (the page's '/ 17' is a typo — the score can never reach 17, so do not hunt for missing points). Do exactly what each instruction says using click, fill, select, hover, press, upload, or scroll-inside-a-box; attempt each card once, in order, and do not go back. If a card is impossible for you (e.g. reading letters off a canvas image), skip it and move on. Scroll down only when every card in view is done or skipped. Finish with done (success=true if you attempted all 15 cards) when the last card (the contenteditable one) is done.
 
@@ -547,7 +547,7 @@ and verifies identity per mark with a composed-tree `elementFromPoint`.
   longer listed. A `fill` on `input[date|time]` normalises `mm/dd/yyyy` / 12-hour values — the
   vision model reads the picker's *displayed* format off the screenshot.
 
-## H3. Set-of-Marks geometry check (`evals/som_check.py`)
+## H3. Set-of-Marks geometry check (`netgent eval som` (`src/netgent/evals/som.py`))
 
 | site | viewport | listed | in view | marks | identity % | hit | covered | miss | label overlaps | unmarked in view | render ms |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -570,13 +570,13 @@ Before the flat-tree walk Reddit scored 45 % (every shadow-DOM control "missed" 
 "Guide" resolved to its hidden twin. Render cost: 10–60 ms; the per-step identity check is one
 evaluate per frame.
 
-Image cost (`evals/results/observation_ab_vision.md`): a 1280×800 viewport PNG is 28–660 KB and
+Image cost (`evals/results/observation/observation_ab_vision.md`): a 1280×800 viewport PNG is 28–660 KB and
 ≈1,365 Anthropic image tokens regardless of content (tokens scale with pixel area, ≈ w·h/750) —
 i.e. +1.4k tokens on top of a 200–1,400-token text observation, per step.
 
 ## H4. Matrix — ax vs hybrid vs hybrid_on_stuck (Haiku, same prompts and budgets as §5–§7)
 
-Same harness, prompts and budgets as §5–§7 (`evals/stress_ab.py … --runs 3`, Haiku 4.5, challenge
+Same harness, prompts and budgets as §5–§7 (`netgent eval stress … --runs 3`, Haiku 4.5, challenge
 `max_steps=60`, sweep `max_steps_per_form=30`, `retries=1`). 3 runs per cell; mean with per-run
 values. Token columns are the API's reported usage; `image tokens` = images × 1,365 (1280×800) and
 is already included in the per-step cost. Prices: Haiku list ($1/M in, $5/M out).
