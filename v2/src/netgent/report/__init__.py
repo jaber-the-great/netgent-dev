@@ -7,14 +7,21 @@ not in `cli/` (tests and other code import it as a library) and not in `core/` (
 layer imports nothing else; this depends on `schema`). See docs/research/repo-layout-viewers.md.
 """
 
-from netgent.report.exploration import load_exploration, render_exploration_text
+from netgent.report.exploration import (
+    load_exploration,
+    render_exploration_html,
+    render_exploration_text,
+    write_exploration_html,
+)
 from netgent.report.run import load_record, render_html, render_text, write_html
 
 __all__ = [
     "load_exploration",
     "load_record",
+    "render_exploration_html",
     "render_exploration_text",
     "render_html",
     "render_text",
+    "write_exploration_html",
     "write_html",
 ]
