@@ -1,4 +1,4 @@
-"""Offline eval harness: run a dataset of workflow artifacts and record pass/fail.
+"""The replay benchmark (`netgent eval dataset`): run a dataset of workflow artifacts, record pass/fail.
 
 A dataset directory holds `*.workflow.yaml` artifacts plus the static fixtures they
 drive. The harness serves the directory over a local HTTP server, substitutes `{base}`

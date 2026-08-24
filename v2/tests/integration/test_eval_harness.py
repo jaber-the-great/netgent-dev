@@ -3,7 +3,7 @@
 import asyncio
 from pathlib import Path
 
-from netgent.evalharness import run_dataset
+from netgent.evals.dataset import run_dataset
 
 DATASET = Path(__file__).parents[2] / "evals" / "datasets" / "forms"
 

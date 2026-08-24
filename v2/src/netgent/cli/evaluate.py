@@ -1,8 +1,7 @@
 """`netgent eval` — the reproducible evals behind docs/research/ (a Typer sub-app).
 
-Every subcommand is a thin wrapper over `netgent.evals.*` (or `netgent.evalharness` for the
-replay dataset): it prints a compact summary table, writes markdown + json under
-`evals/results/<eval>/` (override with --out), and exits non-zero only on runner errors —
+Every subcommand is a thin wrapper over `netgent.evals.*`: it prints a compact summary table,
+writes markdown + json under `evals/results/<eval>/` (override with --out), and exits non-zero only on runner errors —
 never on a low score. The one exception is `dataset`, the CI-style replay check.
 """
 
@@ -28,7 +27,7 @@ def dataset(
     Success = the workflow reached its accepting state. Writes summary.json and one record per task.
     Exits 1 when any task fails (this is the CI-style check; the other evals never exit on scores).
     """
-    from netgent.evalharness import run_dataset
+    from netgent.evals.dataset import run_dataset
 
     results_dir = out or (RESULTS / dataset.name)
     summary = asyncio.run(run_dataset(dataset, results_dir, headless=headless))
