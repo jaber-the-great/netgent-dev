@@ -39,6 +39,7 @@ except ImportError:  # pragma: no cover — plain Playwright fallback
     PATCHED_BROWSER = False
 
 from netgent.browser.dom.snapshot import (
+    CLOSED_SHADOW_REGISTRY_JS,
     DOM_SNAPSHOT_JS,
     FRAME_CONTENT_ORIGIN_JS,
     FRAME_SELECTOR_JS,
@@ -86,6 +87,7 @@ class BrowserSession:
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
         self._page: Page | None = None
+        self._cdp = None  # CDP session used to install the closed-shadow registry (Patchright only)
 
     async def __aenter__(self) -> "BrowserSession":
         self._playwright = await async_playwright().start()
@@ -107,6 +109,21 @@ class BrowserSession:
         if profile and profile.init_script:
             await self._context.add_init_script(profile.init_script)
         self._page = await self._context.new_page()
+        # Closed-shadow observation (R8): install the non-leaking registry in every frame,
+        # before any navigation, via CDP addScriptToEvaluateOnNewDocument. Patchright only —
+        # closed roots can only be ACTED on through Patchright's CDP pierce, so observing them
+        # under plain Playwright would surface elements the replayer could never drive; and
+        # Patchright's own add_init_script would break cross-origin child frames (measured).
+        if PATCHED_BROWSER:
+            try:
+                self._cdp = await self._context.new_cdp_session(self._page)
+                await self._cdp.send("Page.enable")
+                await self._cdp.send(
+                    "Page.addScriptToEvaluateOnNewDocument", {"source": CLOSED_SHADOW_REGISTRY_JS}
+                )
+            except Exception as exc:  # noqa: BLE001 — closed-shadow observation is best-effort
+                logger.warning("closed-shadow registry not installed: %s", exc)
+                self._cdp = None
         return self
 
     async def _frame_info(
@@ -153,7 +170,13 @@ class BrowserSession:
         for frame in self.page.frames:
             try:
                 frame_path, offset_x, offset_y = await self._frame_info(frame, frame_cache)
-                raw = await frame.evaluate(DOM_SNAPSHOT_JS)
+                # Under Patchright the default evaluate runs in an isolated world where the
+                # main-world registry (window.__ngClosedRoot) is undefined; isolated_context=False
+                # runs it in the main world so closed roots are seen. That kwarg is Patchright-only.
+                if PATCHED_BROWSER:
+                    raw = await frame.evaluate(DOM_SNAPSHOT_JS, isolated_context=False)
+                else:
+                    raw = await frame.evaluate(DOM_SNAPSHOT_JS)
             except Exception as exc:  # noqa: BLE001 — a detached/unreachable frame is skipped, not fatal
                 # Ad/analytics iframes attach and detach constantly; the top frame must never
                 # be lost to one. Skip it, but say so (browser-use #4778 lost whole observations
@@ -182,6 +205,11 @@ class BrowserSession:
         )
 
     async def __aexit__(self, *exc_info: object) -> None:
+        if self._cdp is not None:
+            try:
+                await self._cdp.detach()
+            except Exception:  # noqa: BLE001 — teardown must never raise
+                pass
         if self._context:
             await self._context.close()
         if self._browser:
@@ -322,6 +350,12 @@ class BrowserSession:
         await self.page.mouse.wheel(0, pixels)
 
     async def dispatch(self, action: Action) -> None:
+        if getattr(action, "requires_closed_shadow", False) and not PATCHED_BROWSER:
+            # The capability flag a plain-Playwright replayer refuses on (R8): the target is
+            # inside a closed shadow root, which only Patchright's CDP pierce can resolve.
+            raise ActionDispatchError(
+                "action requires a closed-shadow-piercing engine (Patchright); this replayer cannot resolve it"
+            )
         try:
             match action:
                 case GotoAction():

@@ -114,6 +114,12 @@ def build_agent_graph(
             upload = agent.upload_path() if decision.kind == "upload" else None
             locator_for, note = await _verified_locator(session, snapshot, decision.index)
             action = to_action(decision, snapshot, upload_path=upload, locator_for=locator_for)
+            # Carry the closed-shadow capability flag from the chosen element onto the action,
+            # so a plain-Playwright replayer refuses instead of timing out (R8).
+            elems = snapshot.interactive()
+            if decision.index is not None and 0 <= decision.index < len(elems):
+                if elems[decision.index].requires_closed_shadow and hasattr(action, "requires_closed_shadow"):
+                    action = action.model_copy(update={"requires_closed_shadow": True})
             await session.dispatch(action)
         except (ExecutionError, ValueError) as exc:
             error = str(exc)

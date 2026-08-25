@@ -398,3 +398,113 @@ def test_r7_frame_selectors_are_unique_and_use_the_real_tag(serve):
     assert twos == ["iframe.two >> nth=0", "iframe.two >> nth=1"] or all(":nth-of-type" in t for t in twos), twos
     legacy = sorted(p[1] for p in paths if len(p) == 2)
     assert legacy[0].startswith("frame") and 'frame[name="left"]' in legacy, legacy
+
+
+# ── R8: closed shadow roots — observe (registry), act (Patchright), flag; page's own check intact ──
+
+from netgent.browser.session import PATCHED_BROWSER  # noqa: E402
+
+CLOSED_ROOT = """<!doctype html><html><head><title>Closed</title></head><body>
+<div id="host"></div>
+<div id="leak">unknown</div>
+<script>
+const r = document.getElementById('host').attachShadow({mode: 'closed'});
+r.innerHTML = '<input id="ci" placeholder="closed input"><button id="cb" type="button">Closed Submit</button>'
+  + '<output id="out"></output>';
+r.getElementById('cb').addEventListener('click', () => {
+  r.getElementById('out').textContent = 'clicked:' + r.getElementById('ci').value;
+});
+// The page's OWN encapsulation check must be UNCHANGED by our registry.
+const sealed = document.getElementById('host').shadowRoot === null;
+document.getElementById('leak').textContent = sealed ? 'still-closed' : 'LEAKED';
+</script></body></html>"""
+
+
+@pytest.mark.skipif(not PATCHED_BROWSER, reason="closed-shadow observation requires Patchright")
+def test_r8a_closed_root_over_http_observed_acted_flagged(serve):
+    from netgent.agent.explore_agent.observation import capture_locator, format_observation
+
+    srv = serve({"/": CLOSED_ROOT})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(srv.url(), wait_until="networkidle")
+            snap = await s.snapshot()
+            ci = next((e for e in snap.elements if e.name == "closed input"), None)
+            cb = next((e for e in snap.elements if e.name == "Closed Submit"), None)
+            assert ci is not None and cb is not None, "closed-root elements must be observed"
+            assert ci.requires_closed_shadow and cb.requires_closed_shadow
+            obs = format_observation(snap)
+            # Act through Patchright natively (fill + click both pierce the closed root).
+            chain, note = await capture_locator(s, ci)
+            await s._resolve(chain).fill("secret", timeout=3000)
+            btn, _ = await capture_locator(s, cb)
+            await s._resolve(btn).click(timeout=3000)
+            # Verify the effect from INSIDE the closed root via the registry (main world) —
+            # input_value() on a closed-root locator hangs under Patchright, so read directly.
+            out = await s.page.evaluate(
+                "() => __ngClosedRoot(document.getElementById('host')).getElementById('out').textContent",
+                isolated_context=False,
+            )
+            leak = await s.page.locator("#leak").inner_text()
+            return ci, obs, out, leak
+
+    ci, obs, out, leak = asyncio.run(_run())
+    assert leak == "still-closed", "our registry must NOT flip the page's own shadowRoot===null check"
+    assert out == "clicked:secret"  # fill AND click landed inside the closed root
+    assert "|SHADOW(closed)|" in obs
+
+
+@pytest.mark.skipif(not PATCHED_BROWSER, reason="closed-shadow observation requires Patchright")
+def test_r8b_closed_root_inside_cross_origin_iframe(serve):
+    child = serve({"/": CLOSED_ROOT})
+    parent = serve({"/": (
+        '<!doctype html><html><head><title>Host</title></head><body>'
+        f'<iframe id="cf" src="{child.url()}" width="400" height="200"></iframe></body></html>'
+    )})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(parent.url(), wait_until="networkidle")
+            snap = await s.snapshot()
+            ci = next((e for e in snap.elements if e.name == "closed input"), None)
+            assert ci is not None, "closed root inside a cross-origin iframe must be observed"
+            assert ci.frame_path == ["iframe#cf"] and ci.requires_closed_shadow
+            from netgent.agent.explore_agent.observation import unique_locator_for
+
+            chain = await unique_locator_for(s, ci)
+            await s._resolve(chain).fill("xframe-secret", timeout=3000)
+            frame = next(f for f in s.page.frames if f.parent_frame is not None)
+            val = await frame.evaluate(
+                "() => __ngClosedRoot(document.getElementById('host')).getElementById('ci').value",
+                isolated_context=False,
+            )
+            leak = await s.page.frame_locator("iframe#cf").locator("#leak").inner_text()
+            return val, leak
+
+    val, leak = asyncio.run(_run())
+    assert val == "xframe-secret"
+    assert leak == "still-closed"
+
+
+DECLARATIVE_CLOSED = """<!doctype html><html><head><title>Decl</title></head><body>
+<div id="d"><template shadowrootmode="closed"><button id="db" type="button">Declarative</button></template></div>
+<button id="real" type="button">Real</button>
+</body></html>"""
+
+
+@pytest.mark.skipif(not PATCHED_BROWSER, reason="requires Patchright")
+def test_r8c_declarative_closed_shadow_is_unobservable_not_falsely_claimed(serve):
+    srv = serve({"/": DECLARATIVE_CLOSED})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(srv.url(), wait_until="networkidle")
+            snap = await s.snapshot()
+            return [e.name for e in snap.elements]
+
+    names = asyncio.run(_run())
+    # The declarative closed root never calls attachShadow, so the registry can't see it:
+    # we report it as unobservable (absent) rather than claiming success on it.
+    assert "Declarative" not in names
+    assert "Real" in names  # the ordinary top-frame button is still observed

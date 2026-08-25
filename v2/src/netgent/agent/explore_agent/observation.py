@@ -53,7 +53,11 @@ def format_observation(snapshot: DomSnapshot, limit: int = 60, text_limit: int =
     lines.append("INTERACTIVE ELEMENTS (near viewport):")
 
     for i, el in shown:
-        kind = el.tag
+        # Mark elements inside a CLOSED shadow root (browser-use's |SHADOW(closed)| prefix,
+        # dom/serializer/serializer.py:1030-1062). Open roots get no marker — Playwright's
+        # engines pierce them and the model gains nothing (Eugene addendum item 2).
+        shadow = "|SHADOW(closed)| " if el.requires_closed_shadow else ""
+        kind = shadow + el.tag
         if el.type:  # input[date], input[file], input[email] — the agent needs the type
             kind += f"[{el.type}]"
         elif el.role and el.role != el.tag:

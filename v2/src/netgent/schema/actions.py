@@ -91,6 +91,11 @@ Locator = Annotated[list[LocatorStep], AfterValidator(validate_locator_chain)]
 
 class _ActionBase(BaseModel):
     timeout_ms: int = DEFAULT_TIMEOUT_MS
+    # The target lives inside a CLOSED shadow root, so replay must use a closed-root-piercing
+    # engine (Patchright's CDP describeNode pierce). A plain-Playwright replayer refuses rather
+    # than silently resolving 0 elements and timing out (Stagehand v4's capability-flag
+    # pattern, __stagehandLocatorWorld). Default False → existing artifacts unaffected (R8).
+    requires_closed_shadow: bool = False
 
     @field_validator("timeout_ms")
     @classmethod

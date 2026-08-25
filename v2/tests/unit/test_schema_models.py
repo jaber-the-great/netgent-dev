@@ -206,3 +206,15 @@ def test_locator_chain_is_type_checked_at_load_time():
         ClickAction(locator=[LocatorStep(fn="nth", args=[0]), css])
     with pytest.raises(ValidationError, match="empty"):
         ClickAction(locator=[])
+
+
+def test_actions_carry_the_closed_shadow_capability_flag():
+    """R8: the flag defaults False (existing artifacts unchanged) and round-trips."""
+    from netgent.schema.actions import FillAction, LocatorStep
+
+    plain = FillAction(locator=[LocatorStep(fn="locator", args=["#a"])], text="x")
+    assert plain.requires_closed_shadow is False
+    flagged = FillAction(
+        locator=[LocatorStep(fn="locator", args=["#ci"])], text="x", requires_closed_shadow=True
+    )
+    assert FillAction.model_validate(flagged.model_dump()).requires_closed_shadow is True

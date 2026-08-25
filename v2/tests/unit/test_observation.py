@@ -137,3 +137,18 @@ def test_scroll_is_anchored_on_an_element_or_the_scoped_frame():
     assert act.locator[0].args == ["iframe#f"]
     act = to_action(AgentDecision(reasoning="x", kind="scroll"), mixed)
     assert act.locator is None
+
+
+def test_closed_shadow_elements_get_a_marker_in_the_observation():
+    snap = DomSnapshot(
+        url="u", title="t",
+        elements=[
+            DomElement(tag="input", name="Secret", requires_closed_shadow=True, bbox=BBox(x=0, y=0, w=1, h=1),
+                       candidates=[SelectorCandidate(kind="css", value="#ci")]),
+            DomElement(tag="button", name="Plain", bbox=BBox(x=0, y=0, w=1, h=1),
+                       candidates=[SelectorCandidate(kind="css", value="#b")]),
+        ],
+    )
+    obs = format_observation(snap)
+    assert "|SHADOW(closed)| input" in obs  # closed-root element is marked
+    assert "|SHADOW(closed)| button" not in obs  # the plain one is not
