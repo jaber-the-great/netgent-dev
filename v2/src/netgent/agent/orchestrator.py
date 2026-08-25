@@ -108,6 +108,13 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
             traj = await agent.run(session, task, req.url)
         for s in traj.steps:
             emit("explore", f"{s.n}. {s.kind} — {s.reasoning}" + (f" [FAILED: {s.error}]" if s.error else ""))
+        usage = getattr(llm, "usage", None)  # LangChainLLM tracks it; the LLM protocol doesn't require it
+        if usage and usage.get("calls"):
+            emit(
+                "explore",
+                f"LLM usage: {usage['calls']} calls, "
+                f"{usage['input_tokens']:,} input + {usage['output_tokens']:,} output tokens",
+            )
         if not traj.success:
             reason = traj.stopped_reason or "not completed"
             emit("explore", f"exploration failed: {reason}")
