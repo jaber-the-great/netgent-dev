@@ -129,7 +129,10 @@ class LangChainLLM:
         if not name:  # bare model name, no provider prefix
             provider, name = "gemini", provider
         self._provider = _PROVIDER_ALIAS.get(provider, provider)
-        self._chat = init_chat_model(name, model_provider=self._provider, temperature=0)
+        # Claude 4.7+ / Claude 5 models reject `temperature` outright (400: "deprecated
+        # for this model") — omit it for anthropic; keep 0 elsewhere for determinism.
+        kwargs = {} if self._provider == "anthropic" else {"temperature": 0}
+        self._chat = init_chat_model(name, model_provider=self._provider, **kwargs)
         self._structured: dict[tuple, object] = {}  # per (allowed kinds, max_actions)
         # Running totals across decide() calls — what an exploration cost (the evals under
         # `netgent eval stress` report these per run). `input_tokens` is the provider's total
