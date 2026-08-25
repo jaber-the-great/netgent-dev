@@ -17,7 +17,7 @@ import operator
 from typing import Annotated, Any, Literal, TypedDict
 
 from netgent.agent.explore_agent.browser_agent import MAX_REPEAT, AgentStep, BrowserAgent
-from netgent.agent.explore_agent.observation import _locator_for, format_observation, to_action, unique_locator_for
+from netgent.agent.explore_agent.observation import _locator_for, capture_locator, format_observation, to_action
 from netgent.agent.explore_agent.prompt import SYSTEM_PROMPT
 from netgent.browser.session import BrowserSession
 from netgent.core.errors import ExecutionError
@@ -112,7 +112,7 @@ def build_agent_graph(
         action = None
         try:
             upload = agent.upload_path() if decision.kind == "upload" else None
-            locator_for = await _verified_locator(session, snapshot, decision.index)
+            locator_for, note = await _verified_locator(session, snapshot, decision.index)
             action = to_action(decision, snapshot, upload_path=upload, locator_for=locator_for)
             await session.dispatch(action)
         except (ExecutionError, ValueError) as exc:
@@ -122,6 +122,7 @@ def build_agent_graph(
         step = AgentStep(n=n, kind=decision.kind, reasoning=decision.reasoning, url=session.page.url, error=error)
         if error is None:
             step.action = action  # the compilable record of what actually ran
+            step.locator_check = note
         await agent.capture_screenshot(session, step)
         # Feed outcomes back so the agent recovers instead of repeating itself.
         outcome = f" -> FAILED: {error}" if error else ""
@@ -141,20 +142,21 @@ def build_agent_graph(
 
 
 async def _verified_locator(session: BrowserSession, snapshot, index: int | None):
-    """A locator builder for the chosen element, verified unique against the live page.
+    """(locator builder, provenance note) for the chosen element, verified against the live
+    page: unique (R1) and cross-checked with Playwright's own generator (R4).
 
     Resolution is async (it counts matches in the browser) while `to_action` is pure, so
     the chain is built here and handed in. Any failure falls back to the unverified chain.
     """
     elems = snapshot.interactive()
     if index is None or not (0 <= index < len(elems)):
-        return _locator_for
+        return _locator_for, None
     try:
-        chain = await unique_locator_for(session, elems[index])
+        chain, note = await capture_locator(session, elems[index])
     except Exception as exc:  # noqa: BLE001 — verification is best-effort; dispatch fails loudly
         logger.warning("locator verification failed for element %d: %s", index, exc)
-        return _locator_for
-    return lambda _el: chain
+        return _locator_for, f"verification failed: {exc}"
+    return (lambda _el: chain), note
 
 
 def agent_graph_mermaid() -> str:

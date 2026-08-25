@@ -208,3 +208,84 @@ def test_r3_detached_frame_is_reported_not_swallowed(serve):
     from netgent.agent.explore_agent.observation import format_observation
 
     assert "1 frame(s) could not be observed" in format_observation(snap)
+
+
+# ── R4: the hostile page — our chain and Playwright's normalize() chain must agree ──
+
+HOSTILE_LEAF = """<!doctype html><html><head><title>Leaf</title></head><body>
+<input id="d2" placeholder="deep field"><button id="deep-go">Deep go</button>
+</body></html>"""
+
+HOSTILE_MID = """<!doctype html><html><head><title>Mid</title></head><body>
+<label for="mi">Middle</label><input id="mi">
+<iframe id="inner" src="{leaf}"></iframe>
+</body></html>"""
+
+HOSTILE_PAY = """<!doctype html><html><head><title>Pay</title></head><body>
+<div id="host"></div>
+<script>
+const r = document.getElementById('host').attachShadow({mode: 'open'});
+r.innerHTML = '<input data-testid="cardno" placeholder="Card"><button data-testid="deepbtn">Pay</button>';
+</script></body></html>"""
+
+
+def _hostile_top(pay_url: str, mid_url: str, leaf_url: str) -> str:
+    return f"""<!doctype html><html><head><title>Hostile</title></head><body>
+<button id="top-btn">Top</button>
+<iframe title="Pay" src="{pay_url}" width="400" height="120"></iframe>
+<iframe id="nest" src="{mid_url}" width="400" height="300"></iframe>
+<my-form data-n="1"></my-form><my-form data-n="2"></my-form>
+<shadow-host></shadow-host>
+<script>
+customElements.define('my-form', class extends HTMLElement {{
+  connectedCallback() {{
+    const root = this.attachShadow({{mode: 'open'}});
+    root.innerHTML = '<input id="email" placeholder="Email"><button id="go">Go</button>';
+  }}
+}});
+customElements.define('shadow-host', class extends HTMLElement {{
+  connectedCallback() {{
+    const root = this.attachShadow({{mode: 'open'}});
+    root.innerHTML = '<iframe id="fb" src="{leaf_url}" width="300" height="80"></iframe>';
+  }}
+}});
+</script></body></html>"""
+
+
+def test_r4_our_chains_agree_with_playwrights_normalized_chains(serve):
+    from netgent.agent.explore_agent.normalized import chain_from_normalized
+    from netgent.agent.explore_agent.observation import capture_locator
+
+    leaf = serve({"/": HOSTILE_LEAF})
+    mid = serve({"/": HOSTILE_MID.format(leaf=leaf.url())})
+    pay = serve({"/": HOSTILE_PAY})
+    top = serve({"/": _hostile_top(pay.url(), mid.url(), leaf.url())})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(top.url(), wait_until="networkidle")
+            snap = await s.snapshot()
+            assert snap.frames_skipped == 0
+            results = []
+            for el in snap.elements:
+                ours = await unique_locator_for(s, el)
+                theirs = chain_from_normalized(await s.normalize(ours))  # total: raises if unmappable
+                same = await s.same_element(ours, theirs)
+                stored, note = await capture_locator(s, el)
+                results.append((el.name, el.frame_path, ours, theirs, same, stored, note, await s.count(stored)))
+            return results
+
+    results = asyncio.run(_run())
+    names = sorted(r[0] for r in results)
+    assert names == sorted(["Top", "Card", "Pay", "Middle", "deep field", "Deep go",
+                            "Email", "Go", "Email", "Go", "deep field", "Deep go"]), names
+    for name, frame_path, ours, theirs, same, stored, note, n in results:
+        assert same, (name, frame_path, ours, theirs)
+        assert n == 1, (name, stored)
+        assert note.startswith("normalize agreed"), (name, note)
+    # The title-only iframe: our path was positional; Playwright's iframe[title="Pay"] replaces it.
+    card = next(r for r in results if r[0] == "Card")
+    assert card[5][0].args == ['iframe[title="Pay"]'], card[5]
+    assert "frame selectors" in card[6]
+    # Two hops deep and iframe-in-shadow: both agree and stay unique.
+    assert sum(1 for r in results if r[0] == "deep field") == 2

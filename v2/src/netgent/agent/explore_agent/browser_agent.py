@@ -35,6 +35,9 @@ class AgentStep(BaseModel):
     # The resolved, durable-locator action that was dispatched (None for done or
     # failed steps). This is what `netgent generate` compiles into a workflow transition.
     action: Action | None = None
+    # How the action's locator was cross-checked at capture time (R4): whether Playwright's
+    # own generator agreed, and which chain was kept. Compile-time provenance, not replayed.
+    locator_check: str | None = None
 
 
 class AgentTrajectory(BaseModel):

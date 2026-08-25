@@ -170,6 +170,42 @@ async def unique_locator_for(session, el: DomElement) -> list[LocatorStep]:
     return ambiguous + [LocatorStep(fn="nth", args=[index])]
 
 
+async def capture_locator(session, el: DomElement) -> tuple[list[LocatorStep], str]:
+    """The chain to store for an element, cross-checked against Playwright's generator (R4).
+
+    1. `unique_locator_for` gives our verified-unique chain (never worse than before).
+    2. `Locator.normalize()` gives Playwright's frame-aware, shadow-aware selector for the
+       same element; `chain_from_normalized` maps it into our whitelist — totally, or not
+       at all (an unmappable part is a recorded compile-time note, never stored raw).
+    3. If both resolve to the same element: Playwright's frame steps (`iframe[name=…]`,
+       `#id`) replace our nth-of-type paths unless they needed an `nth`; and if ours had to be
+       disambiguated with `nth` while Playwright's is unique on its own, take Playwright's
+       whole chain — a semantically keyed locator beats css+index.
+    Returns (chain, note) — the note is what the trajectory records.
+    """
+    from netgent.agent.explore_agent.normalized import UnmappableSelector, chain_from_normalized, frame_steps
+
+    ours = await unique_locator_for(session, el)
+    try:
+        raw = await session.normalize(ours)
+    except Exception as exc:  # noqa: BLE001 — element gone / not normalizable: keep ours
+        return ours, f"normalize unavailable: {str(exc).splitlines()[0]}"
+    try:
+        theirs = chain_from_normalized(raw)
+    except UnmappableSelector as exc:
+        return ours, f"normalize unmappable ({exc}); kept ours"
+    if not await session.same_element(ours, theirs):
+        return ours, "normalize disagreed; kept ours"
+    if ours[-1].fn == "nth" and theirs[-1].fn != "nth" and await session.count(theirs) == 1:
+        return theirs, "normalize agreed; took Playwright's unique chain over css+nth"
+    our_frames, their_frames = frame_steps(ours), frame_steps(theirs)
+    if our_frames != their_frames and not any(step.fn == "nth" for step in their_frames):
+        merged = their_frames + ours[len(our_frames):]
+        if await session.count(merged) == 1:
+            return merged, "normalize agreed; took Playwright's frame selectors"
+    return ours, "normalize agreed"
+
+
 LocatorResolver = Callable[[DomElement], list[LocatorStep]]
 
 

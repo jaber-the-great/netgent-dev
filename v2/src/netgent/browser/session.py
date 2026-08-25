@@ -232,6 +232,27 @@ class BrowserSession:
                 best, best_d = i, d
         return best
 
+    async def normalize(self, chain: LocatorChain) -> str:
+        """Playwright's own selector for the element `chain` resolves to (Locator.normalize()).
+
+        Server side this is Frame.resolveSelector (playwright-core server/frames.ts:1312-1339):
+        resolve, generate a selector for the element, then one per ancestor <iframe>, joined
+        by `>> internal:control=enter-frame >>`. The string is in Playwright's private
+        `internal:` syntax and is only ever parsed back into our whitelist at compile time
+        (agent/explore_agent/normalized.py); it never reaches an artifact.
+        """
+        normalized = await self._resolve(chain).normalize()
+        return normalized._impl_obj._selector
+
+    async def same_element(self, a: LocatorChain, b: LocatorChain) -> bool:
+        """Do two chains resolve to the very same element node right now?"""
+        try:
+            ha = await self._resolve(a).element_handle(timeout=2000)
+            hb = await self._resolve(b).element_handle(timeout=2000)
+            return bool(await ha.evaluate("(x, y) => x === y", hb))
+        except Exception:  # noqa: BLE001 — different frames / unresolvable → not the same
+            return False
+
     async def _click(self, locator: Locator, timeout_ms: int) -> None:
         """Click, with checkbox/radio handling folded in (keyed on the live element).
 
