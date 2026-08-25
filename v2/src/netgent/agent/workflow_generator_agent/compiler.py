@@ -47,17 +47,20 @@ def _element_condition(action: Action) -> dict | None:
     chain = action.locator
     if len(chain) < 2 or chain[-1].fn != "locator" or chain[-1].kwargs:
         return None
-    frames = chain[:-1]
-    if any(step.fn != "frame_locator" or len(step.args) != 1 for step in frames):
-        return None
+    frame_path: list[str] = []
+    for step in chain[:-1]:
+        if step.fn == "frame_locator" and len(step.args) == 1:
+            frame_path.append(str(step.args[0]))
+        elif step.fn == "nth" and frame_path and len(step.args) == 1:
+            # a disambiguated frame step: the same thing as a selector string (Playwright's
+            # `>> nth=N` chaining), which is what frame_path carries
+            frame_path[-1] = f"{frame_path[-1]} >> nth={int(step.args[0])}"
+        else:
+            return None
     selector = chain[-1].args[0] if len(chain[-1].args) == 1 else None
     if not isinstance(selector, str):
         return None
-    return {
-        "type": "selector_visible",
-        "selector": selector,
-        "frame_path": [str(step.args[0]) for step in frames],
-    }
+    return {"type": "selector_visible", "selector": selector, "frame_path": frame_path}
 
 
 def compile_trajectory(

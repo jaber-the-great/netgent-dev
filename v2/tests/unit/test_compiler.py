@@ -95,3 +95,19 @@ def test_compiler_anchors_states_on_the_next_steps_element_with_frame_path():
     assert [c.type for c in by_id["s4"].conditions] == ["url_matches"]  # next: top-frame click
     assert by_id["s5"].conditions == []  # next: upload
     assert by_id["s6"].conditions == []  # last state
+
+
+def test_compiler_folds_a_frame_nth_step_into_the_frame_path():
+    from netgent.agent.explore_agent.browser_agent import AgentStep, AgentTrajectory
+    from netgent.agent.workflow_generator_agent.compiler import _element_condition
+    from netgent.schema.actions import ClickAction, GotoAction, LocatorStep
+
+    chain = [LocatorStep(fn="frame_locator", args=["iframe.two"]), LocatorStep(fn="nth", args=[1]),
+             LocatorStep(fn="locator", args=["#go"])]
+    assert _element_condition(ClickAction(locator=chain))["frame_path"] == ["iframe.two >> nth=1"]
+    traj = AgentTrajectory(task="t", steps=[
+        AgentStep(n=0, kind="goto", reasoning="", url="http://x/", action=GotoAction(url="http://x/")),
+        AgentStep(n=1, kind="click", reasoning="", url="http://x/", action=ClickAction(locator=chain)),
+    ])
+    wf = compile_trajectory(traj, name="n")
+    assert wf.states[1].conditions[1].frame_path == ["iframe.two >> nth=1"]

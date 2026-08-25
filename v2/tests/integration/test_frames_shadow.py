@@ -283,10 +283,10 @@ def test_r4_our_chains_agree_with_playwrights_normalized_chains(serve):
         assert same, (name, frame_path, ours, theirs)
         assert n == 1, (name, stored)
         assert note.startswith("normalize agreed"), (name, note)
-    # The title-only iframe: our path was positional; Playwright's iframe[title="Pay"] replaces it.
+    # The title-only iframe is addressed by attribute, never by a positional path (ours and
+    # Playwright's generator agree on iframe[title="Pay"] since R7; before R7 the swap did it).
     card = next(r for r in results if r[0] == "Card")
     assert card[5][0].args == ['iframe[title="Pay"]'], card[5]
-    assert "frame selectors" in card[6]
     # Two hops deep and iframe-in-shadow: both agree and stay unique.
     assert sum(1 for r in results if r[0] == "deep field") == 2
 
@@ -359,3 +359,42 @@ def test_r6_bbox_is_in_top_viewport_coordinates_on_both_axes(serve):
     bbox, truth = asyncio.run(_run())
     assert abs(bbox.x - truth["x"]) <= 1 and abs(bbox.y - truth["y"]) <= 1, (bbox, truth)
     assert bbox.x >= 30 + 8 + 5 + 23  # margin + border + padding + inner margin
+
+
+# ── R7: two sibling iframes sharing a class (no id/name) + a legacy <frame> in a frameset ──
+
+def test_r7_frame_selectors_are_unique_and_use_the_real_tag(serve):
+    leaf_a = serve({"/": '<!doctype html><html><body><input placeholder="in A"></body></html>'})
+    leaf_b = serve({"/": '<!doctype html><html><body><input placeholder="in B"></body></html>'})
+    frameset = serve({"/": (
+        '<!doctype html><html><head><title>Legacy</title></head>'
+        f'<frameset cols="50%,50%"><frame name="left" src="{leaf_a.url()}"><frame src="{leaf_b.url()}"></frameset>'
+        '</html>'
+    )})
+    top = serve({"/": (
+        '<!doctype html><html><body>'
+        f'<iframe class="two" src="{leaf_a.url()}"></iframe><iframe class="two" src="{leaf_b.url()}"></iframe>'
+        f'<iframe id="legacy" src="{frameset.url()}" width="600" height="200"></iframe>'
+        '</body></html>'
+    )})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(top.url(), wait_until="networkidle")
+            snap = await s.snapshot()
+            out = []
+            for el in snap.elements:
+                # every frame path resolves strictly (no 'resolved to N elements')
+                n = await s.count(_locator_for(el))
+                out.append((el.name, el.frame_path, n))
+            return snap.frames_skipped, out
+
+    skipped, out = asyncio.run(_run())
+    assert skipped == 0
+    paths = {tuple(p) for _, p, _ in out}
+    assert len(paths) == 4, out  # two .two iframes + two legacy frames: four distinct paths
+    assert all(n == 1 for _, _, n in out), out
+    twos = sorted(p[0] for p in paths if len(p) == 1)
+    assert twos == ["iframe.two >> nth=0", "iframe.two >> nth=1"] or all(":nth-of-type" in t for t in twos), twos
+    legacy = sorted(p[1] for p in paths if len(p) == 2)
+    assert legacy[0].startswith("frame") and 'frame[name="left"]' in legacy, legacy
