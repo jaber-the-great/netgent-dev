@@ -41,6 +41,7 @@ except ImportError:  # pragma: no cover — plain Playwright fallback
 from netgent.browser.dom.snapshot import DOM_SNAPSHOT_JS, FRAME_SELECTOR_JS, DomElement, DomSnapshot, TextBlock
 from netgent.browser.dom.stealth import StealthProfile
 from netgent.core.errors import ActionDispatchError, LocatorResolutionError, TriggerTimeoutError
+from netgent.core.logger import get_logger
 from netgent.schema.actions import (
     Action,
     ClickAction,
@@ -61,6 +62,7 @@ from netgent.schema.triggers import SelectorHidden, SelectorVisible, TitleContai
 from netgent.schema.workflow import State
 
 POLL_INTERVAL_S = 0.1
+logger = get_logger(__name__)
 
 
 class BrowserSession:
@@ -130,12 +132,19 @@ class BrowserSession:
         """
         elements: list[DomElement] = []
         texts: list[TextBlock] = []
+        skipped: list[str] = []
         viewport_height = await self.page.evaluate("() => window.innerHeight")
         for frame in self.page.frames:
             try:
                 frame_path, offset_y = await self._frame_info(frame)
                 raw = await frame.evaluate(DOM_SNAPSHOT_JS)
-            except Exception:  # a detached/unreachable frame is skipped, not fatal
+            except Exception as exc:  # noqa: BLE001 — a detached/unreachable frame is skipped, not fatal
+                # Ad/analytics iframes attach and detach constantly; the top frame must never
+                # be lost to one. Skip it, but say so (browser-use #4778 lost whole observations
+                # to this until they logged and kept going; dom/service.py:376-398).
+                reason = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+                logger.warning("snapshot: skipping frame %s: %s", frame.url, reason)
+                skipped.append(f"{frame.url}: {reason}")
                 continue
             for element in raw["elements"]:
                 element["framePath"] = frame_path
@@ -150,6 +159,8 @@ class BrowserSession:
             elements=elements,
             texts=texts,
             viewport_height=int(viewport_height),
+            frames_skipped=len(skipped),
+            skipped_frames=skipped,
         )
 
     async def __aexit__(self, *exc_info: object) -> None:
@@ -167,17 +178,28 @@ class BrowserSession:
         return self._page
 
     def _resolve(self, chain: LocatorChain) -> Locator:
-        target: Page | Locator = self.page
-        for step in chain:
+        """Replay a stored chain by whitelist reflection; the result is always a Locator.
+
+        The schema already type-checks the receiver sequence (`validate_locator_chain`);
+        this is the runtime backstop, so a chain ending on a FrameLocator (no fill/click)
+        or on the Page is a LocatorResolutionError, never an AttributeError from dispatch.
+        """
+        target: Page | Locator | FrameLocator = self.page
+        for i, step in enumerate(chain):
             fn = getattr(target, step.fn, None)
             if fn is None:
-                raise LocatorResolutionError(f"{type(target).__name__} has no locator fn {step.fn!r}")
+                raise LocatorResolutionError(
+                    f"step {i} ({step.fn!r}) is not available on a {type(target).__name__}"
+                )
             try:
                 target = fn(*step.args, **step.kwargs)
             except Exception as exc:
-                raise LocatorResolutionError(f"step {step.fn!r} failed: {exc}") from exc
-        if isinstance(target, Page):
-            raise LocatorResolutionError("empty locator chain")
+                raise LocatorResolutionError(f"step {i} ({step.fn!r}) failed: {exc}") from exc
+        if not isinstance(target, Locator):
+            raise LocatorResolutionError(
+                "empty locator chain" if isinstance(target, Page)
+                else f"locator chain ends on a {type(target).__name__}, not an element locator"
+            )
         return target
 
     async def count(self, chain: LocatorChain) -> int:

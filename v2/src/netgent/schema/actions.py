@@ -6,7 +6,7 @@ never generated code, never `exec` (docs/browser-layer-design.md §1).
 
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator
 
 DEFAULT_TIMEOUT_MS = 5000
 
@@ -44,7 +44,49 @@ class LocatorStep(BaseModel):
         return value
 
 
-Locator = list[LocatorStep]
+# What each receiver in a chain can be asked next. A chain starts on the Page; get_by_*/
+# locator move to a Locator; frame_locator moves to a FrameLocator, which has no `filter`
+# and — having no fill/click — is never a legal END of a chain (measured:
+# hasattr(FrameLocator, "filter") == hasattr(FrameLocator, "fill") == False).
+_QUERY_FNS = frozenset(ALLOWED_LOCATOR_FNS - {"frame_locator", "filter", "nth"})
+_NEXT: dict[str, dict[str, str]] = {
+    "page": {**{fn: "locator" for fn in _QUERY_FNS}, "frame_locator": "frame"},
+    "locator": {
+        **{fn: "locator" for fn in _QUERY_FNS},
+        "frame_locator": "frame",
+        "filter": "locator",
+        "nth": "locator",
+    },
+    "frame": {**{fn: "locator" for fn in _QUERY_FNS}, "frame_locator": "frame", "nth": "frame"},
+}
+
+
+def validate_locator_chain(chain: list[LocatorStep]) -> list[LocatorStep]:
+    """Reject chains that can never resolve to an actionable Locator, at load time.
+
+    Type-checks the receiver sequence (Page → Locator | FrameLocator → …): `filter`/`nth`
+    cannot open a chain, `filter` cannot follow `frame_locator`, and a chain cannot end on a
+    FrameLocator. Without this a schema-legal chain surfaced as an AttributeError at replay.
+    """
+    if not chain:
+        raise ValueError("locator chain is empty")
+    receiver = "page"
+    for i, step in enumerate(chain):
+        nxt = _NEXT[receiver].get(step.fn)
+        if nxt is None:
+            raise ValueError(
+                f"step {i} ({step.fn!r}) cannot follow a {receiver!r} receiver — "
+                f"allowed here: {sorted(_NEXT[receiver])}"
+            )
+        receiver = nxt
+    if receiver != "locator":
+        raise ValueError(
+            "locator chain ends on a frame_locator (a FrameLocator has no fill/click) — add the element step"
+        )
+    return chain
+
+
+Locator = Annotated[list[LocatorStep], AfterValidator(validate_locator_chain)]
 
 
 class _ActionBase(BaseModel):

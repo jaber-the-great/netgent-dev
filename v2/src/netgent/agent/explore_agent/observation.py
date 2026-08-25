@@ -74,6 +74,9 @@ def format_observation(snapshot: DomSnapshot, limit: int = 60, text_limit: int =
         lines.append(f"  [{i}] {kind}{name}{val}{state}")
     if below:
         lines.append(f"(↓ {below} more elements below — scroll down to reveal and reach them)")
+    if snapshot.frames_skipped:
+        lines.append(f"(⚠ {snapshot.frames_skipped} frame(s) could not be observed this step: "
+                     + "; ".join(snapshot.skipped_frames[:3]) + ")")
     if snapshot.texts:
         lines.append("VISIBLE TEXT:")
         for t in snapshot.texts[:text_limit]:

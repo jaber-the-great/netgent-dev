@@ -163,3 +163,48 @@ def test_r2_triggers_and_param_sources_are_frame_aware(serve):
     assert latency >= 0
     assert code == "Payment accepted: ORD-42"
     assert blind_code is None  # top-frame lookup cannot see into the iframe
+
+
+# ── R3: an iframe that removes itself shortly after load — skipped, but REPORTED ──
+
+SELF_REMOVING = """<!doctype html><html><head><title>Churn</title></head><body>
+<button id="stay">Stay</button>
+<iframe id="ad" srcdoc="<button id='inner'>Inner</button>"></iframe>
+<script>
+window.addEventListener('load', () => setTimeout(() => document.getElementById('ad').remove(), 100));
+</script></body></html>"""
+
+
+def test_r3_detached_frame_is_reported_not_swallowed(serve):
+    from netgent.core.errors import LocatorResolutionError
+    from netgent.schema.actions import LocatorStep
+
+    srv = serve({"/": SELF_REMOVING})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(srv.url(), wait_until="load")
+            # Stall the walk on the child so the fixture's 100 ms self-removal fires while
+            # the frame is still in page.frames — the detach then happens mid-snapshot.
+            original = s._frame_info
+
+            async def stalled(frame):
+                if frame.parent_frame is not None:
+                    await asyncio.sleep(0.4)
+                return await original(frame)
+
+            s._frame_info = stalled
+            snap = await s.snapshot()
+            # The runtime backstop for a chain ending on a FrameLocator (schema rejects it
+            # in artifacts; this covers hand-built chains reaching _resolve directly).
+            with pytest.raises(LocatorResolutionError, match="FrameLocator"):
+                s._resolve([LocatorStep(fn="frame_locator", args=["iframe"])])
+            return snap
+
+    snap = asyncio.run(_run())
+    assert [e.name for e in snap.elements] == ["Stay"]  # the top frame is never lost
+    assert snap.frames_skipped == 1
+    assert len(snap.skipped_frames) == 1 and "srcdoc" in snap.skipped_frames[0]
+    from netgent.agent.explore_agent.observation import format_observation
+
+    assert "1 frame(s) could not be observed" in format_observation(snap)

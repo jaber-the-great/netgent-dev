@@ -185,3 +185,24 @@ def test_executor_walks_sequence_with_fake_session():
     assert record.success
     assert [e.outcome for e in record.edges] == ["ok"]
     assert record.edges[0].url_after == "https://example.com/done"
+
+
+def test_locator_chain_is_type_checked_at_load_time():
+    """R3: a schema-legal step sequence that can never resolve is rejected when the artifact
+    loads, not as an AttributeError at replay (FrameLocator has no filter/fill)."""
+    from netgent.schema.actions import FillAction, LocatorStep, validate_locator_chain
+
+    frame = LocatorStep(fn="frame_locator", args=["iframe#pay"])
+    css = LocatorStep(fn="locator", args=["#card"])
+    # legal: frames, then the element; nth may follow a frame_locator (FrameLocator.nth exists)
+    validate_locator_chain([frame, frame, css])
+    validate_locator_chain([frame, LocatorStep(fn="nth", args=[1]), css])
+    validate_locator_chain([css, LocatorStep(fn="filter", kwargs={"has_text": "x"}), LocatorStep(fn="nth", args=[0])])
+    with pytest.raises(ValidationError, match="ends on a frame_locator"):
+        FillAction(locator=[frame], text="x")
+    with pytest.raises(ValidationError, match="cannot follow a 'frame' receiver"):
+        ClickAction(locator=[frame, LocatorStep(fn="filter", kwargs={"has_text": "x"}), css])
+    with pytest.raises(ValidationError, match="cannot follow a 'page' receiver"):
+        ClickAction(locator=[LocatorStep(fn="nth", args=[0]), css])
+    with pytest.raises(ValidationError, match="empty"):
+        ClickAction(locator=[])

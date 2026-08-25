@@ -208,6 +208,11 @@ class DomSnapshot(BaseModel):
     elements: list[DomElement] = Field(default_factory=list)
     texts: list[TextBlock] = Field(default_factory=list)
     viewport_height: int = 0  # top-frame innerHeight; 0 = unknown (show everything)
+    # Frames whose walk failed (detached mid-snapshot, unreachable): their elements are
+    # missing from this observation. Counted and named so the agent and the trajectory can
+    # see the observation shrank, instead of it silently looking complete (browser-use #4778).
+    frames_skipped: int = 0
+    skipped_frames: list[str] = Field(default_factory=list)  # "<url>: <error>" per skipped frame
 
     def interactive(self) -> list[DomElement]:
         return self.elements
@@ -225,4 +230,6 @@ class DomSnapshot(BaseModel):
             elements=[e for e in self.elements if e.frame_path == frame_path],
             texts=[t for t in self.texts if t.frame_path == frame_path],
             viewport_height=0,
+            frames_skipped=self.frames_skipped,
+            skipped_frames=self.skipped_frames,
         )
