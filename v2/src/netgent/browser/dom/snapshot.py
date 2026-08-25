@@ -12,38 +12,21 @@ Generator can store the most durable one first.
 
 from pydantic import BaseModel, Field
 
-# A non-leaking closed-shadow-root registry (Percy's shape, cypress percy@464f728
-# index.js:16-37): stash each closed root in a WeakMap keyed by host, leave `mode` UNTOUCHED,
-# expose only a non-enumerable probe. Measured: the site's own `host.shadowRoot === null`
-# check still returns true and no enumerable window key is added, whereas the naive
-# `closed → open` rewrite flips that check (research doc R8; h5player's re-lying override).
-# Installed at CONTEXT level via CDP Page.addScriptToEvaluateOnNewDocument (NOT Patchright's
-# add_init_script — that rewrites HTML responses through routes and BREAKS cross-origin child
-# frames; measured: any context init_script drops a same-site cross-origin iframe's content).
-# CDP installs it in every frame with runImmediately before the document's own scripts, so it
-# reaches OOPIFs and srcdoc too (measured: closed root inside a cross-origin child observed).
-CLOSED_SHADOW_REGISTRY_JS = r"""
-(() => {
-  if (Object.getOwnPropertyDescriptor(window, '__ngClosedRoot')) return;
-  const roots = new WeakMap();
-  const orig = Element.prototype.attachShadow;
-  Element.prototype.attachShadow = function (init) {
-    const root = orig.call(this, init);
-    try { if (init && init.mode === 'closed') roots.set(this, root); } catch (e) { /* ignore */ }
-    return root;
-  };
-  Object.defineProperty(window, '__ngClosedRoot', {
-    value: (el) => { try { return roots.get(el) || null; } catch (e) { return null; } },
-    enumerable: false, configurable: false, writable: false,
-  });
-})();
-"""
-
-# Injected into the page; returns a flat list of interactive-element descriptors.
+# The walker. Runs in an ISOLATED world (Playwright's default `frame.evaluate`, or the world
+# `browser/closed_shadow.py` creates over CDP) — never in the page's main world — and returns a
+# flat list of interactive-element descriptors. It is read-only: nothing on the page is patched,
+# defined, or stamped, so page JavaScript cannot tell it ran (a prototype lie such as a wrapped
+# `attachShadow` is exactly the fingerprint docs/research/stealth-after-patchright.md forbids).
+#
+# Closed shadow roots are invisible to `el.shadowRoot`, so they are handed IN: `closedRoots`
+# are ShadowRoot handles resolved from outside the page (CDP `DOM.describeNode(pierce)` →
+# `DOM.resolveNode`, the same pierce Patchright's actions use). `root.host` maps each back to
+# its host, so the walker descends at the host's position and element order is unchanged.
+# Playwright's own `evaluate` passes one `undefined` argument — filtered out below.
 # Kept dependency-free and defensive (wrapped in try/catch per node) so one weird node
 # can't abort the whole snapshot.
 DOM_SNAPSHOT_JS = r"""
-() => {
+(...closedRoots) => {
   const INTERACTIVE = new Set(['A','BUTTON','INPUT','SELECT','TEXTAREA']);
   // Roles you actually operate on. Container roles (radiogroup, group, list, tablist, …)
   // are NOT here: listing them makes the agent try to click a wrapper and time out.
@@ -118,8 +101,10 @@ DOM_SNAPSHOT_JS = r"""
     for (const n of el.childNodes) if (n.nodeType === 3) t += n.textContent;
     return clean(t);
   };
-  const closedRootOf = (el) =>
-    (typeof window.__ngClosedRoot === 'function') ? window.__ngClosedRoot(el) : null;
+  const closedByHost = new Map();
+  for (const root of closedRoots) {
+    try { if (root && root.host) closedByHost.set(root.host, root); } catch (e) { /* not a root */ }
+  }
   const walk = (root, inClosed) => {
     let nodes;
     try { nodes = root.querySelectorAll('*'); } catch (e) { return; }
@@ -128,10 +113,10 @@ DOM_SNAPSHOT_JS = r"""
         if (el.shadowRoot) {
           walk(el.shadowRoot, inClosed);  // open root: pierced by Playwright anyway (no marker)
         } else {
-          // A closed root is invisible to el.shadowRoot; the registry hands it back (Patchright
-          // only). Elements inside carry requiresClosedShadow so a plain-Playwright replayer
-          // can refuse, and the synthesizer flags the action.
-          const closed = closedRootOf(el);
+          // A closed root is invisible to el.shadowRoot; CDP handed it in (Patchright only —
+          // it is the engine that can act inside). Elements inside carry requiresClosedShadow
+          // so a plain-Playwright replayer can refuse, and the synthesizer flags the action.
+          const closed = closedByHost.get(el);
           if (closed) walk(closed, true);
         }
         // iframes are NOT descended here — the Python layer iterates page.frames and
@@ -265,7 +250,8 @@ class DomElement(BaseModel):
     value: str | None = None
     frame_path: list[str] = Field(default_factory=list, alias="framePath")
     # Captured from inside a CLOSED shadow root: only Patchright (CDP describeNode pierce) can
-    # resolve it, so a plain-Playwright replay must refuse. Set from the registry probe (R8).
+    # resolve it, so a plain-Playwright replay must refuse. Set by the walker when it descends
+    # a root handed in over CDP (browser/closed_shadow.py, R8).
     requires_closed_shadow: bool = Field(default=False, alias="requiresClosedShadow")
     bbox: BBox
     candidates: list[SelectorCandidate] = Field(default_factory=list)

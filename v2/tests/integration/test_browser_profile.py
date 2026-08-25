@@ -158,3 +158,49 @@ def test_headed_uses_the_real_display_geometry():
     fixed = asyncio.run(_run(BrowserProfile(viewport=(1280, 800))))
     assert (fixed["iw"], fixed["ih"]) == (1280, 800)
     assert (natural["sw"], natural["sh"]) != (natural["iw"], natural["ih"])  # a real window inside a real screen
+
+
+CLOSED_SHADOW_PAGE = """<!doctype html><html><head><title>Sealed</title></head><body>
+<div id="host"></div><button id="plain">Plain</button>
+<script>
+document.getElementById('host').attachShadow({mode: 'closed'}).innerHTML =
+  '<input id="ci" placeholder="closed input"><button id="cb" type="button">Closed Submit</button>';
+</script></body></html>"""
+
+# What CreepJS's "lies" section does to natives: Function.prototype.toString, .name, and a scan
+# of window's own properties for injected globals. Evaluated in the page's MAIN world.
+NATIVE_PROBE_JS = """() => ({
+  attachShadowSrc: Element.prototype.attachShadow.toString(),
+  attachShadowName: Element.prototype.attachShadow.name,
+  injectedGlobals: Object.getOwnPropertyNames(window).filter(k => k.startsWith('__')),
+  hostSealed: document.getElementById('host').shadowRoot === null,
+})"""
+
+
+def test_closed_shadow_observation_leaves_no_page_visible_trace(serve):
+    """Closed roots are observed from OUTSIDE the page (CDP describeNode pierce → isolated
+    world walk), so the main world keeps a native attachShadow, no `__` global, and the page's
+    own encapsulation check — while the closed-root elements are still in the snapshot.
+    The previous mechanism (a main-world attachShadow wrapper + window.__ngClosedRoot) failed
+    every one of these probes; see docs/research/iframes-shadow-dom.md R8."""
+    from netgent.browser.session import PATCHED_BROWSER
+
+    srv = serve({"/": CLOSED_SHADOW_PAGE})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(srv.url(), wait_until="networkidle")
+            snap = await s.snapshot()
+            probe = await s.page.evaluate(NATIVE_PROBE_JS, isolated_context=False)  # main world
+            return snap, probe
+
+    snap, probe = asyncio.run(_run())
+    assert "[native code]" in probe["attachShadowSrc"], probe["attachShadowSrc"]
+    assert probe["attachShadowName"] == "attachShadow"
+    assert probe["injectedGlobals"] == []
+    assert probe["hostSealed"] is True
+    names = {e.name for e in snap.elements}
+    assert "Plain" in names
+    if PATCHED_BROWSER:  # the closed root was nonetheless observed, and flagged
+        closed = [e for e in snap.elements if e.requires_closed_shadow]
+        assert {e.name for e in closed} == {"closed input", "Closed Submit"}, names

@@ -599,11 +599,14 @@ I ran our own `BrowserSession.snapshot()`, `_locator_for` and `_resolve` against
 >   both axes (Puppeteer's `#getTopLeftCornerOfFrame`), memoized. Closes gap #5 and #9. (fixture: 8px border+padding)
 > - **R7 — harden `FRAME_SELECTOR_JS`** *(done)*. Real tag name, quoted attributes, verified-unique
 >   with `nth`, preferring test-id/name/title. Closes gap #6. (fixture: two sibling iframes + a legacy `<frame>`)
-> - **R8 — closed shadow roots** *(done)*. A non-leaking WeakMap registry installed via CDP
->   `addScriptToEvaluateOnNewDocument` (not `add_init_script`, which breaks cross-origin frames under
->   Patchright — measured); `DOM_SNAPSHOT_JS` probes it in the main world (Patchright-gated
->   `isolated_context=False`); `requires_closed_shadow` capability flag; Patchright acts natively.
->   Closes gap #3. (fixtures: closed root over HTTP / in a cross-origin iframe / declarative-unobservable)
+> - **R8 — closed shadow roots** *(done; re-done zero-footprint 2026-08-25)*. Observed from OUTSIDE
+>   the page over CDP (`browser/closed_shadow.py`): `DOMSnapshot.captureSnapshot` detects documents
+>   with a closed tree, `DOM.describeNode(depth=-1, pierce=true)` — Patchright's own pierce — lists
+>   the closed roots, `DOM.resolveNode` hands them into an isolated world we create with
+>   `Page.createIsolatedWorld`, and `DOM_SNAPSHOT_JS` walks them there. No init script, no
+>   prototype patch, no global; `DOM_SNAPSHOT_JS` is back in Playwright's isolated world.
+>   `requires_closed_shadow` capability flag; Patchright acts natively. Closes gap #3. (fixtures:
+>   closed root over HTTP / in a cross-origin iframe / declarative — now observed / no-trace probe)
 > - **Observation** now prints `|IFRAME n|` headers grouping elements by frame and marks
 >   `|SHADOW(closed)|` elements, so the model sees containment (browser-use / Playwright aria-snapshot shape).
 > - **Not yet closed: #10** (`PressAction` without a locator still keys the focused frame) — left as-is;
@@ -757,8 +760,59 @@ step when it is not. Memoize `_frame_info` per parent frame to kill the O(depth�
 
 ### P2 — new capability
 
-**R8. Closed shadow roots: observe with a non-leaking init-script registry, act through Patchright,
-and record a capability flag.** *(cost: M–L)*
+**R8. Closed shadow roots: observe from outside the page over CDP, act through Patchright, and
+record a capability flag.** *(cost: M–L)*
+
+> **Implemented mechanism (2026-08-25) — supersedes the registry design below.** The first
+> implementation followed this section: a WeakMap registry wrapping `Element.prototype.attachShadow`,
+> installed in the main world via CDP `Page.addScriptToEvaluateOnNewDocument`, probed by
+> `DOM_SNAPSHOT_JS` under `isolated_context=False`. It did not leak `host.shadowRoot`, but it *was* a
+> prototype lie — measured on Chrome 151 from the page's main world:
+> `Element.prototype.attachShadow.toString()` returned our source instead of
+> `function attachShadow() { [native code] }`, `.name` was `""` instead of `"attachShadow"`, and
+> `'__ngClosedRoot' in window` was `true` (it appears in `Object.getOwnPropertyNames(window)`). That is
+> exactly the class CreepJS's lies section scores (`Function.prototype.toString` on natives), and
+> `stealth-after-patchright.md` says we must not ship it. The hook is gone; nothing of ours runs in the
+> main world any more.
+>
+> What replaced it, per snapshot (`v2/src/netgent/browser/closed_shadow.py`):
+> 1. **One CDP session per target.** The page's session covers the top frame and every same-process
+>    child; each OOPIF gets `context.new_cdp_session(frame)`. Playwright refuses that call for a
+>    same-process frame ("This frame does not have a separate CDP session, it is a part of the parent
+>    frame's session") — measured — which is how the two are told apart. Cross-origin frames therefore
+>    keep working (a same-site cross-origin iframe is same-process and rides the page session; a
+>    cross-site one, e.g. `localhost` vs `127.0.0.1`, is an OOPIF with its own session — both measured).
+> 2. **Detect** with `DOMSnapshot.captureSnapshot({computedStyles: []})`: a flat dump of every local
+>    document whose `shadowRootType` column says whether the document holds any closed tree (the
+>    ShadowRoot node itself is not listed — children hang off the host, tagged with the tree type).
+>    1–5 ms measured; most documents stop here.
+> 3. **Enumerate** with `DOM.describeNode(backendNodeId=<document>, depth=-1, pierce=true)` — the call
+>    Patchright's `_customFindElementsByParsed` uses to act — collecting every `shadowRootType:
+>    "closed"` root's `backendNodeId`, nested ones included. Declarative closed roots
+>    (`<template shadowrootmode="closed">`) are listed too, so they are now observed (the registry
+>    could not see them: no `attachShadow` call) — fixture r8c flipped from "absent" to "observed,
+>    flagged, clicked".
+> 4. **Walk** in a world of our own: `Page.createIsolatedWorld(frameId)` → `executionContextId`
+>    (cached per frame; a navigation destroys it and `Cannot find context with specified id` triggers
+>    re-creation), `DOM.resolveNode(backendNodeId, executionContextId)` per root, then
+>    `Runtime.callFunctionOn(DOM_SNAPSHOT_JS, arguments=roots, returnByValue)`. The walker maps
+>    `root.host → root` and descends at the host's position, so element order is identical to the
+>    registry's. Isolated worlds share the DOM but not the JS global — the page cannot see them.
+> 5. **Join** to Playwright's frame loop by an exact key: the frame's selector path, computed on the
+>    CDP side with `DOM.getFrameOwner` + `FRAME_SELECTOR_JS` in each ancestor's world, is the same
+>    string `_frame_info` produces with Playwright for the same frame (measured equal for `iframe#cf`,
+>    `iframe#oop`, `html > body > iframe:nth-of-type(4)`). `snapshot()` uses the CDP walk for frames
+>    with that key and the ordinary `frame.evaluate` (isolated world) for all others.
+>
+> Cost: 25 ms for three closed-root documents (one OOPIF) on the fixtures. On pages without closed
+> roots the only addition is detection: `captureSnapshot` ≈ 5 ms on browser-use's challenge page
+> (2 documents) and 45–90 ms on its forms-comparison page (27 documents, ≈1.5 ms/document); the
+> per-frame `new_cdp_session` probe is 0.3 ms / 6–25 ms respectively. `netgent eval observation`
+> on both pages reports identical element counts and metrics before and after (207 / 39 elements,
+> same named/unique/resolves %). Regression probe:
+> `tests/integration/test_browser_profile.py::test_closed_shadow_observation_leaves_no_page_visible_trace`
+> (native `attachShadow` source and name, no `__` global on `window`, page's `shadowRoot === null`
+> intact, closed-root elements still observed and flagged).
 The asymmetry today is backwards — we can act but not see. Three verified facts make the fix concrete:
 (i) `context.add_init_script` reaches **every** frame including cross-origin OOPIFs and `srcdoc`
 (measured, and Playwright installs init scripts per FrameSession with `runImmediately: true` before

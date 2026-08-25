@@ -38,8 +38,8 @@ except ImportError:  # pragma: no cover — plain Playwright fallback
 
     PATCHED_BROWSER = False
 
+from netgent.browser.closed_shadow import ClosedShadowObserver
 from netgent.browser.dom.snapshot import (
-    CLOSED_SHADOW_REGISTRY_JS,
     DOM_SNAPSHOT_JS,
     FRAME_CONTENT_ORIGIN_JS,
     FRAME_SELECTOR_JS,
@@ -85,7 +85,8 @@ class BrowserSession:
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
         self._page: Page | None = None
-        self._cdp = None  # CDP session: closed-shadow registry (Patchright) + headless client-hints repair
+        self._cdp = None  # CDP session: closed-shadow observation (Patchright) + headless client-hints repair
+        self._closed_shadow: ClosedShadowObserver | None = None
 
     async def _browser_version(self) -> str:
         """The channel's real version, via a throwaway launch (memoized per process)."""
@@ -125,19 +126,14 @@ class BrowserSession:
         except Exception as exc:  # noqa: BLE001 — everything below is best-effort
             logger.warning("CDP session unavailable: %s", exc)
             self._cdp = None
-        # Closed-shadow observation (R8): install the non-leaking registry in every frame,
-        # before any navigation, via CDP addScriptToEvaluateOnNewDocument. Patchright only —
-        # closed roots can only be ACTED on through Patchright's CDP pierce, so observing them
-        # under plain Playwright would surface elements the replayer could never drive; and
-        # Patchright's own add_init_script would break cross-origin child frames (measured).
+        # Closed-shadow observation (R8) is read from OUTSIDE the page over CDP — no init
+        # script, no prototype patch, no global: page JS cannot tell (browser/closed_shadow.py).
+        # Patchright only — closed roots can only be ACTED on through Patchright's CDP pierce,
+        # so observing them under plain Playwright would surface elements the replayer could
+        # never drive. Cross-origin frames work because every frame is read through its own
+        # target's session (an init script via add_init_script would break them — measured).
         if PATCHED_BROWSER and self._cdp is not None:
-            try:
-                await self._cdp.send("Page.enable")
-                await self._cdp.send(
-                    "Page.addScriptToEvaluateOnNewDocument", {"source": CLOSED_SHADOW_REGISTRY_JS}
-                )
-            except Exception as exc:  # noqa: BLE001 — closed-shadow observation is best-effort
-                logger.warning("closed-shadow registry not installed: %s", exc)
+            self._closed_shadow = ClosedShadowObserver(self._page, self._cdp, DOM_SNAPSHOT_JS, FRAME_SELECTOR_JS)
         if user_agent and self._cdp is not None:
             await self._repair_client_hints(user_agent)
         return self
@@ -201,7 +197,10 @@ class BrowserSession:
         """Observe interactive elements + text across ALL frames (same- and cross-origin).
 
         The DOM walk runs inside each frame's own context (Playwright evaluates it there
-        via CDP, bypassing the same-origin policy that limits in-page contentDocument access).
+        via CDP, bypassing the same-origin policy that limits in-page contentDocument access),
+        in an ISOLATED world — the page's own JavaScript never sees it. Frames containing a
+        closed shadow root are walked over CDP instead (same walker, same world kind, plus the
+        closed roots as handles) and joined here by their frame path (browser/closed_shadow.py).
         Element bboxes are normalized to TOP-viewport coordinates (both axes) so the
         observation can be paged by scroll position and matched against bounding_box().
         """
@@ -209,15 +208,15 @@ class BrowserSession:
         texts: list[TextBlock] = []
         skipped: list[str] = []
         viewport_height = await self.page.evaluate("() => window.innerHeight")
+        closed: dict[tuple[str, ...], dict] = {}
+        if self._closed_shadow is not None:
+            closed = await self._closed_shadow.observe()
         frame_cache: dict[Frame, tuple[list[str], float, float]] = {}
         for frame in self.page.frames:
             try:
                 frame_path, offset_x, offset_y = await self._frame_info(frame, frame_cache)
-                # Under Patchright the default evaluate runs in an isolated world where the
-                # main-world registry (window.__ngClosedRoot) is undefined; isolated_context=False
-                # runs it in the main world so closed roots are seen. That kwarg is Patchright-only.
-                if PATCHED_BROWSER:
-                    raw = await frame.evaluate(DOM_SNAPSHOT_JS, isolated_context=False)
+                if tuple(frame_path) in closed:
+                    raw = closed[tuple(frame_path)]
                 else:
                     raw = await frame.evaluate(DOM_SNAPSHOT_JS)
             except Exception as exc:  # noqa: BLE001 — a detached/unreachable frame is skipped, not fatal

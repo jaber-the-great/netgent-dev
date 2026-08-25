@@ -400,21 +400,28 @@ def test_r7_frame_selectors_are_unique_and_use_the_real_tag(serve):
     assert legacy[0].startswith("frame") and 'frame[name="left"]' in legacy, legacy
 
 
-# ── R8: closed shadow roots — observe (registry), act (Patchright), flag; page's own check intact ──
+# ── R8: closed shadow roots — observe (CDP, from outside the page), act (Patchright), flag ──
 
 from netgent.browser.session import PATCHED_BROWSER  # noqa: E402
 
+# The page echoes what happens INSIDE its closed root into light DOM (#echo) — the only way a
+# test can read it without a page-side hook, which is precisely what we no longer install.
 CLOSED_ROOT = """<!doctype html><html><head><title>Closed</title></head><body>
 <div id="host"></div>
 <div id="leak">unknown</div>
+<div id="echo"></div>
 <script>
 const r = document.getElementById('host').attachShadow({mode: 'closed'});
 r.innerHTML = '<input id="ci" placeholder="closed input"><button id="cb" type="button">Closed Submit</button>'
   + '<output id="out"></output>';
+r.getElementById('ci').addEventListener('input', () => {
+  document.getElementById('echo').textContent = 'value:' + r.getElementById('ci').value;
+});
 r.getElementById('cb').addEventListener('click', () => {
   r.getElementById('out').textContent = 'clicked:' + r.getElementById('ci').value;
+  document.getElementById('echo').textContent = r.getElementById('out').textContent;
 });
-// The page's OWN encapsulation check must be UNCHANGED by our registry.
+// The page's OWN encapsulation check must be UNCHANGED by our observation.
 const sealed = document.getElementById('host').shadowRoot === null;
 document.getElementById('leak').textContent = sealed ? 'still-closed' : 'LEAKED';
 </script></body></html>"""
@@ -440,18 +447,18 @@ def test_r8a_closed_root_over_http_observed_acted_flagged(serve):
             await s._resolve(chain).fill("secret", timeout=3000)
             btn, _ = await capture_locator(s, cb)
             await s._resolve(btn).click(timeout=3000)
-            # Verify the effect from INSIDE the closed root via the registry (main world) —
-            # input_value() on a closed-root locator hangs under Patchright, so read directly.
-            out = await s.page.evaluate(
-                "() => __ngClosedRoot(document.getElementById('host')).getElementById('out').textContent",
-                isolated_context=False,
-            )
+            # The effect inside the closed root, as the page itself reports it (light-DOM echo) —
+            # input_value() on a closed-root locator hangs under Patchright, so read the echo.
+            out = await s.page.locator("#echo").inner_text()
             leak = await s.page.locator("#leak").inner_text()
-            return ci, obs, out, leak
+            # A second observation sees the new value INSIDE the closed root (CDP re-walk).
+            after = next(e for e in (await s.snapshot()).elements if e.name == "closed input")
+            return ci, obs, out, leak, after.value
 
-    ci, obs, out, leak = asyncio.run(_run())
-    assert leak == "still-closed", "our registry must NOT flip the page's own shadowRoot===null check"
+    ci, obs, out, leak, value = asyncio.run(_run())
+    assert leak == "still-closed", "observing must NOT flip the page's own shadowRoot===null check"
     assert out == "clicked:secret"  # fill AND click landed inside the closed root
+    assert value == "secret"
     assert "|SHADOW(closed)|" in obs
 
 
@@ -474,37 +481,47 @@ def test_r8b_closed_root_inside_cross_origin_iframe(serve):
 
             chain = await unique_locator_for(s, ci)
             await s._resolve(chain).fill("xframe-secret", timeout=3000)
-            frame = next(f for f in s.page.frames if f.parent_frame is not None)
-            val = await frame.evaluate(
-                "() => __ngClosedRoot(document.getElementById('host')).getElementById('ci').value",
-                isolated_context=False,
-            )
+            val = await s.page.frame_locator("iframe#cf").locator("#echo").inner_text()
             leak = await s.page.frame_locator("iframe#cf").locator("#leak").inner_text()
             return val, leak
 
     val, leak = asyncio.run(_run())
-    assert val == "xframe-secret"
+    assert val == "value:xframe-secret"
     assert leak == "still-closed"
 
 
 DECLARATIVE_CLOSED = """<!doctype html><html><head><title>Decl</title></head><body>
 <div id="d"><template shadowrootmode="closed"><button id="db" type="button">Declarative</button></template></div>
 <button id="real" type="button">Real</button>
+<div id="echo"></div>
+<script>
+document.getElementById('real').addEventListener('click', () => {
+  document.getElementById('echo').textContent = 'real';
+});
+</script>
 </body></html>"""
 
 
 @pytest.mark.skipif(not PATCHED_BROWSER, reason="requires Patchright")
-def test_r8c_declarative_closed_shadow_is_unobservable_not_falsely_claimed(serve):
+def test_r8c_declarative_closed_shadow_is_observed_and_flagged(serve):
+    """A `<template shadowrootmode="closed">` root never calls attachShadow, so the old
+    page-side registry could not see it. The CDP read (DOM.describeNode pierce) lists it like
+    any other closed root: observed, flagged, and — Patchright's pierce is the same call —
+    actionable."""
+    from netgent.agent.explore_agent.observation import capture_locator
+
     srv = serve({"/": DECLARATIVE_CLOSED})
 
     async def _run():
         async with BrowserSession(headless=True) as s:
             await s.page.goto(srv.url(), wait_until="networkidle")
             snap = await s.snapshot()
+            decl = next((e for e in snap.elements if e.name == "Declarative"), None)
+            assert decl is not None and decl.requires_closed_shadow
+            chain, _ = await capture_locator(s, decl)
+            await s._resolve(chain).click(timeout=3000)  # resolves through the closed root
             return [e.name for e in snap.elements]
 
     names = asyncio.run(_run())
-    # The declarative closed root never calls attachShadow, so the registry can't see it:
-    # we report it as unobservable (absent) rather than claiming success on it.
-    assert "Declarative" not in names
+    assert "Declarative" in names
     assert "Real" in names  # the ordinary top-frame button is still observed
