@@ -188,10 +188,10 @@ def test_r3_detached_frame_is_reported_not_swallowed(serve):
             # the frame is still in page.frames — the detach then happens mid-snapshot.
             original = s._frame_info
 
-            async def stalled(frame):
+            async def stalled(frame, cache=None):
                 if frame.parent_frame is not None:
                     await asyncio.sleep(0.4)
-                return await original(frame)
+                return await original(frame, cache)
 
             s._frame_info = stalled
             snap = await s.snapshot()
@@ -335,3 +335,27 @@ def test_r5_scroll_reaches_into_a_cross_origin_iframe(serve):
     assert inner >= 2500, inner  # the iframe scrolled to its bottom
     assert outer == 0  # the top frame did not move
     assert outer_after > 0
+
+
+# ── R6: an element in an iframe with border + padding — bbox must match bounding_box() ──
+
+def test_r6_bbox_is_in_top_viewport_coordinates_on_both_axes(serve):
+    child = serve({"/": '<!doctype html><html><body style="margin:0"><div style="height:37px"></div>'
+                        '<button id="b" style="margin-left:23px">In frame</button></body></html>'})
+    parent = serve({"/": (
+        '<!doctype html><html><body style="margin:0"><div style="height:50px;width:70px"></div>'
+        f'<iframe id="f" src="{child.url()}" style="border:8px solid red;padding:5px;margin-left:30px;'
+        'width:300px;height:200px"></iframe></body></html>'
+    )})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(parent.url(), wait_until="networkidle")
+            snap = await s.snapshot()
+            el = next(e for e in snap.elements if e.name == "In frame")
+            truth = await s.page.frame_locator("iframe#f").locator("#b").bounding_box()
+            return el.bbox, truth
+
+    bbox, truth = asyncio.run(_run())
+    assert abs(bbox.x - truth["x"]) <= 1 and abs(bbox.y - truth["y"]) <= 1, (bbox, truth)
+    assert bbox.x >= 30 + 8 + 5 + 23  # margin + border + padding + inner margin

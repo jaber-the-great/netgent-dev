@@ -38,7 +38,14 @@ except ImportError:  # pragma: no cover — plain Playwright fallback
 
     PATCHED_BROWSER = False
 
-from netgent.browser.dom.snapshot import DOM_SNAPSHOT_JS, FRAME_SELECTOR_JS, DomElement, DomSnapshot, TextBlock
+from netgent.browser.dom.snapshot import (
+    DOM_SNAPSHOT_JS,
+    FRAME_CONTENT_ORIGIN_JS,
+    FRAME_SELECTOR_JS,
+    DomElement,
+    DomSnapshot,
+    TextBlock,
+)
 from netgent.browser.dom.stealth import StealthProfile
 from netgent.core.errors import ActionDispatchError, LocatorResolutionError, TriggerTimeoutError
 from netgent.core.logger import get_logger
@@ -102,41 +109,50 @@ class BrowserSession:
         self._page = await self._context.new_page()
         return self
 
-    async def _frame_info(self, frame: Frame) -> tuple[list[str], float]:
-        """(iframe CSS-selector chain, top-viewport Y offset) for a frame.
+    async def _frame_info(
+        self, frame: Frame, cache: dict[Frame, tuple[list[str], float, float]] | None = None
+    ) -> tuple[list[str], float, float]:
+        """(iframe CSS-selector chain, top-viewport X offset, top-viewport Y offset) for a frame.
 
-        Both are computed in each parent frame's context, so they work for cross-origin
-        frames too (Playwright reaches them via CDP). The Y offset is the sum of each
-        iframe's getBoundingClientRect().top up the chain, i.e. the frame's top edge in
-        the TOP viewport's coordinates — used to place in-frame elements for scroll paging.
+        Computed in each parent frame's context, so it works for cross-origin frames too
+        (Playwright reaches them via CDP). The offsets place the frame's CONTENT origin in
+        the top viewport: per hop, the iframe's border-box left/top plus its border and
+        padding — Puppeteer's #getTopLeftCornerOfFrame (puppeteer-core
+        api/ElementHandle.ts:1380-1415), which is what Playwright's bounding_box() reports
+        against. `cache` memoizes ancestors within one snapshot (O(frames) round trips
+        instead of O(depth²)).
         """
-        path: list[str] = []
-        offset = 0.0
-        current = frame
-        while current.parent_frame is not None:
-            handle = await current.frame_element()
-            selector = await current.parent_frame.evaluate(FRAME_SELECTOR_JS, handle)
-            top = await current.parent_frame.evaluate("(el) => el.getBoundingClientRect().top", handle)
-            path.insert(0, selector)
-            offset += top
-            current = current.parent_frame
-        return path, offset
+        if cache is None:
+            cache = {}
+        if frame in cache:
+            return cache[frame]
+        parent = frame.parent_frame
+        if parent is None:
+            cache[frame] = ([], 0.0, 0.0)
+            return cache[frame]
+        parent_path, px, py = await self._frame_info(parent, cache)
+        handle = await frame.frame_element()
+        selector = await parent.evaluate(FRAME_SELECTOR_JS, handle)
+        left, top = await parent.evaluate(FRAME_CONTENT_ORIGIN_JS, handle)
+        cache[frame] = (parent_path + [selector], px + left, py + top)
+        return cache[frame]
 
     async def snapshot(self) -> DomSnapshot:
         """Observe interactive elements + text across ALL frames (same- and cross-origin).
 
         The DOM walk runs inside each frame's own context (Playwright evaluates it there
         via CDP, bypassing the same-origin policy that limits in-page contentDocument access).
-        Element bbox.y is normalized to TOP-viewport coordinates so the observation can be
-        paged by scroll position.
+        Element bboxes are normalized to TOP-viewport coordinates (both axes) so the
+        observation can be paged by scroll position and matched against bounding_box().
         """
         elements: list[DomElement] = []
         texts: list[TextBlock] = []
         skipped: list[str] = []
         viewport_height = await self.page.evaluate("() => window.innerHeight")
+        frame_cache: dict[Frame, tuple[list[str], float, float]] = {}
         for frame in self.page.frames:
             try:
-                frame_path, offset_y = await self._frame_info(frame)
+                frame_path, offset_x, offset_y = await self._frame_info(frame, frame_cache)
                 raw = await frame.evaluate(DOM_SNAPSHOT_JS)
             except Exception as exc:  # noqa: BLE001 — a detached/unreachable frame is skipped, not fatal
                 # Ad/analytics iframes attach and detach constantly; the top frame must never
@@ -148,7 +164,9 @@ class BrowserSession:
                 continue
             for element in raw["elements"]:
                 element["framePath"] = frame_path
-                element["bbox"]["y"] += round(offset_y)  # normalize to top-viewport coordinates
+                # normalize to top-viewport coordinates (both axes — R6)
+                element["bbox"]["x"] += round(offset_x)
+                element["bbox"]["y"] += round(offset_y)
                 elements.append(DomElement.model_validate(element))
             for t in raw["texts"]:
                 t["frame_path"] = frame_path
