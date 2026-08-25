@@ -13,7 +13,15 @@ import re
 from urllib.parse import quote_plus
 
 from netgent.agent.explorer.browser_agent import AgentTrajectory
-from netgent.schema.actions import Action, ClickAction, FillAction, GotoAction, HoverAction, SelectAction
+from netgent.schema.actions import (
+    Action,
+    ClickAction,
+    FillAction,
+    GotoAction,
+    HoverAction,
+    Locator,
+    SelectAction,
+)
 from netgent.schema.workflow import Param, State, Transition, Workflow
 
 NAVIGATION_TIMEOUT_MS = 30_000  # a page load needs a navigation-scale budget, not an element-action one
@@ -63,6 +71,33 @@ def _element_condition(action: Action) -> dict | None:
     return {"type": "selector_visible", "selector": selector, "frame_path": frame_path}
 
 
+def _locator_selector(locator: Locator) -> str | None:
+    """A Playwright selector string equivalent to a locator chain, or None if inexpressible.
+
+    Conservative by design: only the two single-step shapes the explore agent emits today.
+    A chain we can't translate yields no guard (an open gate), never a wrong guard.
+    """
+    if len(locator) != 1:
+        return None
+    step = locator[0]
+    if step.fn == "locator" and step.args and not step.kwargs:
+        return str(step.args[0])  # raw CSS/Playwright selector, verbatim
+    if step.fn == "get_by_role" and step.args:
+        role = step.args[0]
+        name = step.kwargs.get("name")
+        if name is None:
+            return f"role={role}"
+        escaped = str(name).replace('"', '\\"')
+        return f'role={role}[name="{escaped}" i]'  # `i`: get_by_role's name match is case-insensitive
+    return None
+
+
+def _target_selector(action: Action) -> str | None:
+    """The selector the action is about to act on, when it has one (click/fill/press-on-element/…)."""
+    locator = getattr(action, "locator", None)
+    return _locator_selector(locator) if locator else None
+
+
 def compile_trajectory(
     traj: AgentTrajectory,
     name: str,
@@ -97,6 +132,12 @@ def compile_trajectory(
             element_condition = _element_condition(steps[i].action)
             if element_condition is not None:
                 conditions.append(element_condition)
+            # Anchor the state on the NEXT edge's target element: recognition (up to the
+            # state's timeout) then gates that edge on the page being ready for it, replacing
+            # blind sleeps and races. docs/browser-layer-design.md §3: every fixed sleep is a
+            # trigger that couldn't be expressed — this expresses it.
+            elif (sel := _target_selector(steps[i].action)) is not None:
+                conditions.append({"type": "selector_visible", "selector": sel})
         # A dialog raised by THIS step's action is the page's own confirmation — often the
         # ONLY one (alert-only forms leave URL and DOM unchanged). Anchor the state the
         # action lands in on it; replay evaluates it against dialogs raised since the last
