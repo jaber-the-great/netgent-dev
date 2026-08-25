@@ -86,6 +86,7 @@ class ParamSource(BaseModel):
 
     kind: Literal["text", "input_value", "attribute", "url_group"]
     selector: str | None = None  # CSS, for text/input_value/attribute
+    frame_path: list[str] = Field(default_factory=list)  # iframe chain the selector lives in; [] = top
     attribute: str | None = None  # for kind=attribute
     pattern: str | None = None  # regex over page.url, for kind=url_group
     group: int = 1  # which capture group, for kind=url_group

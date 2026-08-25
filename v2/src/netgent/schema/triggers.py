@@ -20,13 +20,27 @@ class TitleContains(BaseModel):
 
 
 class SelectorVisible(BaseModel):
+    """An element matching `selector` is visible.
+
+    `frame_path` is the iframe chain to evaluate in (one CSS selector per hop, outermost
+    first — the same chain a locator's `frame_locator` steps carry); empty = top frame.
+    """
+
     type: Literal["selector_visible"] = "selector_visible"
     selector: str  # CSS selector
+    frame_path: list[str] = Field(default_factory=list)
 
 
 class SelectorHidden(BaseModel):
+    """An element matching `selector` exists but is hidden.
+
+    Holds only for a RESOLVED-and-hidden element: a selector that matches nothing does not
+    satisfy it, so a typo'd or drifted selector can never recognize a state by accident.
+    """
+
     type: Literal["selector_hidden"] = "selector_hidden"
     selector: str  # CSS selector
+    frame_path: list[str] = Field(default_factory=list)
 
 
 Trigger = Annotated[

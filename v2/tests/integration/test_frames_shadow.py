@@ -84,3 +84,82 @@ def test_r1_unique_id_keeps_the_plain_chain(serve):
 
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__])
+
+
+# ── R2: a cross-origin payment iframe whose success banner appears INSIDE the frame ──
+
+PAY_FRAME = """<!doctype html><html><head><title>Pay</title></head><body>
+<input id="card" placeholder="Card number">
+<button id="pay" type="button">Pay now</button>
+<div id="banner" style="display:none" role="status">Payment accepted</div>
+<div id="hint">Enter your card</div>
+<script>document.getElementById('pay').addEventListener('click', () => {
+  document.getElementById('banner').style.display = 'block';
+  document.getElementById('hint').style.display = 'none';
+  document.getElementById('banner').textContent = 'Payment accepted: ORD-42';
+});</script></body></html>"""
+
+
+def _pay_parent(child_url: str) -> str:
+    return (
+        '<!doctype html><html><head><title>Checkout</title></head><body><h1>Checkout</h1>'
+        f'<iframe name="payframe" src="{child_url}" width="500" height="250"></iframe>'
+        '</body></html>'
+    )
+
+
+def test_r2_triggers_and_param_sources_are_frame_aware(serve):
+    from netgent.core.errors import TriggerTimeoutError
+    from netgent.schema.control import ParamSource
+    from netgent.schema.workflow import State
+
+    child = serve({"/": PAY_FRAME})
+    parent = serve({"/": _pay_parent(child.url())})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(parent.url(), wait_until="networkidle")
+            frame = ["iframe[name=\"payframe\"]"]
+            before = State(
+                id="pay-form",
+                conditions=[{"type": "selector_visible", "selector": "#pay", "frame_path": frame}],
+                timeout_ms=3000,
+            )
+            await s.wait_for_state(before)  # in-frame element recognized
+
+            # The same trigger WITHOUT a frame path is frame-blind (the documented bug):
+            blind = State(id="blind", conditions=[{"type": "selector_visible", "selector": "#pay"}], timeout_ms=500)
+            with pytest.raises(TriggerTimeoutError):
+                await s.wait_for_state(blind)
+
+            # selector_hidden: a selector that matches nothing must NOT hold ...
+            typo = State(id="typo", conditions=[{"type": "selector_hidden", "selector": "#no-such"}], timeout_ms=300)
+            with pytest.raises(TriggerTimeoutError):
+                await s.wait_for_state(typo)
+            # ... but a resolved-and-hidden in-frame element does.
+            hidden = State(
+                id="hidden",
+                conditions=[{"type": "selector_hidden", "selector": "#banner", "frame_path": frame}],
+                timeout_ms=1000,
+            )
+            await s.wait_for_state(hidden)
+
+            pay = next(e for e in (await s.snapshot()).elements if e.name == "Pay now")
+            await s._resolve(_locator_for(pay)).click()
+            after = State(
+                id="paid",
+                conditions=[
+                    {"type": "selector_visible", "selector": "#banner", "frame_path": frame},
+                    {"type": "selector_hidden", "selector": "#hint", "frame_path": frame},
+                ],
+                timeout_ms=3000,
+            )
+            latency = await s.wait_for_state(after)
+            code = await s.extract_value(ParamSource(kind="text", selector="#banner", frame_path=frame))
+            blind_code = await s.extract_value(ParamSource(kind="text", selector="#banner"), timeout_ms=300)
+            return latency, code, blind_code
+
+    latency, code, blind_code = asyncio.run(_run())
+    assert latency >= 0
+    assert code == "Payment accepted: ORD-42"
+    assert blind_code is None  # top-frame lookup cannot see into the iframe

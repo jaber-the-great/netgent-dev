@@ -50,3 +50,48 @@ def test_sample_values_become_params():
 def test_empty_trajectory_rejected():
     with pytest.raises(ValueError, match="no successful action steps"):
         compile_trajectory(AgentTrajectory(task="t"), name="empty")
+
+
+def test_compiler_anchors_states_on_the_next_steps_element_with_frame_path():
+    """R2: a state is guarded by the visibility of the element the next transition acts on,
+    evaluated in that element's iframe (frame_locator steps → frame_path)."""
+    from netgent.agent.explore_agent.browser_agent import AgentStep, AgentTrajectory
+    from netgent.schema.actions import ClickAction, FillAction, GotoAction, LocatorStep, UploadFileAction
+
+    frame = LocatorStep(fn="frame_locator", args=['iframe[name="payframe"]'])
+    traj = AgentTrajectory(
+        task="pay",
+        success=True,
+        steps=[
+            AgentStep(n=0, kind="goto", reasoning="", url="http://shop/checkout",
+                      action=GotoAction(url="http://shop/checkout")),
+            AgentStep(n=1, kind="fill", reasoning="", url="http://shop/checkout",
+                      action=FillAction(locator=[frame, LocatorStep(fn="locator", args=["#card"])], text="4242")),
+            AgentStep(n=2, kind="click", reasoning="", url="http://shop/checkout",
+                      action=ClickAction(locator=[frame, LocatorStep(fn="locator", args=["#pay"])])),
+            # nth-disambiguated chains are not expressible as a CSS trigger; top-frame
+            # elements and uploads are deliberately not anchored → no derived condition
+            AgentStep(n=3, kind="click", reasoning="", url="http://shop/done",
+                      action=ClickAction(locator=[frame, LocatorStep(fn="locator", args=["#dup"]),
+                                                  LocatorStep(fn="nth", args=[1])])),
+            AgentStep(n=4, kind="click", reasoning="", url="http://shop/done",
+                      action=ClickAction(locator=[LocatorStep(fn="locator", args=["#top-level"])])),
+            AgentStep(n=5, kind="upload", reasoning="", url="http://shop/done",
+                      action=UploadFileAction(locator=[frame, LocatorStep(fn="locator", args=["#file"])],
+                                              paths=["/tmp/x"])),
+        ],
+    )
+    wf = compile_trajectory(traj, name="pay")
+    by_id = {s.id: s for s in wf.states}
+    # s1 (after goto): next step fills #card inside the frame
+    s1 = [c.model_dump() for c in by_id["s1"].conditions]
+    assert {"type": "selector_visible", "selector": "#card", "frame_path": ['iframe[name="payframe"]']} in s1
+    assert s1[0]["type"] == "url_matches"
+    # s2 (after fill): next step clicks #pay inside the frame
+    assert [c.model_dump() for c in by_id["s2"].conditions] == [
+        {"type": "selector_visible", "selector": "#pay", "frame_path": ['iframe[name="payframe"]']}
+    ]
+    assert by_id["s3"].conditions == []  # next: nth chain
+    assert [c.type for c in by_id["s4"].conditions] == ["url_matches"]  # next: top-frame click
+    assert by_id["s5"].conditions == []  # next: upload
+    assert by_id["s6"].conditions == []  # last state

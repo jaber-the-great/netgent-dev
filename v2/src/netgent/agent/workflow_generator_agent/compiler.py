@@ -13,15 +13,51 @@ import re
 from urllib.parse import quote_plus
 
 from netgent.agent.explore_agent.browser_agent import AgentTrajectory
-from netgent.schema.actions import GotoAction
+from netgent.schema.actions import Action, ClickAction, FillAction, GotoAction, HoverAction, SelectAction
 from netgent.schema.workflow import Param, State, Transition, Workflow
 
 NAVIGATION_TIMEOUT_MS = 30_000  # a page load needs a navigation-scale budget, not an element-action one
+
+# Actions whose element must be VISIBLE for Playwright to act on it — so "its element is
+# visible" is a sound guard for the state the action fires from. (upload_file and press
+# are excluded: set_input_files works on hidden file inputs, press only needs focus.)
+_VISIBILITY_GATED = (ClickAction, FillAction, SelectAction, HoverAction)
 
 
 def _base_url(url: str) -> str:
     """URL without query/fragment — the stable part worth recognizing a state by."""
     return url.split("#", 1)[0].split("?", 1)[0]
+
+
+def _element_condition(action: Action) -> dict | None:
+    """A selector_visible condition for the IN-IFRAME element `action` targets, with its frame path.
+
+    A URL recognizes the top document only; an embedded document (payment, login, consent
+    widgets) loads on its own schedule, so a state whose next action lives in an iframe is
+    anchored on that element being visible *inside the frame* — the frame_locator steps become
+    the trigger's `frame_path` (the frame-blind trigger bug, research doc "Where NetGent stands"
+    #1). Top-frame elements get no such guard on purpose: a missing top-frame element should
+    surface as the action's error (UI drift), not as a state never recognized (flow drift).
+    Only a chain of the shape [frame_locator+, locator(css)] is expressible as a CSS trigger;
+    role/label chains and nth-disambiguated chains (where `.first` would be a different
+    element) yield nothing.
+    """
+    if not isinstance(action, _VISIBILITY_GATED):
+        return None
+    chain = action.locator
+    if len(chain) < 2 or chain[-1].fn != "locator" or chain[-1].kwargs:
+        return None
+    frames = chain[:-1]
+    if any(step.fn != "frame_locator" or len(step.args) != 1 for step in frames):
+        return None
+    selector = chain[-1].args[0] if len(chain[-1].args) == 1 else None
+    if not isinstance(selector, str):
+        return None
+    return {
+        "type": "selector_visible",
+        "selector": selector,
+        "frame_path": [str(step.args[0]) for step in frames],
+    }
 
 
 def compile_trajectory(
@@ -48,6 +84,12 @@ def compile_trajectory(
         # Recognize the state by its URL only when the action moved somewhere new;
         # same-page steps (fills, same-page clicks) get an unconditioned state.
         conditions = [{"type": "url_matches", "pattern": re.escape(base)}] if base != prev_base else []
+        # Anchor the state on the in-iframe element the NEXT step acts on (when it has a
+        # CSS chain): the embedded document being ready is not expressible by the URL.
+        if i < len(steps):
+            element_condition = _element_condition(steps[i].action)
+            if element_condition is not None:
+                conditions.append(element_condition)
         prev_base = base
         state_id = f"s{i}"
         states.append(State(id=state_id, conditions=conditions))

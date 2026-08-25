@@ -12,11 +12,29 @@ from pathlib import Path
 
 try:  # Patchright: a patched Playwright that closes the CDP-level leaks (Runtime.enable,
     # Console.enable, automation flags). Same API, so it is a drop-in when installed.
-    from patchright.async_api import Browser, BrowserContext, Frame, Locator, Page, Playwright, async_playwright
+    from patchright.async_api import (
+        Browser,
+        BrowserContext,
+        Frame,
+        FrameLocator,
+        Locator,
+        Page,
+        Playwright,
+        async_playwright,
+    )
 
     PATCHED_BROWSER = True
 except ImportError:  # pragma: no cover — plain Playwright fallback
-    from playwright.async_api import Browser, BrowserContext, Frame, Locator, Page, Playwright, async_playwright
+    from playwright.async_api import (
+        Browser,
+        BrowserContext,
+        Frame,
+        FrameLocator,
+        Locator,
+        Page,
+        Playwright,
+        async_playwright,
+    )
 
     PATCHED_BROWSER = False
 
@@ -258,6 +276,15 @@ class BrowserSession:
         except Exception as exc:
             raise ActionDispatchError(f"{action.type} failed: {exc}") from exc
 
+    def _frame_scope(self, frame_path: list[str]) -> Page | FrameLocator:
+        """The receiver a CSS selector is queried on: the page, or the frame_locator chain
+        for `frame_path` — the same chain `_resolve` builds from a locator's frame steps,
+        so triggers and parameter sources see exactly the frames actions do."""
+        scope: Page | FrameLocator = self.page
+        for selector in frame_path:
+            scope = scope.frame_locator(selector)
+        return scope
+
     async def _holds(self, trigger: Trigger) -> bool:
         match trigger:
             case UrlMatches():
@@ -265,9 +292,15 @@ class BrowserSession:
             case TitleContains():
                 return trigger.text in await self.page.title()
             case SelectorVisible():
-                return await self.page.locator(trigger.selector).first.is_visible()
+                locator = self._frame_scope(trigger.frame_path).locator(trigger.selector)
+                return await locator.first.is_visible()
             case SelectorHidden():
-                return not await self.page.locator(trigger.selector).first.is_visible()
+                # Resolved-and-hidden only: a selector matching nothing must not hold, or a
+                # typo'd selector would "recognize" every state (research doc, R2).
+                locator = self._frame_scope(trigger.frame_path).locator(trigger.selector)
+                if await locator.count() == 0:
+                    return False
+                return not await locator.first.is_visible()
         return False
 
     async def extract_value(self, source: "ParamSource", timeout_ms: int = 5000) -> str | None:
@@ -278,7 +311,7 @@ class BrowserSession:
                     return None
                 match = re.search(source.pattern, self.page.url)
                 return match.group(source.group) if match else None
-            locator = self.page.locator(source.selector).first
+            locator = self._frame_scope(source.frame_path).locator(source.selector).first
             if source.kind == "text":
                 return (await locator.inner_text(timeout=timeout_ms)).strip()
             if source.kind == "input_value":
