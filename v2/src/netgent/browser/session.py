@@ -162,6 +162,36 @@ class BrowserSession:
             raise LocatorResolutionError("empty locator chain")
         return target
 
+    async def count(self, chain: LocatorChain) -> int:
+        """How many elements a chain resolves to right now (0 = nothing, >1 = ambiguous).
+
+        A compile-time hook: the explore agent verifies every captured chain resolves to
+        exactly one element before storing it (Skyvern's `count() == 1` discipline,
+        `skyvern/webeye/utils/dom.py`), so replay never sees a strict-mode violation.
+        """
+        return await self._resolve(chain).count()
+
+    async def match_index(self, chain: LocatorChain, x: float, y: float, limit: int = 50) -> int:
+        """Index (for an `nth` step) of the chain's match whose box is nearest (x, y).
+
+        (x, y) are top-viewport coordinates, the same space Playwright's bounding_box()
+        reports in — so this works for in-frame elements too.
+        """
+        locator = self._resolve(chain)
+        n = min(await locator.count(), limit)
+        best, best_d = 0, float("inf")
+        for i in range(n):
+            try:
+                box = await locator.nth(i).bounding_box(timeout=1000)
+            except Exception:  # noqa: BLE001 — a detached match is simply not the one
+                box = None
+            if box is None:
+                continue
+            d = (box["x"] - x) ** 2 + (box["y"] - y) ** 2
+            if d < best_d:
+                best, best_d = i, d
+        return best
+
     async def _click(self, locator: Locator, timeout_ms: int) -> None:
         """Click, with checkbox/radio handling folded in (keyed on the live element).
 
