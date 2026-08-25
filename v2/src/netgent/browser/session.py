@@ -47,7 +47,7 @@ from netgent.browser.dom.snapshot import (
     DomSnapshot,
     TextBlock,
 )
-from netgent.browser.dom.stealth import StealthProfile
+from netgent.browser.profile import BrowserProfile, user_agent_metadata
 from netgent.core.errors import ActionDispatchError, LocatorResolutionError, TriggerTimeoutError
 from netgent.core.logger import get_logger
 from netgent.schema.actions import (
@@ -73,26 +73,44 @@ POLL_INTERVAL_S = 0.1
 logger = get_logger(__name__)
 
 
+# browser.version per channel, so the headless UA flag needs only one extra launch per process.
+_VERSION_CACHE: dict[str | None, str] = {}
+
+
 class BrowserSession:
-    def __init__(self, headless: bool = True, stealth: bool | StealthProfile = True):
+    def __init__(self, headless: bool = True, profile: BrowserProfile | None = None):
         self._headless = headless
-        # stealth=True → default profile; a StealthProfile → that profile; False → vanilla.
-        # With a patched binary the best stealth is to spoof NOTHING in JS (spoofs are
-        # themselves detectable) and run real Chrome with its native UA/headers.
-        default_profile = StealthProfile.native() if PATCHED_BROWSER else StealthProfile()
-        self._stealth: StealthProfile | None = (
-            (stealth if isinstance(stealth, StealthProfile) else default_profile) if stealth else None
-        )
+        self._profile = profile or BrowserProfile.default()
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
         self._page: Page | None = None
-        self._cdp = None  # CDP session used to install the closed-shadow registry (Patchright only)
+        self._cdp = None  # CDP session: closed-shadow registry (Patchright) + headless client-hints repair
+
+    async def _browser_version(self) -> str:
+        """The channel's real version, via a throwaway launch (memoized per process)."""
+        channel = self._profile.channel
+        if channel not in _VERSION_CACHE:
+            kwargs = self._profile.launch_kwargs(headless=True)
+            try:
+                browser = await self._playwright.chromium.launch(**kwargs)
+            except Exception:  # noqa: BLE001 — channel not installed: fall back to bundled Chromium
+                if "channel" not in kwargs:
+                    raise
+                kwargs.pop("channel")
+                browser = await self._playwright.chromium.launch(**kwargs)
+            _VERSION_CACHE[channel] = browser.version
+            await browser.close()
+        return _VERSION_CACHE[channel]
 
     async def __aenter__(self) -> "BrowserSession":
         self._playwright = await async_playwright().start()
-        profile = self._stealth
-        launch_kwargs = profile.launch_kwargs(self._headless) if profile else {"headless": self._headless}
+        profile = self._profile
+        # Headless Chrome stamps "HeadlessChrome/<ver>" into its UA. Only the LAUNCH flag
+        # reaches ServiceWorkers/SharedWorkers (the context option leaves them leaking); the
+        # real version keeps the UA in step with the binary.
+        user_agent = profile.headless_user_agent(await self._browser_version()) if self._headless else None
+        launch_kwargs = profile.launch_kwargs(self._headless, user_agent)
         try:
             self._browser = await self._playwright.chromium.launch(**launch_kwargs)
         except Exception:  # noqa: BLE001 — e.g. channel="chrome" but Chrome isn't installed
@@ -100,31 +118,56 @@ class BrowserSession:
                 raise
             launch_kwargs.pop("channel")
             self._browser = await self._playwright.chromium.launch(**launch_kwargs)
-        context_kwargs = profile.context_kwargs() if profile else {}
-        if profile and profile.user_agent is None and self._headless:
-            # Headless Chrome stamps "HeadlessChrome/<ver>" into its own UA — the one native
-            # tell worth overriding. Use the REAL version so the UA never drifts from the binary.
-            context_kwargs["user_agent"] = profile.headless_user_agent(self._browser.version)
-        self._context = await self._browser.new_context(**context_kwargs)
-        if profile and profile.init_script:
-            await self._context.add_init_script(profile.init_script)
+        self._context = await self._browser.new_context(**profile.context_kwargs(self._headless))
         self._page = await self._context.new_page()
+        try:
+            self._cdp = await self._context.new_cdp_session(self._page)
+        except Exception as exc:  # noqa: BLE001 — everything below is best-effort
+            logger.warning("CDP session unavailable: %s", exc)
+            self._cdp = None
         # Closed-shadow observation (R8): install the non-leaking registry in every frame,
         # before any navigation, via CDP addScriptToEvaluateOnNewDocument. Patchright only —
         # closed roots can only be ACTED on through Patchright's CDP pierce, so observing them
         # under plain Playwright would surface elements the replayer could never drive; and
         # Patchright's own add_init_script would break cross-origin child frames (measured).
-        if PATCHED_BROWSER:
+        if PATCHED_BROWSER and self._cdp is not None:
             try:
-                self._cdp = await self._context.new_cdp_session(self._page)
                 await self._cdp.send("Page.enable")
                 await self._cdp.send(
                     "Page.addScriptToEvaluateOnNewDocument", {"source": CLOSED_SHADOW_REGISTRY_JS}
                 )
             except Exception as exc:  # noqa: BLE001 — closed-shadow observation is best-effort
                 logger.warning("closed-shadow registry not installed: %s", exc)
-                self._cdp = None
+        if user_agent and self._cdp is not None:
+            await self._repair_client_hints(user_agent)
         return self
+
+    async def _repair_client_hints(self, user_agent: str) -> None:
+        """The --user-agent flag empties the high-entropy client hints (architecture,
+        platformVersion, fullVersionList) on the page. Re-issue the UA over CDP with a complete
+        userAgentMetadata: the browser's own brands/platform (read from a routed https page —
+        userAgentData needs a secure context) plus the host's real architecture and OS version.
+        Measured byte-identical to real headed Chrome on headers, page and both worker types."""
+        probe_url = "https://netgent.invalid/client-hints"
+        try:
+            await self._page.route(
+                probe_url, lambda route: route.fulfill(status=200, body="", content_type="text/html")
+            )
+            await self._page.goto(probe_url)
+            hints = await self._page.evaluate(
+                "() => navigator.userAgentData ? {brands: navigator.userAgentData.brands, "
+                "platform: navigator.userAgentData.platform} : null"
+            )
+            await self._page.unroute(probe_url)
+            await self._page.goto("about:blank")
+            if not hints:
+                return
+            metadata = user_agent_metadata(self._browser.version, hints["brands"], hints["platform"])
+            await self._cdp.send(
+                "Emulation.setUserAgentOverride", {"userAgent": user_agent, "userAgentMetadata": metadata}
+            )
+        except Exception as exc:  # noqa: BLE001 — a headless UA with empty hints beats a crash
+            logger.warning("client-hints repair skipped: %s", exc)
 
     async def _frame_info(
         self, frame: Frame, cache: dict[Frame, tuple[list[str], float, float]] | None = None

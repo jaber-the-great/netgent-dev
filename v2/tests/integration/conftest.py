@@ -45,7 +45,7 @@ def pytest_collection_modifyitems(items):
 
 
 class LocalServer:
-    """A tiny threaded static server: `routes` maps a path ("/", "/child") to HTML."""
+    """A tiny threaded static server: `routes` maps a path ("/", "/child") to HTML (".js" paths → JS)."""
 
     def __init__(self, routes: dict[str, str]):
         pages = {path: html.encode() for path, html in routes.items()}
@@ -58,7 +58,8 @@ class LocalServer:
                     self.end_headers()
                     return
                 self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
+                ctype = "text/javascript" if self.path.split("?", 1)[0].endswith(".js") else "text/html; charset=utf-8"
+                self.send_header("Content-Type", ctype)
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)

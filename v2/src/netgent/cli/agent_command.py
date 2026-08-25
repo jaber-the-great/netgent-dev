@@ -20,7 +20,7 @@ def agent(
         bool, typer.Option("--graph", help="Print the agent loop's LangGraph (Mermaid) and exit.")
     ] = False,
 ) -> None:
-    """Drive a stealth browser to complete a task, one atomic action per step."""
+    """Drive a browser to complete a task, one atomic action per step."""
     if show_graph:
         from netgent.agent.explore_agent.graph import agent_graph_mermaid
 
@@ -39,7 +39,7 @@ def agent(
 
     async def _run():
         llm = make_llm(resolved_model)
-        async with BrowserSession(headless=headless, stealth=True) as session:
+        async with BrowserSession(headless=headless) as session:
             return await BrowserAgent(llm, max_steps=max_steps, run_dir=trajectory_dir).run(session, task, url)
 
     traj = asyncio.run(_run())

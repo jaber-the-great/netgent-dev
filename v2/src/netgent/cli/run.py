@@ -18,12 +18,15 @@ def run(
         list[str] | None, typer.Option("--param", "-p", help="Workflow param as name=value (repeatable).")
     ] = None,
     headless: Annotated[bool, typer.Option("--headless/--headed", help="Run the browser headless.")] = True,
-    stealth: Annotated[bool, typer.Option("--stealth/--no-stealth", help="Harden the browser fingerprint.")] = True,
+    bare: Annotated[
+        bool, typer.Option("--bare", help="Bundled Chromium instead of real Chrome (control arm for experiments).")
+    ] = False,
 ) -> None:
     """Execute a compiled workflow (NFA) without LLM calls."""
     # Heavy imports stay inside the handler so `--help` stays fast.
     from pydantic import ValidationError
 
+    from netgent.browser.profile import BrowserProfile
     from netgent.browser.session import BrowserSession
     from netgent.executor.engine import Executor
     from netgent.schema.workflow import load_workflow, resolve_params
@@ -42,7 +45,7 @@ def run(
     )
 
     async def _run():
-        async with BrowserSession(headless=headless, stealth=stealth) as session:
+        async with BrowserSession(headless=headless, profile=BrowserProfile.bare() if bare else None) as session:
             # params are substituted at dispatch (statics upfront, dynamics from the live page)
             return await Executor(session, wf, run_dir=trajectory_dir, params=values).run()
 

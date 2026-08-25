@@ -18,8 +18,10 @@ uv run netgent generate "Search YouTube for cat videos and play the first result
 uv run netgent run cat-video.yaml --param "query=dog videos"
 ```
 
-Stealth: with Patchright installed the browser spoofs nothing (real Chrome, native UA);
-the CDP-level automation leaks are closed at the binary level. Measured 31/31 on
-bot.sannysoft.com and "Normal" on browserscan.net bot-detection, headless and headed.
+Browser fidelity: Patchright closes the driver-level leaks and real Chrome supplies its own
+fingerprint — nothing is spoofed or injected (`browser/profile.py`). Headless only rewrites
+Chrome's own "HeadlessChrome" UA stamp, at launch and with repaired client hints, so page,
+workers and headers all match real headed Chrome. Measured all-pass on sannysoft, browserscan,
+rebrowser and fingerprint.com (docs/research/stealth-after-patchright.md).
 
 Tests: `NETGENT_BROWSER_TESTS=1 uv run pytest -q` · Lint: `uv run ruff check src tests`

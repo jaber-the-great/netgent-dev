@@ -4,6 +4,14 @@
 151.0.7922.175, `patchright==1.62.1`, `playwright==1.62.0`, residential IP. Every number below
 came from a run on this machine; nothing here is quoted from a blog post.*
 
+> **Status (2026-08-25): implemented on `eugene/v2-scaffold`.** `StealthProfile` → `BrowserProfile`
+> (`browser/profile.py`); the spoof fallback and the duplicate `AutomationControlled` switch are gone;
+> the headless UA is a `--user-agent=` launch flag plus one CDP `Emulation.setUserAgentOverride`
+> carrying the browser's own brands and the host's real architecture / OS version — step 2 below,
+> now **measured**: headers, page, ServiceWorker and SharedWorker byte-identical to real headed
+> Chrome. Headed runs `no_viewport`; locale/timezone default to the host; `storage_state` added as
+> the warm-profile axis. Regression: `tests/integration/test_browser_profile.py`.
+
 ## Question
 
 `patchright>=1.62.1` is a hard dependency (`v2/pyproject.toml:12`), so `PATCHED_BROWSER` in

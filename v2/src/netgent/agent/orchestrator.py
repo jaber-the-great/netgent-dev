@@ -81,7 +81,7 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
     async def explore(state: OrchestrationState) -> Command[Literal["generate", "__end__"]]:
         emit("explore", f"exploring: {req.task}")
         agent = BrowserAgent(llm, max_steps=req.max_steps, run_dir=req.trajectory_dir)
-        async with BrowserSession(headless=req.headless, stealth=True) as session:
+        async with BrowserSession(headless=req.headless) as session:
             traj = await agent.run(session, req.task, req.url)
         for s in traj.steps:
             emit("explore", f"{s.n}. {s.kind} — {s.reasoning}" + (f" [FAILED: {s.error}]" if s.error else ""))

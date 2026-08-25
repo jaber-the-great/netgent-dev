@@ -1,6 +1,6 @@
 """The browser agent: observe → decide → act, until done or stuck.
 
-An LLM-driven loop over a stealth BrowserSession, run as a LangGraph StateGraph
+An LLM-driven loop over a BrowserSession, run as a LangGraph StateGraph
 (`agent/graph.py`). Each step it snapshots the interactive DOM, asks the LLM for one atomic
 action, resolves it to a durable locator and dispatches it, and records a trajectory step.
 Long-horizon safety: a step cap and observation-based stuck detection.

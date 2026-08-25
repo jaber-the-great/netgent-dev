@@ -102,7 +102,7 @@ async def run_dataset(dataset_dir: Path, results_dir: Path, headless: bool = Tru
             task = wf_path.name.removesuffix(".workflow.yaml")
             try:
                 wf = _load_workflow_with_base(wf_path, server.base)
-                async with BrowserSession(headless=headless, stealth=True) as session:
+                async with BrowserSession(headless=headless) as session:
                     record: RunRecord = await Executor(session, wf, run_dir=results_dir / task).run()
                 result = EvalTaskResult(
                     task=task,
