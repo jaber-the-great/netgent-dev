@@ -152,3 +152,30 @@ def test_closed_shadow_elements_get_a_marker_in_the_observation():
     obs = format_observation(snap)
     assert "|SHADOW(closed)| input" in obs  # closed-root element is marked
     assert "|SHADOW(closed)| button" not in obs  # the plain one is not
+
+
+def test_iframe_headers_group_elements_by_frame():
+    """Addendum: elements are grouped under a |IFRAME n| header per frame; the top frame gets
+    none; single-frame and scoped observations get zero header lines."""
+    top = DomElement(tag="button", name="Top", bbox=BBox(x=0, y=0, w=1, h=1),
+                     candidates=[SelectorCandidate(kind="css", value="#t")])
+    a1 = DomElement(tag="input", name="A1", frame_path=['iframe[name="pay"]'], bbox=BBox(x=0, y=10, w=1, h=1),
+                    candidates=[SelectorCandidate(kind="css", value="#a1")])
+    a2 = DomElement(tag="button", name="A2", frame_path=['iframe[name="pay"]'], bbox=BBox(x=0, y=20, w=1, h=1),
+                    candidates=[SelectorCandidate(kind="css", value="#a2")])
+    b1 = DomElement(tag="input", name="B1", frame_path=["iframe#other"], bbox=BBox(x=0, y=30, w=1, h=1),
+                    candidates=[SelectorCandidate(kind="css", value="#b1")])
+    multi = DomSnapshot(url="u", title="t", elements=[top, a1, b1, a2], viewport_height=0)
+    obs = format_observation(multi)
+    assert '|IFRAME 1| iframe[name="pay"] (2 elements)' in obs
+    assert "|IFRAME 2| iframe#other (1 element)" in obs
+    # the two "pay" elements are contiguous (grouped), the top-frame one has no header
+    lines = [ln for ln in obs.splitlines() if ln.startswith("  [") or ln.startswith("|IFRAME")]
+    assert lines[0].strip().startswith("[0]")  # Top, no header
+    assert lines[1].startswith("|IFRAME 1|") and "A1" in lines[2] and "A2" in lines[3]
+
+    # single frame → no headers; scoped → no headers
+    single = DomSnapshot(url="u", title="t", elements=[top], viewport_height=0)
+    assert "|IFRAME" not in format_observation(single)
+    scoped = DomSnapshot(url="u", title="t", elements=[a1, a2], viewport_height=0)
+    assert "|IFRAME" not in format_observation(scoped)

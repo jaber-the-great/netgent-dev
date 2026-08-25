@@ -18,6 +18,10 @@ video or stream for some time. Wait ONCE for the full duration, then declare don
 The observation shows the elements near the current viewport, with a POSITION line. The
 listed elements are real and actionable RIGHT NOW.
 
+A line like "|IFRAME 2| <selector> (N elements)" is a container header, not an action: the
+indexed elements beneath it live inside that embedded frame. Act on the elements by their
+[index] as usual — the frame is handled for you.
+
 NEVER scroll to explore, survey, "see all forms first", or "understand the layout" — you
 already have everything you need in the current observation. Your action must operate on a
 listed element (fill/select/click). Only AFTER you have filled and submitted every
