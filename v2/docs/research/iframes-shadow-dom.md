@@ -575,6 +575,41 @@ I ran our own `BrowserSession.snapshot()`, `_locator_for` and `_resolve` against
 
 ### What is fragile or missing
 
+> **Implemented on `v2/frames-shadow` (2026-08-25).** All ten gaps below are addressed; each
+> item is tagged with the R-recommendation and commit that closed it, and every fix ships with
+> the fixture-based test the Recommendations section prescribes (`tests/integration/test_frames_shadow.py`
+> for the browser fixtures, `tests/unit/test_normalized.py` / `test_locator_uniqueness.py` /
+> `test_compiler.py` for the pure logic). Status per R-item:
+>
+> - **R1 — locator uniqueness at capture time** *(done)*. `observation.unique_locator_for` verifies
+>   each candidate chain resolves to `count()==1` before storing it; an all-ambiguous element gets a
+>   whitelisted `nth` step. Closes gaps #2 and #8-uniqueness. (fixture: two `<my-form>` instances)
+> - **R2 — frame-aware triggers + `ParamSource`** *(done)*. `frame_path: list[str] = []` on
+>   `SelectorVisible`/`SelectorHidden`/`ParamSource`, resolved through the same `frame_locator` chain;
+>   `SelectorHidden` now requires a resolved element. Closes gap #1. (fixture: cross-origin payment iframe)
+> - **R3 — don't swallow per-frame failures; type-check `_resolve`** *(done)*. `snapshot()` logs and
+>   counts skipped frames (`DomSnapshot.frames_skipped`); `_resolve` and a schema `AfterValidator`
+>   reject chains that don't end on a `Locator`. Closes gaps #7 and #8. (fixture: self-removing iframe)
+> - **R4 — `Locator.normalize()` cross-check/fallback** *(done)*. `agent/explore_agent/normalized.py`
+>   parses the `internal:` selector back into our whitelist (total, else `UnmappableSelector`);
+>   `capture_locator` prefers Playwright's frame selectors when both agree. (fixture: the hostile page)
+> - **R5 — frame-aware scroll** *(done)*. `ScrollAction.locator` moves the cursor over the target
+>   before the wheel; `to_action` anchors on the scoped frame. Closes gap #4. (fixture: 3000px in a 400px iframe)
+> - **R6 — coordinate space** *(done)*. `_frame_info` accumulates border+padding content-origin on
+>   both axes (Puppeteer's `#getTopLeftCornerOfFrame`), memoized. Closes gap #5 and #9. (fixture: 8px border+padding)
+> - **R7 — harden `FRAME_SELECTOR_JS`** *(done)*. Real tag name, quoted attributes, verified-unique
+>   with `nth`, preferring test-id/name/title. Closes gap #6. (fixture: two sibling iframes + a legacy `<frame>`)
+> - **R8 — closed shadow roots** *(done)*. A non-leaking WeakMap registry installed via CDP
+>   `addScriptToEvaluateOnNewDocument` (not `add_init_script`, which breaks cross-origin frames under
+>   Patchright — measured); `DOM_SNAPSHOT_JS` probes it in the main world (Patchright-gated
+>   `isolated_context=False`); `requires_closed_shadow` capability flag; Patchright acts natively.
+>   Closes gap #3. (fixtures: closed root over HTTP / in a cross-origin iframe / declarative-unobservable)
+> - **Observation** now prints `|IFRAME n|` headers grouping elements by frame and marks
+>   `|SHADOW(closed)|` elements, so the model sees containment (browser-use / Playwright aria-snapshot shape).
+> - **Not yet closed: #10** (`PressAction` without a locator still keys the focused frame) — left as-is;
+>   the frame-aware press has no fixture in scope and the risk is a focus-steal race, not a silent
+>   mis-recognition. Noted here as an honest remaining gap.
+
 **1. Triggers and parameter extraction are frame-blind — a correctness bug in the NFA, not a gap.**
 `_holds` uses `self.page.locator(trigger.selector)` (`session.py:238-240`) and `extract_value` uses
 `self.page.locator(source.selector)` (`session.py:251`). Neither has a frame path. Measured:
