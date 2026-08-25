@@ -270,7 +270,19 @@ def to_action(
                     raise ValueError(
                         f"do not scroll yet — fill the [required]/[invalid] fields in view first: {pending[:8]}"
                     )
-            return ScrollAction(down=down, pages=decision.pages if decision.pages is not None else 1.0)
+            pages = decision.pages if decision.pages is not None else 1.0
+            # Frame-aware scroll: anchor on the named element, or — when the observation is
+            # scoped to one iframe (a sweep) — on any element of that frame, so the wheel
+            # moves that frame instead of the top document (research doc, R5).
+            elems = snapshot.interactive()
+            anchor: DomElement | None = None
+            if decision.index is not None and 0 <= decision.index < len(elems):
+                anchor = elems[decision.index]
+            elif elems and elems[0].frame_path and all(e.frame_path == elems[0].frame_path for e in elems):
+                anchor = elems[0]
+            if anchor is not None:
+                return ScrollAction(down=down, pages=pages, locator=locator_for(anchor))
+            return ScrollAction(down=down, pages=pages)
         case "go_back":
             return GoBackAction()
         case "wait":

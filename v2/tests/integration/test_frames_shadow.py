@@ -289,3 +289,49 @@ def test_r4_our_chains_agree_with_playwrights_normalized_chains(serve):
     assert "frame selectors" in card[6]
     # Two hops deep and iframe-in-shadow: both agree and stay unique.
     assert sum(1 for r in results if r[0] == "deep field") == 2
+
+
+# ── R5: a 3000px document inside a 400px cross-origin iframe; the button is at the bottom ──
+
+TALL_CHILD = """<!doctype html><html><head><title>Tall</title></head><body style="margin:0">
+<input id="first" placeholder="first field">
+<div style="height:2900px"></div>
+<button id="bottom">Bottom</button>
+</body></html>"""
+
+
+def test_r5_scroll_reaches_into_a_cross_origin_iframe(serve):
+    from netgent.agent.explore_agent.decision import AgentDecision
+    from netgent.agent.explore_agent.observation import to_action
+
+    child = serve({"/": TALL_CHILD})
+    parent = serve({"/": (
+        '<!doctype html><html><head><title>Host</title></head><body style="margin:0">'
+        '<div style="height:100px">top</div>'
+        f'<iframe id="tall" src="{child.url()}" width="500" height="400" style="border:0"></iframe>'
+        '<div style="height:2000px">filler</div></body></html>'
+    )})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(parent.url(), wait_until="networkidle")
+            snap = await s.snapshot()
+            scoped = snap.scoped_to(["iframe#tall"])
+            assert {e.name for e in scoped.elements} == {"first field", "Bottom"}
+            # A frame-scoped observation anchors the scroll on the frame (no index needed).
+            action = to_action(AgentDecision(reasoning="x", kind="scroll", down=True, pages=10), scoped)
+            assert action.locator is not None
+            await s.dispatch(action)
+            await s.page.wait_for_timeout(300)
+            inner = await s.page.frame_locator("iframe#tall").locator("body").evaluate("() => window.scrollY")
+            outer = await s.page.evaluate("() => window.scrollY")
+            # The plain (unanchored) scroll still moves the top frame.
+            await s.dispatch(to_action(AgentDecision(reasoning="x", kind="scroll", down=True, pages=1), snap))
+            await s.page.wait_for_timeout(300)
+            outer_after = await s.page.evaluate("() => window.scrollY")
+            return inner, outer, outer_after
+
+    inner, outer, outer_after = asyncio.run(_run())
+    assert inner >= 2500, inner  # the iframe scrolled to its bottom
+    assert outer == 0  # the top frame did not move
+    assert outer_after > 0

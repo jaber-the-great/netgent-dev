@@ -132,11 +132,17 @@ class SelectAction(_ActionBase):
 class ScrollAction(_ActionBase):
     """Scroll by viewport pages (browser-use's model): the LLM picks a direction and a
     fraction of a viewport, converted to pixels at dispatch. pages=10 ≈ to the end.
+
+    `locator` (optional) names an element whose scroll container should move: the mouse
+    is placed over it before the wheel event, so the frame or inner scroller under the
+    cursor scrolls (measured: at (0,0) the top frame scrolls; centred on an iframe, the
+    iframe does). Without it, the top frame scrolls as before.
     """
 
     type: Literal["scroll"] = "scroll"
     down: bool = True
     pages: float = 1.0
+    locator: Locator | None = None
 
 
 class UploadFileAction(_ActionBase):

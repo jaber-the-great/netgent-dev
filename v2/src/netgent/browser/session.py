@@ -282,6 +282,27 @@ class BrowserSession:
             # context — this fires framework listeners a synthetic input click misses.
             await first.evaluate("el => (el.labels && el.labels[0] ? el.labels[0] : el).click()")
 
+    async def _scroll(self, action: ScrollAction) -> None:
+        """Wheel-scroll whatever is under the cursor: the top frame by default, or the frame /
+        inner scroller holding `action.locator` (mouse moved to its box centre first — the
+        mechanic lumen and magnitude rely on). The page-to-pixel conversion uses that
+        element's own window height, so 'one page' means one page of the frame it lives in.
+        """
+        viewport = await self.page.evaluate("() => window.innerHeight")
+        if action.locator is not None:
+            locator = self._resolve(action.locator)
+            box = await locator.bounding_box(timeout=action.timeout_ms)
+            if box is None:
+                raise ActionDispatchError("scroll target has no bounding box (hidden or detached)")
+            await self.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+            viewport = await locator.evaluate("el => el.ownerDocument.defaultView.innerHeight")
+        else:
+            # Park the cursor at the origin so an earlier anchored scroll cannot leave it over
+            # an iframe / inner scroller: an unanchored scroll always means the top frame.
+            await self.page.mouse.move(0, 0)
+        pixels = int(action.pages * viewport) * (1 if action.down else -1)
+        await self.page.mouse.wheel(0, pixels)
+
     async def dispatch(self, action: Action) -> None:
         try:
             match action:
@@ -299,9 +320,7 @@ class BrowserSession:
                 case SelectAction():
                     await self._resolve(action.locator).select_option(action.value, timeout=action.timeout_ms)
                 case ScrollAction():
-                    viewport = await self.page.evaluate("() => window.innerHeight")
-                    pixels = int(action.pages * viewport) * (1 if action.down else -1)
-                    await self.page.mouse.wheel(0, pixels)
+                    await self._scroll(action)
                 case UploadFileAction():
                     await self._resolve(action.locator).set_input_files(action.paths, timeout=action.timeout_ms)
                 case GoBackAction():

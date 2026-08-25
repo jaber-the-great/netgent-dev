@@ -115,3 +115,25 @@ def test_upload_maps_to_upload_file_action():
     assert isinstance(act, UploadFileAction) and act.paths == ["/tmp/s.txt"]
     with pytest.raises(ValueError, match="no upload file configured"):
         to_action(AgentDecision(reasoning="x", kind="upload", index=0), snap)
+
+
+def test_scroll_is_anchored_on_an_element_or_the_scoped_frame():
+    """R5: a scroll names the element (or, in a frame-scoped observation, any element of that
+    frame) whose scroll container should move; an unscoped, index-less scroll stays plain."""
+    from netgent.schema.actions import ScrollAction
+
+    in_frame = DomElement(
+        tag="input", type="text", name="A", frame_path=["iframe#f"], bbox=BBox(x=0, y=0, w=1, h=1),
+        candidates=[SelectorCandidate(kind="css", value="#a")],
+    )
+    top = DomElement(tag="button", name="B", bbox=BBox(x=0, y=0, w=1, h=1),
+                     candidates=[SelectorCandidate(kind="css", value="#b")])
+    scoped = DomSnapshot(url="u", title="t", elements=[in_frame], viewport_height=0)
+    mixed = DomSnapshot(url="u", title="t", elements=[top, in_frame], viewport_height=0)
+
+    act = to_action(AgentDecision(reasoning="x", kind="scroll", down=True), scoped)
+    assert isinstance(act, ScrollAction) and [s.fn for s in act.locator] == ["frame_locator", "locator"]
+    act = to_action(AgentDecision(reasoning="x", kind="scroll", index=1), mixed)
+    assert act.locator[0].args == ["iframe#f"]
+    act = to_action(AgentDecision(reasoning="x", kind="scroll"), mixed)
+    assert act.locator is None

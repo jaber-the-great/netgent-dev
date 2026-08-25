@@ -6,7 +6,8 @@ Choose exactly ONE next atomic action.
 
 Return a decision with:
 - kind: one of click, fill, select, hover, press, goto, scroll, go_back, wait, done
-- index: the element number from the observation (for click/fill/select/hover)
+- index: the element number from the observation (for click/fill/select/hover; optional for
+  scroll — give an element inside the box or iframe you want to scroll)
 - text (fill), value (select), url (goto), keys (press), down + pages (scroll), seconds (wait)
 - reasoning: one short sentence
 - success: for done, whether the task was achieved (false = you are giving up; say why)
