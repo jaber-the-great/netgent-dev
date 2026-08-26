@@ -29,3 +29,4 @@ out/
 
 # eval trajectory screenshots (heavy, regenerable; keep the json)
 v2/evals/results/**/screenshots/
+trajectories/
