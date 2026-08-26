@@ -205,7 +205,7 @@ def test_r3_detached_frame_is_reported_not_swallowed(serve):
     assert [e.name for e in snap.elements] == ["Stay"]  # the top frame is never lost
     assert snap.frames_skipped == 1
     assert len(snap.skipped_frames) == 1 and "srcdoc" in snap.skipped_frames[0]
-    from netgent.agent.explore_agent.observation import format_observation
+    from netgent.browser.dom import format_observation
 
     assert "1 frame(s) could not be observed" in format_observation(snap)
 
@@ -429,7 +429,8 @@ document.getElementById('leak').textContent = sealed ? 'still-closed' : 'LEAKED'
 
 @pytest.mark.skipif(not PATCHED_BROWSER, reason="closed-shadow observation requires Patchright")
 def test_r8a_closed_root_over_http_observed_acted_flagged(serve):
-    from netgent.agent.explore_agent.observation import capture_locator, format_observation
+    from netgent.agent.explore_agent.observation import capture_locator
+    from netgent.browser.dom import format_observation
 
     srv = serve({"/": CLOSED_ROOT})
 

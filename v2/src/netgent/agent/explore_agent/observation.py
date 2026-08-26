@@ -1,11 +1,10 @@
-"""Format a DOM snapshot for the LLM, and resolve a chosen element to a real action.
+"""Resolve a chosen element to a real action (the rendering itself is browser/dom/serializer.py).
 
 The observation is a numbered list of interactive elements. The LLM answers with an element
 `index`; `to_action` turns (decision, snapshot) into a schema Action whose locator is built
 from the element's most durable candidate selector (role → test-id → label → css).
 """
 
-import os
 import re
 from collections.abc import Callable
 
@@ -25,95 +24,6 @@ from netgent.schema.actions import (
     UploadFileAction,
     WaitAction,
 )
-
-
-def format_observation(snapshot: DomSnapshot, limit: int = 60, text_limit: int = 25) -> str:
-    """Render the near-viewport slice of the page. Elements keep their original snapshot
-    index (what the agent references); scrolling shifts which slice is shown."""
-    lines = [f"URL: {snapshot.url}", f"TITLE: {snapshot.title}"]
-
-    # Page the elements by top-viewport position so scroll reveals the next batch.
-    vh = snapshot.viewport_height or 0
-    indexed = list(enumerate(snapshot.interactive()))
-    if vh:
-        above = sum(1 for _, el in indexed if el.bbox.y < -60)
-        visible = sorted((ie for ie in indexed if ie[1].bbox.y >= -60), key=lambda ie: ie[1].bbox.y)
-    else:  # viewport unknown → show in document order, no paging
-        above, visible = 0, indexed
-    shown = visible[:limit]
-    below = len(visible) - len(shown)
-    # Group elements by the frame they live in and print a header per iframe, so the model
-    # sees containment instead of a flat list that hides frame boundaries. Reference formats:
-    # browser-use renders a non-clickable |IFRAME| line with the frame's elements indented
-    # (dom/serializer/serializer.py:1030-1062); Playwright's aria snapshot merges the child
-    # frame's tree under the iframe node (injected/ariaSnapshot.ts:229). Headers are not
-    # indexed (the model never acts on them) and don't count toward the paging limit.
-    distinct_frames: list[tuple[str, ...]] = []
-    for _, el in shown:
-        key = tuple(el.frame_path)
-        if key not in distinct_frames:
-            distinct_frames.append(key)
-    # Zero extra lines when everything is in ONE frame (single-frame page, or scoped_to a form).
-    # NETGENT_IFRAME_HEADERS=0 turns them off (for the A/B measurement in docs/research).
-    use_headers = len(distinct_frames) > 1 and os.getenv("NETGENT_IFRAME_HEADERS", "1") != "0"
-    if use_headers:
-        shown = sorted(shown, key=lambda ie: (distinct_frames.index(tuple(ie[1].frame_path)), ie[1].bbox.y))
-        frame_number = {k: n for n, k in enumerate((k for k in distinct_frames if k), start=1)}
-    if vh:
-        if not above and below:
-            lines.append("POSITION: top of page. The elements below are the first ones — act on them.")
-        elif above and not below:
-            lines.append("POSITION: bottom of page. Nothing more below; do not scroll down further.")
-        elif above and below:
-            lines.append("POSITION: middle of page.")
-    if above:
-        lines.append(f"(↑ {above} elements above — already handled; scroll up only to revisit)")
-    lines.append("INTERACTIVE ELEMENTS (near viewport):")
-
-    current_frame: tuple[str, ...] | None = None
-    for i, el in shown:
-        key = tuple(el.frame_path)
-        if use_headers and key != current_frame:
-            current_frame = key
-            if key:  # a non-top frame: emit a header before its elements (top frame gets none)
-                label = " › ".join(key)
-                count = sum(1 for _, e in shown if tuple(e.frame_path) == key)
-                lines.append(f"|IFRAME {frame_number[key]}| {label[:80]} ({count} element{'s' if count != 1 else ''})")
-        # Mark elements inside a CLOSED shadow root (browser-use's |SHADOW(closed)| prefix,
-        # dom/serializer/serializer.py:1030-1062). Open roots get no marker — Playwright's
-        # engines pierce them and the model gains nothing (Eugene addendum item 2).
-        shadow = "|SHADOW(closed)| " if el.requires_closed_shadow else ""
-        kind = shadow + el.tag
-        if el.type:  # input[date], input[file], input[email] — the agent needs the type
-            kind += f"[{el.type}]"
-        elif el.role and el.role != el.tag:
-            kind += f" ({el.role})"
-        val = f' value="{el.value}"' if el.value else ""
-        if el.options:
-            val += f" options=[{', '.join(el.options)}]"
-        name = f' "{el.name}"' if el.name else ""
-        state = ""
-        if el.checked is not None:
-            state += " [checked]" if el.checked else " [unchecked]"
-        if el.disabled:
-            state += " [disabled]"
-        if el.required:
-            state += " [required]"
-        if el.invalid:
-            state += " [invalid: still needs a valid value]"
-        lines.append(f"  [{i}] {kind}{name}{val}{state}")
-    if below:
-        lines.append(f"(↓ {below} more elements below — scroll down to reveal and reach them)")
-    if snapshot.frames_skipped:
-        lines.append(f"(⚠ {snapshot.frames_skipped} frame(s) could not be observed this step: "
-                     + "; ".join(snapshot.skipped_frames[:3]) + ")")
-    if snapshot.texts:
-        lines.append("VISIBLE TEXT:")
-        for t in snapshot.texts[:text_limit]:
-            prefix = "  !ALERT " if t.alert else "  "
-            lines.append(f"{prefix}{t.text}")
-    return "\n".join(lines)
-
 
 _VOLATILE_ID = re.compile(r"\d{4,}|[0-9a-f]{8,}|^#(tw|ember|react|:)")
 

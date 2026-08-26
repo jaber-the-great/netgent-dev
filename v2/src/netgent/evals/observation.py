@@ -16,7 +16,8 @@ import statistics
 import time
 from pathlib import Path
 
-from netgent.agent.explore_agent.observation import _locator_for, format_observation
+from netgent.agent.explore_agent.observation import _locator_for
+from netgent.browser.dom import format_observation
 from netgent.browser.session import BrowserSession
 
 SITES = {

@@ -54,7 +54,8 @@ headless UA flag, CDP session, client-hints repair — the seam where capture wi
 (`LocatorResolver`), `actions.py` (`ActionDispatcher` — the doc's `executor.py`, named to avoid the
 top-level `executor/` package), `triggers.py` (`TriggerEngine`), and `dom/` — the doc's
 `observation/` — holding `models.py` (the pydantic snapshot models), `observer.py` (`DomObserver`:
-per-frame walk + closed-shadow join), `closed_shadow.py` (the CDP-only reader, quarantined) and
+per-frame walk + closed-shadow join), `serializer.py` (`format_observation`: the numbered list the
+agent reads — rendering sits beside the walker, as in browser-use/Skyvern/Stagehand), `closed_shadow.py` (the CDP-only reader, quarantined) and
 `scripts/` (the injected JS as real `.js` files, loaded via `importlib.resources`). `capture/` is
 still pending. The schema/core packages live under `schema/` and `core/` rather than one `core/`.
 

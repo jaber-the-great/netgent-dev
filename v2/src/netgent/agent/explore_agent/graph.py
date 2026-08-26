@@ -17,8 +17,9 @@ import operator
 from typing import Annotated, Any, Literal, TypedDict
 
 from netgent.agent.explore_agent.browser_agent import MAX_REPEAT, AgentStep, BrowserAgent
-from netgent.agent.explore_agent.observation import _locator_for, capture_locator, format_observation, to_action
+from netgent.agent.explore_agent.observation import _locator_for, capture_locator, to_action
 from netgent.agent.explore_agent.prompt import SYSTEM_PROMPT
+from netgent.browser.dom import format_observation
 from netgent.browser.session import BrowserSession
 from netgent.core.errors import ExecutionError
 from netgent.core.logger import get_logger

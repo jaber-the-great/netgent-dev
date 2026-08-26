@@ -166,7 +166,7 @@ search; page matches no known state ⇒ new territory, T3; locator ambiguity ⇒
 src/netgent/
 ├── core/         # pure types: actions.py (action IR), triggers.py, states.py (NFA), records.py
 ├── browser/      # pw.py, profile.py, factory.py, session.py, resolution.py, actions.py, triggers.py,
-│                 # dom/{models,observer,closed_shadow}.py + dom/scripts/*.js   — never imports an LLM SDK
+│                 # dom/{models,observer,serializer,closed_shadow}.py + dom/scripts/*.js   — never imports an LLM SDK
 │                 # (realized 2026-08-25; the design's observation/ is dom/, capture/ is still pending)
 ├── synthesis/    # the LLM side (later)
 └── sessions/     # auth: login NFAs, storage-state minting (later)
