@@ -184,7 +184,10 @@
             // selection. Without it a chosen option is invisible in the observation and the
             // model reopens the menu forever (measured: MUI Country dropdown).
             value: (el.value !== undefined ? String(el.value).slice(0, 200)
-              : ((el.getAttribute('aria-haspopup') === 'listbox' || el.getAttribute('role') === 'combobox')
+              : ((el.getAttribute('aria-haspopup') === 'listbox' || el.getAttribute('role') === 'combobox'
+                  // ...and a contenteditable editor's text IS its value: without it the model
+                  // cannot see that its fill landed and re-fills forever (measured: Quill form).
+                  || el.isContentEditable)
                  ? (clean(el.textContent).slice(0, 60) || null) : null)),
             framePath: [],  // set by the Python layer from Playwright's frame tree
             requiresClosedShadow: !!inClosed,

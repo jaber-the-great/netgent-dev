@@ -220,7 +220,9 @@ class ActionDispatcher:
             async with self._page.expect_file_chooser(timeout=action.timeout_ms) as chooser:
                 # The label the input belongs to (or the element itself) is what opens the
                 # chooser on widgets that hide the real input.
-                await first.evaluate("el => (el.labels && el.labels[0] ? el.labels[0] : el).click()")
+                await first.evaluate(
+                    "el => (el.labels && el.labels[0] ? el.labels[0] : el).click()", timeout=3000
+                )
             await (await chooser.value).set_files(action.paths)
         except Exception as exc:
             raise ActionDispatchError(f"upload failed directly ({reason}) and via file chooser: {exc}") from exc

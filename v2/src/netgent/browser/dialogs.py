@@ -28,6 +28,7 @@ class DialogLog:
         self._history: list[str] = []  # cumulative, never cleared: post-hoc success checks
         self._action_mark = 0  # history length when the last action was dispatched
         page.on("dialog", self._on_dialog)
+        page.on("filechooser", self._on_file_chooser)
 
     def mark_action(self) -> None:
         """Called by the action dispatcher before each action: dialogs recorded after this
@@ -58,6 +59,20 @@ class DialogLog:
             await dialog.accept(default) if default else await dialog.accept()
         except Exception as exc:  # noqa: BLE001 — already handled / page gone: never break the run
             logger.debug("dialog accept failed: %s", exc)
+
+    async def _on_file_chooser(self, chooser: Any) -> None:
+        """A click on a styled upload control opened the native file chooser — nothing in the
+        DOM shows it (Playwright-MCP models it as a modal state; browser-use refuses such
+        clicks with "use upload_file"). Record it so the next observation says what to do;
+        the dispatcher's upload action feeds a chooser itself, this one is just noted."""
+        try:
+            multiple = " (multiple)" if chooser.is_multiple() else ""
+        except Exception:  # noqa: BLE001
+            multiple = ""
+        entry = f"filechooser: a file picker opened{multiple} — use the upload action on the file input instead"
+        self._pending.append(entry)
+        self._history.append(entry)
+        logger.info("file chooser opened by a click (recorded for the observation)")
 
     def drain(self) -> list[str]:
         """Dialogs seen since the last drain (oldest first); clears the queue.

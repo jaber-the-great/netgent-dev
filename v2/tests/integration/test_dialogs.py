@@ -105,3 +105,27 @@ def test_dialog_matches_trigger_recognizes_an_alert_only_submit(serve):
             return latency
 
     assert asyncio.run(_run()) >= 0
+
+
+CHOOSER_BUTTON = """<!doctype html><html><head><title>FC</title></head><body>
+<input id="real" type="file" style="display:none">
+<button id="pick" type="button" onclick="document.getElementById('real').click()">Choose file</button>
+</body></html>"""
+
+
+def test_file_chooser_opened_by_a_click_is_reported(serve):
+    from netgent.schema.actions import ClickAction, LocatorStep
+
+    srv = serve({"/": CHOOSER_BUTTON})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(srv.url(), wait_until="networkidle")
+            await s.dispatch(ClickAction(locator=[LocatorStep(fn="locator", args=["#pick"])], timeout_ms=3000))
+            await s.page.wait_for_timeout(300)
+            snap = await s.snapshot()
+            return snap.dialogs, format_observation(snap)
+
+    dialogs, obs = asyncio.run(_run())
+    assert dialogs and dialogs[0].startswith("filechooser:")
+    assert "upload action" in obs

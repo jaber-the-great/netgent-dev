@@ -36,6 +36,20 @@ def test_contenteditable_named_from_data_placeholder_and_children_suppressed(ser
     assert not any(e.tag in ("p", "br") for e in snap.elements)  # editor internals suppressed
 
 
+def test_contenteditable_text_is_observed_as_value(serve):
+    from netgent.schema.actions import FillAction, LocatorStep
+
+    srv = serve({"/": QUILL_LIKE})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(srv.url(), wait_until="networkidle")
+            await s.dispatch(FillAction(locator=[LocatorStep(fn="locator", args=[".editor"])], text="a@b.co"))
+            return next(e for e in (await s.snapshot()).elements if e.tag == "div").value
+
+    assert asyncio.run(_run()) == "a@b.co"  # the fill is visible in the next observation
+
+
 def test_upload_falls_back_to_file_chooser_when_locator_is_the_label(serve, tmp_path):
     """The agent sometimes captures the styled label instead of the hidden input; the
     dispatcher must still land the file (click + intercepted chooser)."""
