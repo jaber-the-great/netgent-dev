@@ -129,10 +129,17 @@
           const r = el.getBoundingClientRect();
           results.push({
             tag: el.tagName.toLowerCase(),
-            role: el.getAttribute('role') || null,
+            // Contenteditable's implicit ARIA role: shown as a fillable textbox, otherwise a
+            // rich-text editor renders as a bare <div> the model only thinks to click.
+            role: el.getAttribute('role') || (el.isContentEditable ? 'textbox' : null),
             name: accName(el),
             type: el.getAttribute('type') || null,
-            checked: (el.type === 'checkbox' || el.type === 'radio') ? !!el.checked : null,
+            // Native checked, or the ARIA toggle state (aria-pressed buttons, aria-checked
+            // customs): without it a selected toggle looks identical to an unselected one
+            // and the model re-clicks it forever (measured: React Native Web contact buttons).
+            checked: (el.type === 'checkbox' || el.type === 'radio') ? !!el.checked
+              : (el.hasAttribute('aria-pressed') ? el.getAttribute('aria-pressed') === 'true'
+                : (el.hasAttribute('aria-checked') ? el.getAttribute('aria-checked') === 'true' : null)),
             disabled: !!el.disabled,
             required: !!el.required,
             // A required field the browser considers invalid blocks native form submit

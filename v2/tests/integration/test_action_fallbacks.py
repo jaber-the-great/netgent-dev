@@ -70,3 +70,40 @@ def test_select_expands_and_picks_on_non_native_dropdown(serve):
         return await s.page.locator("#echo").inner_text()
 
     assert asyncio.run(_run(DIV_DROPDOWN, steps)(serve)) == "Canada"
+
+
+REFORMATTING_INPUT = """<!doctype html><html><head><title>R</title></head><body>
+<input id="date" placeholder="Date">
+<script>
+// A masker/datepicker-style widget: rewrites what you type into its own format.
+document.getElementById('date').addEventListener('input', () => {
+  const el = document.getElementById('date');
+  const m = el.value.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+  if (m) el.value = `${m[2]}/${m[3]}/${m[1]}`;
+});
+</script></body></html>"""
+
+ARIA_TOGGLE = """<!doctype html><html><head><title>T</title></head><body>
+<button id="em" role="button" aria-pressed="false"
+ onclick="this.setAttribute('aria-pressed',
+   this.getAttribute('aria-pressed') === 'true' ? 'false' : 'true')">Email</button>
+</body></html>"""
+
+
+def test_fill_accepts_widget_reformatting_without_escalating(serve):
+    async def steps(s):
+        action = FillAction(locator=[LocatorStep(fn="locator", args=["#date"])], text="1990-05-15", timeout_ms=3000)
+        await s.dispatch(action)
+        return await s.page.locator("#date").input_value()
+
+    assert asyncio.run(_run(REFORMATTING_INPUT, steps)(serve)) == "05/15/1990"  # reformatted = landed
+
+
+def test_aria_pressed_state_is_observed(serve):
+    async def steps(s):
+        before = next(e for e in (await s.snapshot()).elements if e.name == "Email")
+        await s.dispatch(ClickAction(locator=[LocatorStep(fn="locator", args=["#em"])], timeout_ms=3000))
+        after = next(e for e in (await s.snapshot()).elements if e.name == "Email")
+        return before.checked, after.checked
+
+    assert asyncio.run(_run(ARIA_TOGGLE, steps)(serve)) == (False, True)

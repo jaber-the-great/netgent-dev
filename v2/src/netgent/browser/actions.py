@@ -99,13 +99,24 @@ class ActionDispatcher:
         artifact action stays one action at replay.
         """
         first = locator.first
+        try:
+            before = await first.evaluate(self._READBACK_JS)
+        except Exception:  # noqa: BLE001
+            before = None
 
         async def verify() -> tuple[bool, str | None]:
+            """Did the write LAND? Exact match is success; so is any non-empty NEW value —
+            maskers/datepickers reformat what was typed ("1990-05-15" → "05/15/1990"), and
+            escalating on a reformatted value fights the widget (measured: the typed-input
+            rung opened a datepicker popup and garbled the field). Escalate only when the
+            field ended empty or provably unchanged."""
             try:
                 current = await first.evaluate(self._READBACK_JS)
             except Exception:  # noqa: BLE001 — unreadable: trust the write
                 return True, None
-            return current is None or current == text, current
+            if current is None or current == text:
+                return True, current
+            return bool(current) and current != before, current
 
         try:
             await first.fill(text, timeout=timeout_ms)

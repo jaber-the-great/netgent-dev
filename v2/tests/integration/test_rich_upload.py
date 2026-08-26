@@ -32,6 +32,7 @@ def test_contenteditable_named_from_data_placeholder_and_children_suppressed(ser
     snap = asyncio.run(_run())
     editors = [e for e in snap.elements if e.tag == "div"]
     assert [e.name for e in editors] == ["Enter your email address"]  # named, and only the ROOT
+    assert editors[0].role == "textbox"  # contenteditable's implicit role: shown as fillable
     assert not any(e.tag in ("p", "br") for e in snap.elements)  # editor internals suppressed
 
 

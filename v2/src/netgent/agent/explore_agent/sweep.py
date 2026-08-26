@@ -20,7 +20,8 @@ DEFAULT_MARKERS = ("dumbledore", "success", "submitted", "thank you", "completed
 
 FORM_TASK = (
     "Fill in THIS form completely with plausible values and submit it: text/email fields, "
-    "dates as YYYY-MM-DD, dropdowns from their options, click radios/checkboxes, upload "
+    "dates as YYYY-MM-DD (if a date field stays [invalid], retry it as MM/DD/YYYY), "
+    "dropdowns from their options, click radios/checkboxes, upload "
     "for file inputs. Fix any [required]/[invalid] field, then click this form's Submit. "
     "Stop with done when this form shows a success/confirmation message."
 )
