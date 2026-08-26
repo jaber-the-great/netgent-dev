@@ -548,7 +548,7 @@ destroyed by string serialization** [V `dom_tree.py:74-100`].
 
 ## Where NetGent stands
 
-I ran our own `BrowserSession.snapshot()`, `_locator_for` and `_resolve` against a hostile fixture
+I ran our own `BrowserSession.snapshot()`, `durable_locator` and `_resolve` against a hostile fixture
 (top frame + shadow-in-cross-origin-iframe + iframe-in-open-shadow + a closed shadow root + a
 2-deep nested cross-origin chain + two instances of the same shadow component). Raw output in
 [Verification notes](#verification-notes).
@@ -590,7 +590,7 @@ I ran our own `BrowserSession.snapshot()`, `_locator_for` and `_resolve` against
 > - **R3 — don't swallow per-frame failures; type-check `_resolve`** *(done)*. `snapshot()` logs and
 >   counts skipped frames (`DomSnapshot.frames_skipped`); `_resolve` and a schema `AfterValidator`
 >   reject chains that don't end on a `Locator`. Closes gaps #7 and #8. (fixture: self-removing iframe)
-> - **R4 — `Locator.normalize()` cross-check/fallback** *(done)*. `agent/explorer/normalized.py`
+> - **R4 — `Locator.normalize()` cross-check/fallback** *(done)*. `browser/normalized.py`
 >   parses the `internal:` selector back into our whitelist (total, else `UnmappableSelector`);
 >   `capture_locator` prefers Playwright's frame selectors when both agree. (fixture: the hostile page)
 > - **R5 — frame-aware scroll** *(done)*. `ScrollAction.locator` moves the cursor over the target
@@ -621,13 +621,13 @@ iframe. Worse, `SelectorHidden` returns **True** for anything not in the top fra
 "recognized" for the wrong reason. Payment, login and consent widgets are exactly the iframes we need
 to anchor on.
 
-**2. The `#id`-first rule is unsafe under shadow DOM.** `_locator_for` prefers a bare `#id`
-(`agent/explorer/observation.py:102-111`) with the comment that it "pierces open shadow DOM" —
+**2. The `#id`-first rule is unsafe under shadow DOM.** `durable_locator` prefers a bare `#id`
+(`browser/locators.py:102-111`) with the comment that it "pierces open shadow DOM" —
 true, and that is the problem: an id inside a web component is *not* document-unique. Two instances of
 the same component both expose `#email`. Measured: `locator("#email")` resolved to 2 elements →
 `Locator.fill: strict mode violation`. `_click` survives on `.first` (`session.py:175`) but `fill`,
 `select_option`, `set_input_files` and `hover` are strict and will throw **at replay time, in a
-compiled workflow**. `nth` is in the whitelist (`schema/actions.py:27`) but `_locator_for` never emits it.
+compiled workflow**. `nth` is in the whitelist (`schema/actions.py:27`) but `durable_locator` never emits it.
 
 **3. Closed shadow roots: we can act on them but cannot see them.** `DOM_SNAPSHOT_JS` gates on
 `el.shadowRoot` (`snapshot.py:99`), so closed roots are dropped — measured FAIL. Meanwhile Patchright
@@ -688,7 +688,7 @@ whitelisted and replayable — no code in artifacts.
 ### P0 — correctness bugs that will fire in compiled workflows
 
 **R1. Verify locator uniqueness at capture time; emit `nth` when it is not unique.** *(cost: S)*
-In `_locator_for`, before returning a chain, resolve it and check `count()`. If > 1, either fall back
+In `durable_locator`, before returning a chain, resolve it and check `count()`. If > 1, either fall back
 to the next candidate or append `LocatorStep(fn="nth", args=[i])` — `nth` is already whitelisted, so
 the artifact format does not change. Drop the "`#id` first" rule to "`#id` first **iff** it resolves to
 exactly one element", since Playwright's CSS pierces open shadow roots and component ids repeat.
@@ -723,14 +723,14 @@ selector per `<iframe>`, joined by `internal:control=enter-frame` (`server/frame
 shadow-aware (it climbs via `parentElementOrShadowHost`) and it is in the Playwright we already ship
 (1.62.0, measured). Measured output for a shadow-DOM button inside a cross-origin iframe:
 `iframe[name="payframe"] >> internal:control=enter-frame >> internal:testid=[data-testid="deepbtn"s]`.
-Use it two ways: (a) as a **cross-check** on `_locator_for` — if our chain and Playwright's disagree on
+Use it two ways: (a) as a **cross-check** on `durable_locator` — if our chain and Playwright's disagree on
 the resolved element, prefer Playwright's frame selector for the `frame_locator` steps (it uses
 `iframe[name=…]`, which is far more stable than our `nth-of-type` path); (b) as a **fallback** when
-`_locator_for` raises. Parse `internal:role=button[name="X"i]` / `internal:testid=…` back into our
+`durable_locator` raises. Parse `internal:role=button[name="X"i]` / `internal:testid=…` back into our
 whitelisted steps — do **not** store the internal string, which would smuggle a non-whitelisted engine
 into the artifact. Keep the parse total: anything we cannot map to a whitelisted step is a compile-time
 failure, recorded, not papered over.
-*Fixture:* the hostile page above; assert every element's `_locator_for` chain and its `normalize()`
+*Fixture:* the hostile page above; assert every element's `durable_locator` chain and its `normalize()`
 chain resolve to the same element handle.
 
 **R5. Make scroll frame-aware.** *(cost: S)*

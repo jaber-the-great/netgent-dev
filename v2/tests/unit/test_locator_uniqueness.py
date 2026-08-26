@@ -2,8 +2,8 @@
 
 import asyncio
 
-from netgent.agent.explorer.observation import _locator_candidates, _locator_for, unique_locator_for
 from netgent.browser.dom import BBox, DomElement, SelectorCandidate
+from netgent.browser.locators import durable_locator, locator_candidates, unique_locator_for
 
 
 def _el(**kw) -> DomElement:
@@ -39,10 +39,10 @@ def test_candidates_are_ordered_id_role_testid_label_css():
             SelectorCandidate(kind="css", value="#email"),
         ],
     )
-    chains = _locator_candidates(el)
+    chains = locator_candidates(el)
     assert [c[-1].fn for c in chains] == ["locator", "get_by_role", "get_by_test_id", "get_by_label"]
     assert all(c[0].fn == "frame_locator" and c[0].args == ["iframe#pay"] for c in chains)
-    assert _locator_for(el) == chains[0]
+    assert durable_locator(el) == chains[0]
 
 
 def test_ambiguous_id_falls_through_to_a_unique_candidate():

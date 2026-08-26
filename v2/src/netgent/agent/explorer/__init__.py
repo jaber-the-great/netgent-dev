@@ -2,8 +2,9 @@
 
 `BrowserAgent` observes the page (indexed interactive elements), asks the LLM for ONE
 atomic action, dispatches it with a durable locator, and records a trajectory. Its loop is
-the LangGraph StateGraph in `graph.py`; the other modules are its parts (decision schema,
-observation/locators, prompt, selector normalisation). Its output — trajectories — is the
+the LangGraph StateGraph in `graph.py`; the other modules are its parts (`decision.py` the
+LLM's output schema, `actions.py` decision → Action, `prompt.py`). Locator building lives
+in browser/locators.py. Its output — trajectories — is the
 input to the generator.
 """
 

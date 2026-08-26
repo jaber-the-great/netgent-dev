@@ -16,8 +16,8 @@ import statistics
 import time
 from pathlib import Path
 
-from netgent.agent.explorer.observation import _locator_for
 from netgent.browser.dom import format_observation
+from netgent.browser.locators import durable_locator
 from netgent.browser.session import BrowserSession
 
 SITES = {
@@ -83,7 +83,7 @@ async def measure(s: BrowserSession, backend: str, repeats: int = 3) -> dict:
     details = []
     for e in elements:
         try:
-            chain = _locator_for(e)
+            chain = durable_locator(e)
         except ValueError:
             continue
         role_loc += int(any(step.fn == "get_by_role" for step in chain))

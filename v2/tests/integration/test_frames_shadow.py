@@ -8,7 +8,7 @@ import asyncio
 
 import pytest
 
-from netgent.agent.explorer.observation import _locator_for, unique_locator_for
+from netgent.browser.locators import durable_locator, unique_locator_for
 from netgent.browser.session import BrowserSession
 
 # ── R1: two instances of one web component, each exposing #email / #go in an open root ──
@@ -42,7 +42,7 @@ def test_r1_duplicate_shadow_ids_get_a_unique_chain(serve):
             assert len(emails) == 2 and len(gos) == 2, "both component instances must be observed"
 
             # The pure chain is ambiguous: #id pierces open shadow roots (2 matches).
-            assert await s.count(_locator_for(emails[1])) == 2
+            assert await s.count(durable_locator(emails[1])) == 2
 
             # The verified chain resolves to exactly one element — the SECOND instance.
             chain = await unique_locator_for(s, emails[1])
@@ -145,7 +145,7 @@ def test_r2_triggers_and_param_sources_are_frame_aware(serve):
             await s.wait_for_state(hidden)
 
             pay = next(e for e in (await s.snapshot()).elements if e.name == "Pay now")
-            await s.resolve(_locator_for(pay)).click()
+            await s.resolve(durable_locator(pay)).click()
             after = State(
                 id="paid",
                 conditions=[
@@ -253,8 +253,8 @@ customElements.define('shadow-host', class extends HTMLElement {{
 
 
 def test_r4_our_chains_agree_with_playwrights_normalized_chains(serve):
-    from netgent.agent.explorer.normalized import chain_from_normalized
-    from netgent.agent.explorer.observation import capture_locator
+    from netgent.browser.locators import capture_locator
+    from netgent.browser.normalized import chain_from_normalized
 
     leaf = serve({"/": HOSTILE_LEAF})
     mid = serve({"/": HOSTILE_MID.format(leaf=leaf.url())})
@@ -301,8 +301,8 @@ TALL_CHILD = """<!doctype html><html><head><title>Tall</title></head><body style
 
 
 def test_r5_scroll_reaches_into_a_cross_origin_iframe(serve):
+    from netgent.agent.explorer.actions import to_action
     from netgent.agent.explorer.decision import AgentDecision
-    from netgent.agent.explorer.observation import to_action
 
     child = serve({"/": TALL_CHILD})
     parent = serve({"/": (
@@ -385,7 +385,7 @@ def test_r7_frame_selectors_are_unique_and_use_the_real_tag(serve):
             out = []
             for el in snap.elements:
                 # every frame path resolves strictly (no 'resolved to N elements')
-                n = await s.count(_locator_for(el))
+                n = await s.count(durable_locator(el))
                 out.append((el.name, el.frame_path, n))
             return snap.frames_skipped, out
 
@@ -429,8 +429,8 @@ document.getElementById('leak').textContent = sealed ? 'still-closed' : 'LEAKED'
 
 @pytest.mark.skipif(not PATCHED_BROWSER, reason="closed-shadow observation requires Patchright")
 def test_r8a_closed_root_over_http_observed_acted_flagged(serve):
-    from netgent.agent.explorer.observation import capture_locator
     from netgent.browser.dom import format_observation
+    from netgent.browser.locators import capture_locator
 
     srv = serve({"/": CLOSED_ROOT})
 
@@ -478,7 +478,7 @@ def test_r8b_closed_root_inside_cross_origin_iframe(serve):
             ci = next((e for e in snap.elements if e.name == "closed input"), None)
             assert ci is not None, "closed root inside a cross-origin iframe must be observed"
             assert ci.frame_path == ["iframe#cf"] and ci.requires_closed_shadow
-            from netgent.agent.explorer.observation import unique_locator_for
+            from netgent.browser.locators import unique_locator_for
 
             chain = await unique_locator_for(s, ci)
             await s.resolve(chain).fill("xframe-secret", timeout=3000)
@@ -509,7 +509,7 @@ def test_r8c_declarative_closed_shadow_is_observed_and_flagged(serve):
     page-side registry could not see it. The CDP read (DOM.describeNode pierce) lists it like
     any other closed root: observed, flagged, and — Patchright's pierce is the same call —
     actionable."""
-    from netgent.agent.explorer.observation import capture_locator
+    from netgent.browser.locators import capture_locator
 
     srv = serve({"/": DECLARATIVE_CLOSED})
 

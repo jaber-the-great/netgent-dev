@@ -73,7 +73,7 @@ class LocatorResolver:
         resolve, generate a selector for the element, then one per ancestor <iframe>, joined
         by `>> internal:control=enter-frame >>`. The string is in Playwright's private
         `internal:` syntax and is only ever parsed back into our whitelist at compile time
-        (agent/explorer/normalized.py); it never reaches an artifact.
+        (browser/normalized.py); it never reaches an artifact.
         """
         normalized = await self.resolve(chain).normalize()
         return normalized._impl_obj._selector

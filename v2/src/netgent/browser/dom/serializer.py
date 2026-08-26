@@ -5,7 +5,7 @@ way browser-use's `dom/serializer`, Skyvern's `scraped_page.py` and Stagehand's
 `treeFormatUtils` do. This is pure string formatting over the snapshot models: no model call,
 no Playwright, so it stays inside the zero-LLM boundary and evals can render observations
 without importing `agent/`. Element indices printed here are what the agent answers with;
-`agent/explorer/observation.py::to_action` maps an index back to the element.
+`agent/explorer/actions.py::to_action` maps an index back to the element.
 """
 
 import os

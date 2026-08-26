@@ -2,8 +2,8 @@
 
 import pytest
 
+from netgent.agent.explorer.actions import to_action
 from netgent.agent.explorer.decision import AgentDecision
-from netgent.agent.explorer.observation import to_action
 from netgent.browser.dom import BBox, DomElement, DomSnapshot, SelectorCandidate, TextBlock, format_observation
 from netgent.schema.actions import ClickAction
 
@@ -92,13 +92,13 @@ def test_action_type_guards_give_corrective_errors():
 
 
 def test_iframe_element_gets_frame_locator_prefix():
-    from netgent.agent.explorer.observation import _locator_for
+    from netgent.browser.locators import durable_locator
 
     el = DomElement(
         tag="input", type="text", name="Email", frame_path=["iframe#outer", "iframe:nth-of-type(1)"],
         bbox=BBox(x=0, y=0, w=1, h=1), candidates=[SelectorCandidate(kind="css", value="#email")],
     )
-    chain = _locator_for(el)
+    chain = durable_locator(el)
     assert [s.fn for s in chain] == ["frame_locator", "frame_locator", "locator"]
     assert chain[0].args == ["iframe#outer"]
 
@@ -189,3 +189,32 @@ def test_dialogs_render_once_and_survive_scoping():
     assert "DIALOGS" in obs and "alert: Form submitted successfully!" in obs
     assert snap.scoped_to(["iframe#f"]).dialogs == snap.dialogs
     assert "DIALOGS" not in format_observation(DomSnapshot(url="u", title="t"))
+
+
+def test_to_action_uses_the_passed_in_locator_builder_for_every_element_action():
+    """Regression: click/fill/select/hover/upload must take the VERIFIED chain the agent loop
+    hands in (browser/locators.py), not the pure default — otherwise the R1/R4 uniqueness
+    work never reaches the compiled workflow (it only ever reached `scroll` before)."""
+    from netgent.browser.dom import BBox, DomElement, DomSnapshot, SelectorCandidate
+    from netgent.schema.actions import LocatorStep
+
+    def el(tag, **kw):
+        return DomElement(
+            tag=tag, name="x", bbox=BBox(x=1, y=1, w=10, h=10),
+            candidates=[SelectorCandidate(kind="css", value="#x")], **kw,
+        )
+
+    verified = [LocatorStep(fn="get_by_role", args=["button"], kwargs={"name": "verified"})]
+    builder = lambda _el: verified  # noqa: E731
+    cases = [
+        ("click", el("button"), {}),
+        ("hover", el("a"), {}),
+        ("fill", el("input"), {"text": "hi"}),
+        ("select", el("select", options=["a"]), {"value": "a"}),
+        ("upload", el("input", type="file"), {}),
+    ]
+    for kind, element, extra in cases:
+        snap = DomSnapshot(url="http://x", title="", elements=[element])
+        action = to_action(AgentDecision(reasoning="r", kind=kind, index=0, **extra), snap,
+                           upload_path="/tmp/f", locator_for=builder)
+        assert action.locator == verified, kind

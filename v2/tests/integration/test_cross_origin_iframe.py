@@ -11,7 +11,7 @@ import http.server
 import socketserver
 import threading
 
-from netgent.agent.explorer.observation import _locator_for
+from netgent.browser.locators import durable_locator
 from netgent.browser.session import BrowserSession
 
 CHILD_HTML = """<!doctype html><html><head><title>Child</title></head><body>
@@ -70,7 +70,7 @@ def test_cross_origin_iframe_observed_and_acted_on(tmp_path):
                     assert inner is not None, "cross-origin iframe input was not observed"
                     assert inner.frame_path, "element should carry a frame path"
                     # act on it through the resolved frame_locator chain
-                    await s.resolve(_locator_for(inner)).fill("hello-xorigin", timeout=3000)
-                    return await s.resolve(_locator_for(inner)).input_value()
+                    await s.resolve(durable_locator(inner)).fill("hello-xorigin", timeout=3000)
+                    return await s.resolve(durable_locator(inner)).input_value()
 
             assert asyncio.run(_run()) == "hello-xorigin"

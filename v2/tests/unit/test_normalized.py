@@ -2,7 +2,7 @@
 
 import pytest
 
-from netgent.agent.explorer.normalized import UnmappableSelector, chain_from_normalized, frame_steps, split_parts
+from netgent.browser.normalized import UnmappableSelector, chain_from_normalized, frame_steps, split_parts
 from netgent.schema.actions import ClickAction
 
 # Shapes measured from Locator.normalize() on Playwright 1.62 / Patchright 1.62.1.

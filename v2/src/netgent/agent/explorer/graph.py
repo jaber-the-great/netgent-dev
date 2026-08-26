@@ -16,10 +16,11 @@ output costs a step but never crashes, failures echoed into history, and the ste
 import operator
 from typing import Annotated, Any, Literal, TypedDict
 
+from netgent.agent.explorer.actions import to_action
 from netgent.agent.explorer.browser_agent import MAX_REPEAT, AgentStep, BrowserAgent
-from netgent.agent.explorer.observation import _locator_for, capture_locator, to_action
 from netgent.agent.explorer.prompt import SYSTEM_PROMPT
 from netgent.browser.dom import format_observation
+from netgent.browser.locators import capture_locator, durable_locator
 from netgent.browser.session import BrowserSession
 from netgent.core.errors import ExecutionError
 from netgent.core.logger import get_logger
@@ -166,12 +167,12 @@ async def _verified_locator(session: BrowserSession, snapshot, index: int | None
     """
     elems = snapshot.interactive()
     if index is None or not (0 <= index < len(elems)):
-        return _locator_for, None
+        return durable_locator, None
     try:
         chain, note = await capture_locator(session, elems[index])
     except Exception as exc:  # noqa: BLE001 — verification is best-effort; dispatch fails loudly
         logger.warning("locator verification failed for element %d: %s", index, exc)
-        return _locator_for, f"verification failed: {exc}"
+        return durable_locator, f"verification failed: {exc}"
     return (lambda _el: chain), note
 
 

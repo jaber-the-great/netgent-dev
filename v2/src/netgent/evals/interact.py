@@ -23,7 +23,7 @@ FILL_BY_TYPE = {"date": "1990-05-15", "email": "eval@example.com", "tel": "55512
 
 async def _try_element(session: BrowserSession, element, sample: str) -> tuple[str, str]:
     """(verdict ok|FAIL|skip, detail) for one element's canonical action."""
-    from netgent.agent.explorer.observation import unique_locator_for
+    from netgent.browser.locators import unique_locator_for
 
     chain = await unique_locator_for(session, element)
     locator = session.resolve(chain).first
