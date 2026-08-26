@@ -130,6 +130,7 @@ def build_agent_graph(
         if error is None:
             step.action = action  # the compilable record of what actually ran
             step.locator_check = note
+            step.dialogs = session.dialogs_since_last_action()  # this action's own dialogs
         await agent.capture_screenshot(session, step)
         # Feed outcomes back so the agent recovers instead of repeating itself.
         outcome = f" -> FAILED: {error}" if error else ""

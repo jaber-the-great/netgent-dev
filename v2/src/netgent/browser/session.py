@@ -60,10 +60,11 @@ class BrowserSession:
         closed_shadow: ClosedShadowObserver | None = None
         if PATCHED_BROWSER and self._cdp is not None:
             closed_shadow = ClosedShadowObserver(self._page, self._cdp, DOM_SNAPSHOT_JS, FRAME_SELECTOR_JS)
-        self._dom = DomObserver(self._page, closed_shadow, DialogLog(self._page))
+        dialogs = DialogLog(self._page)
+        self._dom = DomObserver(self._page, closed_shadow, dialogs)
         self._resolver = LocatorResolver(self._page)
-        self._actions = ActionDispatcher(self._page, self._resolver)
-        self._triggers = TriggerEngine(self._page, self._resolver)
+        self._actions = ActionDispatcher(self._page, self._resolver, dialogs)
+        self._triggers = TriggerEngine(self._page, self._resolver, dialogs)
         return self
 
     async def __aexit__(self, *exc_info: object) -> None:
@@ -80,6 +81,11 @@ class BrowserSession:
 
     async def snapshot(self) -> DomSnapshot:
         return await self._dom.snapshot()
+
+    def dialogs_since_last_action(self) -> list[str]:
+        """Dialogs raised by the most recently dispatched action (browser/dialogs.py)."""
+        dialogs = self._dom._dialogs if self._dom is not None else None
+        return dialogs.since_last_action() if dialogs is not None else []
 
     def dialogs_seen(self) -> list[str]:
         """Every JS dialog (alert/confirm/prompt) accepted this session, in order. Cumulative —

@@ -31,6 +31,10 @@ class AgentStep(BaseModel):
     reasoning: str
     url: str
     screenshot: str | None = None
+    # JS dialogs this step's action raised ("<type>: <message>"), auto-accepted by the
+    # browser layer. Recorded so the compiler can anchor the post-step state on a dialog
+    # when it is the page's only feedback (schema DialogMatches).
+    dialogs: list[str] = []
     error: str | None = None
     # The resolved, durable-locator action that was dispatched (None for done or
     # failed steps). This is what `netgent generate` compiles into a workflow transition.

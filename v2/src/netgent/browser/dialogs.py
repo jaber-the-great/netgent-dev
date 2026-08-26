@@ -26,7 +26,17 @@ class DialogLog:
     def __init__(self, page: Any):
         self._pending: list[str] = []
         self._history: list[str] = []  # cumulative, never cleared: post-hoc success checks
+        self._action_mark = 0  # history length when the last action was dispatched
         page.on("dialog", self._on_dialog)
+
+    def mark_action(self) -> None:
+        """Called by the action dispatcher before each action: dialogs recorded after this
+        mark belong to that action's edge. `dialog_matches` triggers read only past it, so
+        a state can never be recognized by a dialog an EARLIER transition raised."""
+        self._action_mark = len(self._history)
+
+    def since_last_action(self) -> list[str]:
+        return list(self._history[self._action_mark:])
 
     async def _on_dialog(self, dialog: Any) -> None:
         # Accept every type — alert/confirm/prompt AND beforeunload. Accept is the safe default

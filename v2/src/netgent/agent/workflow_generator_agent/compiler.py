@@ -93,6 +93,13 @@ def compile_trajectory(
             element_condition = _element_condition(steps[i].action)
             if element_condition is not None:
                 conditions.append(element_condition)
+        # A dialog raised by THIS step's action is the page's own confirmation — often the
+        # ONLY one (alert-only forms leave URL and DOM unchanged). Anchor the state the
+        # action lands in on it; replay evaluates it against dialogs raised since the last
+        # dispatched action, so it cannot match a dialog from an earlier edge. If the
+        # message is dynamic, zero-LLM validation replay fails the workflow honestly.
+        if step.dialogs:
+            conditions.append({"type": "dialog_matches", "pattern": re.escape(step.dialogs[-1])})
         prev_base = base
         state_id = f"s{i}"
         states.append(State(id=state_id, conditions=conditions))

@@ -1,5 +1,6 @@
 """Action dispatch: one handler per atomic action type, driven through resolved locators."""
 
+from netgent.browser.dialogs import DialogLog
 from netgent.browser.pw import PATCHED_BROWSER, Locator, Page
 from netgent.browser.resolution import LocatorResolver
 from netgent.core.errors import ActionDispatchError, LocatorResolutionError
@@ -22,9 +23,10 @@ from netgent.schema.actions import (
 class ActionDispatcher:
     """Executes artifact actions against the live page. Zero LLM, by construction."""
 
-    def __init__(self, page: Page, resolver: LocatorResolver):
+    def __init__(self, page: Page, resolver: LocatorResolver, dialogs: DialogLog | None = None):
         self._page = page
         self._resolver = resolver
+        self._dialogs = dialogs
 
     async def _click(self, locator: Locator, timeout_ms: int) -> None:
         """Click, with checkbox/radio handling folded in (keyed on the live element).
@@ -78,6 +80,8 @@ class ActionDispatcher:
         await page.mouse.wheel(0, pixels)
 
     async def dispatch(self, action: Action) -> None:
+        if self._dialogs is not None:
+            self._dialogs.mark_action()  # dialogs from here on belong to this edge (dialog_matches)
         if getattr(action, "requires_closed_shadow", False) and not PATCHED_BROWSER:
             # The capability flag a plain-Playwright replayer refuses on (R8): the target is
             # inside a closed shadow root, which only Patchright's CDP pierce can resolve.

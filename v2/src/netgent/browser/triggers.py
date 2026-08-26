@@ -4,11 +4,12 @@ import asyncio
 import re
 import time
 
+from netgent.browser.dialogs import DialogLog
 from netgent.browser.pw import Page
 from netgent.browser.resolution import LocatorResolver
 from netgent.core.errors import TriggerTimeoutError
 from netgent.schema.control import ParamSource
-from netgent.schema.triggers import SelectorHidden, SelectorVisible, TitleContains, Trigger, UrlMatches
+from netgent.schema.triggers import DialogMatches, SelectorHidden, SelectorVisible, TitleContains, Trigger, UrlMatches
 from netgent.schema.workflow import State
 
 POLL_INTERVAL_S = 0.1
@@ -17,9 +18,10 @@ POLL_INTERVAL_S = 0.1
 class TriggerEngine:
     """Evaluates state conditions and page-extracted parameter sources against the live page."""
 
-    def __init__(self, page: Page, resolver: LocatorResolver):
+    def __init__(self, page: Page, resolver: LocatorResolver, dialogs: DialogLog | None = None):
         self._page = page
         self._resolver = resolver
+        self._dialogs = dialogs
 
     async def holds(self, trigger: Trigger) -> bool:
         match trigger:
@@ -30,6 +32,12 @@ class TriggerEngine:
             case SelectorVisible():
                 locator = self._resolver.frame_scope(trigger.frame_path).locator(trigger.selector)
                 return await locator.first.is_visible()
+            case DialogMatches():
+                # Only dialogs raised since the last dispatched action count: the dialog is
+                # the edge's own feedback, not ambient page state (browser/dialogs.py).
+                if self._dialogs is None:
+                    return False
+                return any(re.search(trigger.pattern, d) for d in self._dialogs.since_last_action())
             case SelectorHidden():
                 # Resolved-and-hidden only: a selector matching nothing must not hold, or a
                 # typo'd selector would "recognize" every state (research doc, R2).

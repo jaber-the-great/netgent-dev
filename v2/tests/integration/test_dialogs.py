@@ -70,3 +70,38 @@ def test_confirm_accepted_and_prompt_answered_with_default(serve):
     echo, dialogs = asyncio.run(_run())
     assert echo == "confirm=true name=Ada"  # confirm accepted, prompt answered with its default
     assert dialogs == ["confirm: Proceed?", 'prompt: Your name?  (answered "Ada")']
+
+
+def test_dialog_matches_trigger_recognizes_an_alert_only_submit(serve):
+    """Replay path: dispatch the submit through the session (the dispatcher marks the edge),
+    then wait_for_state on a dialog_matches condition — the mechanism a compiled workflow
+    uses when a dialog is the page's only feedback. A later edge must NOT re-match it."""
+    import re
+
+    import pytest
+
+    from netgent.core.errors import TriggerTimeoutError
+    from netgent.schema.actions import ClickAction, FillAction, LocatorStep
+    from netgent.schema.workflow import State
+
+    srv = serve({"/": ALERT_FORM})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(srv.url(), wait_until="networkidle")
+            await s.dispatch(FillAction(locator=[LocatorStep(fn="locator", args=["#email"])], text="a@b.co"))
+            await s.dispatch(ClickAction(locator=[LocatorStep(fn="locator", args=["#go"])]))
+            submitted = State(
+                id="submitted",
+                conditions=[{"type": "dialog_matches", "pattern": re.escape("alert: Form submitted successfully")}],
+                timeout_ms=3000,
+            )
+            latency = await s.wait_for_state(submitted)
+            # A later edge (new mark) must not be satisfied by the OLD dialog.
+            await s.dispatch(FillAction(locator=[LocatorStep(fn="locator", args=["#email"])], text="x@y.co"))
+            stale = State(id="stale", conditions=list(submitted.conditions), timeout_ms=400)
+            with pytest.raises(TriggerTimeoutError):
+                await s.wait_for_state(stale)
+            return latency
+
+    assert asyncio.run(_run()) >= 0

@@ -43,7 +43,24 @@ class SelectorHidden(BaseModel):
     frame_path: list[str] = Field(default_factory=list)
 
 
+class DialogMatches(BaseModel):
+    """A JavaScript dialog (alert/confirm/prompt) raised by the LAST transition's action
+    matches `pattern`.
+
+    Some pages confirm an action ONLY via a dialog — e.g. `alert('Form submitted
+    successfully')` — which the browser layer auto-accepts and records
+    (browser/dialogs.py). No DOM or URL change exists for the other triggers to anchor
+    on, so the state after such a transition is recognized by the dialog itself. The
+    pattern is matched with re.search against the recorded "<type>: <message>" entries
+    raised since the last dispatched action, so an old dialog can never satisfy a later
+    state.
+    """
+
+    type: Literal["dialog_matches"] = "dialog_matches"
+    pattern: str  # regex, matched with re.search against "<type>: <message>"
+
+
 Trigger = Annotated[
-    Union[UrlMatches, TitleContains, SelectorVisible, SelectorHidden],
+    Union[UrlMatches, TitleContains, SelectorVisible, SelectorHidden, DialogMatches],
     Field(discriminator="type"),
 ]

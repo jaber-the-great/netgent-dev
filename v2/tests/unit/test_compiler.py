@@ -111,3 +111,22 @@ def test_compiler_folds_a_frame_nth_step_into_the_frame_path():
     ])
     wf = compile_trajectory(traj, name="n")
     assert wf.states[1].conditions[1].frame_path == ["iframe.two >> nth=1"]
+
+
+def test_step_dialog_becomes_a_dialog_matches_condition():
+    """An alert-only form leaves URL and DOM unchanged: the dialog the submit raised is the
+    only recognizable feedback, so the compiled post-submit state anchors on it."""
+    from netgent.agent.explore_agent.browser_agent import AgentStep, AgentTrajectory
+    from netgent.agent.workflow_generator_agent.compiler import compile_trajectory
+    from netgent.schema.actions import ClickAction, LocatorStep
+
+    click = ClickAction(locator=[LocatorStep(fn="locator", args=["#submit"])])
+    steps = [
+        AgentStep(n=1, kind="click", reasoning="submit", url="https://site.test/form",
+                  action=click, dialogs=["alert: Form submitted successfully! The secret is: dumbledore"]),
+    ]
+    wf = compile_trajectory(AgentTrajectory(task="t", steps=steps, success=True, stopped_reason=""), name="w")
+    final = wf.states[-1]
+    dialog = [c for c in final.conditions if c.type == "dialog_matches"]
+    assert len(dialog) == 1
+    assert "dumbledore" in dialog[0].pattern

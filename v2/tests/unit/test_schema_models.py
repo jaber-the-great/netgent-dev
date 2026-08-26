@@ -218,3 +218,12 @@ def test_actions_carry_the_closed_shadow_capability_flag():
         locator=[LocatorStep(fn="locator", args=["#ci"])], text="x", requires_closed_shadow=True
     )
     assert FillAction.model_validate(flagged.model_dump()).requires_closed_shadow is True
+
+
+def test_dialog_matches_trigger_round_trips():
+    from netgent.schema.triggers import DialogMatches
+    from netgent.schema.workflow import State
+
+    state = State(id="submitted", conditions=[{"type": "dialog_matches", "pattern": "alert: Form submitted"}])
+    assert isinstance(state.conditions[0], DialogMatches)
+    assert State.model_validate(state.model_dump()).conditions[0].pattern == "alert: Form submitted"
