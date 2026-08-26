@@ -4,6 +4,7 @@ from netgent.browser.dialogs import DialogLog
 from netgent.browser.pw import PATCHED_BROWSER, Locator, Page
 from netgent.browser.resolution import LocatorResolver
 from netgent.core.errors import ActionDispatchError, LocatorResolutionError
+from netgent.core.logger import get_logger
 from netgent.schema.actions import (
     Action,
     ClickAction,
@@ -18,6 +19,8 @@ from netgent.schema.actions import (
     UploadFileAction,
     WaitAction,
 )
+
+logger = get_logger(__name__)
 
 
 class ActionDispatcher:
@@ -44,7 +47,26 @@ class ActionDispatcher:
         except Exception:  # noqa: BLE001 — attribute probe must never break the click
             kind = None
         if kind not in ("checkbox", "radio"):
-            await first.click(timeout=timeout_ms)
+            try:
+                await first.click(timeout=timeout_ms)
+                return
+            except Exception as exc:  # noqa: BLE001 — occluded/unstable element: try the JS ladder
+                reason = str(exc).splitlines()[0]
+            # The ladder every mature agent lands on (Skyvern chain_click steps 3+7, browser-use
+            # _click_element_node_impl occluded→JS): a sticky header/toast/overlay intercepts the
+            # pointer, but the element itself is live — click its bound label if it has one
+            # (custom widgets bind behaviour there), else dispatch el.click() directly. Untrusted
+            # events, so only after the trusted path failed, and only on a visible element.
+            try:
+                await first.evaluate(
+                    "el => { if (!el.isConnected) throw new Error('detached');"
+                    " const t = (el.labels && el.labels[0]) || el; t.click(); }"
+                )
+                logger.info("click fell back to JS dispatch (%s)", reason)
+            except Exception as js_exc:
+                raise ActionDispatchError(
+                    f"click failed via mouse ({reason}) and via JS dispatch: {js_exc}"
+                ) from js_exc
             return
 
         target = True if kind == "radio" else not await first.is_checked()
@@ -56,6 +78,113 @@ class ActionDispatcher:
             # Custom radio/checkbox: click the label (or the input) in the element's own
             # context — this fires framework listeners a synthetic input click misses.
             await first.evaluate("el => (el.labels && el.labels[0] ? el.labels[0] : el).click()")
+
+    # The value a fill can be verified against, or None when the element has no readable
+    # value (then we trust the fill). Contenteditable reads textContent.
+    _READBACK_JS = (
+        "el => el.isContentEditable ? el.textContent"
+        " : ('value' in el ? String(el.value) : null)"
+    )
+
+    async def _fill(self, locator: Locator, text: str, timeout_ms: int) -> None:
+        """fill, verified by reading the value back, with two escalations.
+
+        Playwright's fill sets the value and dispatches synthetic (untrusted) events; most
+        frameworks accept that, but keystroke-driven widgets (rich editors, maskers,
+        listeners gating on isTrusted) drop it — measured across browser-use
+        (_input_text_element_node_impl readback+retry), Skyvern (input_sequentially) and
+        Stagehand (CDP Input.insertText). Ladder: fill → trusted per-key typing
+        (press_sequentially) → native-prototype setter + input/change/blur (the React
+        _valueTracker path). Each rung is verified; all rungs are deterministic, so one
+        artifact action stays one action at replay.
+        """
+        first = locator.first
+
+        async def verify() -> tuple[bool, str | None]:
+            try:
+                current = await first.evaluate(self._READBACK_JS)
+            except Exception:  # noqa: BLE001 — unreadable: trust the write
+                return True, None
+            return current is None or current == text, current
+
+        try:
+            await first.fill(text, timeout=timeout_ms)
+            ok, _ = await verify()
+            if ok:
+                return
+        except Exception as exc:  # noqa: BLE001 — fall through to typed input
+            logger.info("fill escalating to typed input: %s", str(exc).splitlines()[0])
+        try:
+            await first.click(timeout=timeout_ms)
+            await first.press("ControlOrMeta+a", timeout=timeout_ms)
+            await first.press_sequentially(text, timeout=timeout_ms)
+            ok, _ = await verify()
+            if ok:
+                return
+        except Exception as exc:  # noqa: BLE001 — fall through to the native setter
+            logger.info("typed input escalating to native setter: %s", str(exc).splitlines()[0])
+        await first.evaluate(
+            """(el, value) => {
+                 const proto = el instanceof HTMLTextAreaElement
+                   ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+                 const setter = Object.getOwnPropertyDescriptor(proto, 'value');
+                 if (setter && setter.set && 'value' in el) setter.set.call(el, value);
+                 else if (el.isContentEditable) el.textContent = value;
+                 if (el._valueTracker) el._valueTracker.setValue('');
+                 el.dispatchEvent(new Event('input', {bubbles: true}));
+                 el.dispatchEvent(new Event('change', {bubbles: true}));
+                 el.dispatchEvent(new Event('blur', {bubbles: true}));
+               }""",
+            text,
+        )
+        ok, current = await verify()
+        if not ok:
+            raise ActionDispatchError(
+                f"fill did not stick: field still holds {current!r} after fill, typing and native set"
+            )
+
+    async def _select(self, action: SelectAction, locator: Locator) -> None:
+        """select_option, with a surrogate ladder for non-native dropdowns.
+
+        A styled dropdown (Material UI div[role=button], Select2 span[combobox], headless-UI
+        listboxes) is not a <select>: select_option can never work on it. Ladder (Skyvern's
+        hidden-select surrogate flow, Stagehand's click-to-expand evals): if the target is a
+        real <select>, select_option by value then by label; otherwise click it open and
+        click the option whose text is the recorded value — deterministic, since the option
+        text is stored in the artifact.
+        """
+        value, timeout_ms = action.value, action.timeout_ms
+        first = locator.first
+        is_select = False
+        try:
+            is_select = await first.evaluate("el => el.tagName === 'SELECT'")
+        except Exception:  # noqa: BLE001 — unreachable element: let select_option surface it
+            is_select = True
+        if is_select:
+            try:
+                await first.select_option(value, timeout=timeout_ms)
+                return
+            except Exception:  # noqa: BLE001 — value didn't match: try the visible label
+                await first.select_option(label=value, timeout=timeout_ms)
+                return
+        await first.click(timeout=timeout_ms)
+        # Options portal to the DOCUMENT the widget lives in, not into its subtree — search
+        # the same frame the action's locator chain targets (frame-blindness would miss every
+        # in-iframe dropdown).
+        scope = self._resolver.frame_scope(
+            [str(step.args[0]) for step in action.locator if step.fn == "frame_locator"]
+        )
+        option = scope.get_by_role("option", name=value, exact=True)
+        if await option.count() == 0:
+            option = scope.get_by_role("option", name=value)
+        if await option.count() == 0:
+            option = scope.get_by_text(value, exact=True)
+        try:
+            await option.first.click(timeout=timeout_ms)
+        except Exception as exc:
+            raise ActionDispatchError(
+                f"select {value!r}: target is not a <select> and no matching option appeared after opening"
+            ) from exc
 
     async def _upload(self, locator: Locator, action: UploadFileAction) -> None:
         """set_input_files, with a file-chooser fallback for styled upload widgets.
@@ -121,14 +250,14 @@ class ActionDispatcher:
                 case ClickAction():
                     await self._click(resolve(action.locator), action.timeout_ms)
                 case FillAction():
-                    await resolve(action.locator).fill(action.text, timeout=action.timeout_ms)
+                    await self._fill(resolve(action.locator), action.text, action.timeout_ms)
                 case PressAction():
                     if action.locator is not None:
                         await resolve(action.locator).press(action.keys, timeout=action.timeout_ms)
                     else:
                         await page.keyboard.press(action.keys)
                 case SelectAction():
-                    await resolve(action.locator).select_option(action.value, timeout=action.timeout_ms)
+                    await self._select(action, resolve(action.locator))
                 case ScrollAction():
                     await self._scroll(action)
                 case UploadFileAction():
