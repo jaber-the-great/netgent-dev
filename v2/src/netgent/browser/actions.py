@@ -60,7 +60,8 @@ class ActionDispatcher:
             try:
                 await first.evaluate(
                     "el => { if (!el.isConnected) throw new Error('detached');"
-                    " const t = (el.labels && el.labels[0]) || el; t.click(); }"
+                    " const t = (el.labels && el.labels[0]) || el; t.click(); }",
+                    timeout=3000,  # 0 matches (element gone) must fail fast, not hang 30 s
                 )
                 logger.info("click fell back to JS dispatch (%s)", reason)
             except Exception as js_exc:
@@ -183,6 +184,7 @@ class ActionDispatcher:
                 await first.select_option(label=value, timeout=timeout_ms)
                 return
         await first.click(timeout=timeout_ms)
+        page = self._page
         # Options portal to the DOCUMENT the widget lives in, not into its subtree — search
         # the same frame the action's locator chain targets (frame-blindness would miss every
         # in-iframe dropdown).
@@ -200,6 +202,14 @@ class ActionDispatcher:
             raise ActionDispatchError(
                 f"select {value!r}: target is not a <select> and no matching option appeared after opening"
             ) from exc
+        # Some menus stay open after a pick (measured: MUI Select keeps its popover + backdrop
+        # up, and the backdrop then swallows the next action). Skyvern's dropdown flow ends with
+        # Escape/blur cleanup for the same reason; Escape is inert when nothing is open.
+        try:
+            if await scope.get_by_role("listbox").count() > 0:
+                await page.keyboard.press("Escape")
+        except Exception:  # noqa: BLE001 — cleanup only
+            pass
 
     async def _upload(self, locator: Locator, action: UploadFileAction) -> None:
         """set_input_files, with a file-chooser fallback for styled upload widgets.
@@ -260,6 +270,18 @@ class ActionDispatcher:
             )
         page = self._page
         resolve = self._resolver.resolve
+        target = getattr(action, "locator", None)
+        if target:
+            try:
+                if await resolve(target).count() == 0:
+                    # Nothing matches right now — commonly an open menu/popover whose backdrop
+                    # (or aria-hidden) hides the rest of the page. Escape dismisses such
+                    # overlays and is inert otherwise; the action then resolves normally or
+                    # fails with Playwright's own timeout.
+                    await page.keyboard.press("Escape")
+                    await page.wait_for_timeout(150)
+            except Exception:  # noqa: BLE001 — probing must never replace the real error
+                pass
         try:
             match action:
                 case GotoAction():

@@ -35,6 +35,10 @@ document.getElementById('dd').addEventListener('click', () => {
 });
 for (const li of document.querySelectorAll('[role=option]'))
   li.addEventListener('click', () => { document.getElementById('echo').textContent = li.textContent; });
+// A sticky menu (MUI-style): stays open after a pick, closes only on Escape.
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') document.getElementById('menu').style.display = 'none';
+});
 </script></body></html>"""
 
 
@@ -67,9 +71,10 @@ def test_select_expands_and_picks_on_non_native_dropdown(serve):
     async def steps(s):
         action = SelectAction(locator=[LocatorStep(fn="locator", args=["#dd"])], value="Canada", timeout_ms=3000)
         await s.dispatch(action)
-        return await s.page.locator("#echo").inner_text()
+        menu = await s.page.locator("#menu").evaluate("el => getComputedStyle(el).display")
+        return await s.page.locator("#echo").inner_text(), menu
 
-    assert asyncio.run(_run(DIV_DROPDOWN, steps)(serve)) == "Canada"
+    assert asyncio.run(_run(DIV_DROPDOWN, steps)(serve)) == ("Canada", "none")  # picked, and the sticky menu dismissed
 
 
 REFORMATTING_INPUT = """<!doctype html><html><head><title>R</title></head><body>
