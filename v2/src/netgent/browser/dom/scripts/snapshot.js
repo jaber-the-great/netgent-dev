@@ -40,9 +40,25 @@
     return s.visibility !== 'hidden' && s.display !== 'none' && s.opacity !== '0';
   };
   const clean = (s) => (s || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  const labelledBy = (el) => {
+    // ARIA name computation step 2B (aria-labelledby): MUI selects carry their whole name
+    // here ("Country") while their text content is a zero-width space — measured.
+    const ids = (el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean);
+    if (!ids.length) return '';
+    const root = el.getRootNode();
+    return ids.map((id) => { const n = root.getElementById && root.getElementById(id);
+      return n && n !== el ? n.textContent : ''; }).join(' ');
+  };
   const accName = (el) => clean(
     el.getAttribute('aria-label') ||
-    (el.labels && el.labels.length ? el.labels[0].childNodes[0]?.textContent : '') ||
+    labelledBy(el) ||
+    // A label's FIRST child node when it is real text ("Email <input>"), else the whole
+    // label text — a wrapping label often starts with whitespace before the input, and
+    // childNodes[0] alone then yields an empty name (measured: MUI PrivateSwitchBase).
+    (el.labels && el.labels.length
+      ? ((el.labels[0].childNodes[0]?.textContent || '').trim()
+         ? el.labels[0].childNodes[0].textContent : el.labels[0].textContent)
+      : '') ||
     el.getAttribute('placeholder') ||
     // Rich-text editors (Quill: ql-editor, and aria-placeholder per ARIA 1.2) carry their
     // field name here — without it a contenteditable email field is an anonymous <div>
@@ -123,10 +139,19 @@
           // upload widgets (Bootstrap custom-file opacity:0, Material UI display:none behind a
           // styled label) hide the real input on purpose — measured on browser-use's stress
           // forms, where dropping them left the agent nothing valid to upload to.
-          const hiddenFileInput = el.tagName === 'INPUT'
-            && (el.getAttribute('type') || '').toLowerCase() === 'file' && !visible(el);
-          if (!visible(el) && !hiddenFileInput) continue;
-          const r = el.getBoundingClientRect();
+          const itype = el.tagName === 'INPUT' ? (el.getAttribute('type') || '').toLowerCase() : '';
+          const hiddenProxyInput = !visible(el) && (
+            itype === 'file'
+            // Custom radio/checkbox widgets hide the real input and style its LABEL (MUI
+            // PrivateSwitchBase, Rich-Text contact radios — measured): the input is still
+            // the actionable element (our click ladder clicks the label), so observe it and
+            // report the label's geometry.
+            || ((itype === 'radio' || itype === 'checkbox') && el.labels && el.labels.length > 0)
+          );
+          if (!visible(el) && !hiddenProxyInput) continue;
+          const rectSource = (hiddenProxyInput && el.labels && el.labels.length && itype !== 'file')
+            ? el.labels[0] : el;
+          const r = rectSource.getBoundingClientRect();
           results.push({
             tag: el.tagName.toLowerCase(),
             // Contenteditable's implicit ARIA role: shown as a fillable textbox, otherwise a

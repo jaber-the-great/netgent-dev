@@ -44,3 +44,30 @@ def test_hidden_file_inputs_are_observed_and_fillable(serve, tmp_path):
             return await s.page.locator("#echo").inner_text()
 
     assert asyncio.run(_run()) == "f1:cv.txt;f2:cv.txt;"
+
+
+ARIA_AND_HIDDEN_RADIO = """<!doctype html><html><head><title>A</title></head><body>
+<span id="country-label">Country</span>
+<div id="dd" role="button" aria-haspopup="listbox" aria-labelledby="country-label dd" tabindex="0">\u200b</div>
+<label style="display:inline-block;padding:4px">
+  <input type="radio" name="c" value="email" style="opacity:0;position:absolute;width:0;height:0">Email me
+</label>
+<span id="visible-text">just text</span>
+</body></html>"""
+
+
+def test_aria_labelledby_names_and_hidden_labeled_radios_are_observed(serve):
+    srv = serve({"/": ARIA_AND_HIDDEN_RADIO})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(srv.url(), wait_until="networkidle")
+            snap = await s.snapshot()
+            dd = next(e for e in snap.elements if e.role == "button" and e.tag == "div")
+            radio = next((e for e in snap.elements if e.type == "radio"), None)
+            return dd.name, radio
+
+    name, radio = asyncio.run(_run())
+    assert name == "Country"  # resolved via aria-labelledby, not the zero-width text
+    assert radio is not None and radio.name == "Email me"  # hidden input, visible label
+    assert radio.bbox.w > 0  # geometry reported from the LABEL, not the 0x0 input
