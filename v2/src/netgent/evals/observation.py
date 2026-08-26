@@ -87,7 +87,7 @@ async def measure(s: BrowserSession, backend: str, repeats: int = 3) -> dict:
             continue
         role_loc += int(any(step.fn == "get_by_role" for step in chain))
         try:
-            n = await s._resolve(chain).count()
+            n = await s.resolve(chain).count()
         except Exception:  # noqa: BLE001
             n = -1
         resolved_any += int(n >= 1)

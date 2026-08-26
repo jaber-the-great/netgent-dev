@@ -70,7 +70,7 @@ def test_cross_origin_iframe_observed_and_acted_on(tmp_path):
                     assert inner is not None, "cross-origin iframe input was not observed"
                     assert inner.frame_path, "element should carry a frame path"
                     # act on it through the resolved frame_locator chain
-                    await s._resolve(_locator_for(inner)).fill("hello-xorigin", timeout=3000)
-                    return await s._resolve(_locator_for(inner)).input_value()
+                    await s.resolve(_locator_for(inner)).fill("hello-xorigin", timeout=3000)
+                    return await s.resolve(_locator_for(inner)).input_value()
 
             assert asyncio.run(_run()) == "hello-xorigin"

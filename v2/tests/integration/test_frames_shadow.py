@@ -48,7 +48,7 @@ def test_r1_duplicate_shadow_ids_get_a_unique_chain(serve):
             chain = await unique_locator_for(s, emails[1])
             assert chain[-1].fn == "nth", chain
             assert await s.count(chain) == 1
-            await s._resolve(chain).fill("second@example.com", timeout=3000)
+            await s.resolve(chain).fill("second@example.com", timeout=3000)
             second = await s.page.evaluate(
                 "() => document.querySelectorAll('my-form')[1].shadowRoot.getElementById('email').value"
             )
@@ -57,7 +57,7 @@ def test_r1_duplicate_shadow_ids_get_a_unique_chain(serve):
             )
             go = await unique_locator_for(s, gos[0])
             assert await s.count(go) == 1
-            await s._resolve(go).click(timeout=3000)
+            await s.resolve(go).click(timeout=3000)
             out = await s.page.evaluate(
                 "() => document.querySelectorAll('my-form')[0].shadowRoot.getElementById('out').textContent"
             )
@@ -145,7 +145,7 @@ def test_r2_triggers_and_param_sources_are_frame_aware(serve):
             await s.wait_for_state(hidden)
 
             pay = next(e for e in (await s.snapshot()).elements if e.name == "Pay now")
-            await s._resolve(_locator_for(pay)).click()
+            await s.resolve(_locator_for(pay)).click()
             after = State(
                 id="paid",
                 conditions=[
@@ -186,19 +186,19 @@ def test_r3_detached_frame_is_reported_not_swallowed(serve):
             await s.page.goto(srv.url(), wait_until="load")
             # Stall the walk on the child so the fixture's 100 ms self-removal fires while
             # the frame is still in page.frames — the detach then happens mid-snapshot.
-            original = s._frame_info
+            original = s._dom._frame_info
 
             async def stalled(frame, cache=None):
                 if frame.parent_frame is not None:
                     await asyncio.sleep(0.4)
                 return await original(frame, cache)
 
-            s._frame_info = stalled
+            s._dom._frame_info = stalled
             snap = await s.snapshot()
             # The runtime backstop for a chain ending on a FrameLocator (schema rejects it
-            # in artifacts; this covers hand-built chains reaching _resolve directly).
+            # in artifacts; this covers hand-built chains reaching resolve directly).
             with pytest.raises(LocatorResolutionError, match="FrameLocator"):
-                s._resolve([LocatorStep(fn="frame_locator", args=["iframe"])])
+                s.resolve([LocatorStep(fn="frame_locator", args=["iframe"])])
             return snap
 
     snap = asyncio.run(_run())
@@ -444,9 +444,9 @@ def test_r8a_closed_root_over_http_observed_acted_flagged(serve):
             obs = format_observation(snap)
             # Act through Patchright natively (fill + click both pierce the closed root).
             chain, note = await capture_locator(s, ci)
-            await s._resolve(chain).fill("secret", timeout=3000)
+            await s.resolve(chain).fill("secret", timeout=3000)
             btn, _ = await capture_locator(s, cb)
-            await s._resolve(btn).click(timeout=3000)
+            await s.resolve(btn).click(timeout=3000)
             # The effect inside the closed root, as the page itself reports it (light-DOM echo) —
             # input_value() on a closed-root locator hangs under Patchright, so read the echo.
             out = await s.page.locator("#echo").inner_text()
@@ -480,7 +480,7 @@ def test_r8b_closed_root_inside_cross_origin_iframe(serve):
             from netgent.agent.explore_agent.observation import unique_locator_for
 
             chain = await unique_locator_for(s, ci)
-            await s._resolve(chain).fill("xframe-secret", timeout=3000)
+            await s.resolve(chain).fill("xframe-secret", timeout=3000)
             val = await s.page.frame_locator("iframe#cf").locator("#echo").inner_text()
             leak = await s.page.frame_locator("iframe#cf").locator("#leak").inner_text()
             return val, leak
@@ -519,7 +519,7 @@ def test_r8c_declarative_closed_shadow_is_observed_and_flagged(serve):
             decl = next((e for e in snap.elements if e.name == "Declarative"), None)
             assert decl is not None and decl.requires_closed_shadow
             chain, _ = await capture_locator(s, decl)
-            await s._resolve(chain).click(timeout=3000)  # resolves through the closed root
+            await s.resolve(chain).click(timeout=3000)  # resolves through the closed root
             return [e.name for e in snap.elements]
 
     names = asyncio.run(_run())

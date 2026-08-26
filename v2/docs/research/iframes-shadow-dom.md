@@ -600,7 +600,7 @@ I ran our own `BrowserSession.snapshot()`, `_locator_for` and `_resolve` against
 > - **R7 — harden `FRAME_SELECTOR_JS`** *(done)*. Real tag name, quoted attributes, verified-unique
 >   with `nth`, preferring test-id/name/title. Closes gap #6. (fixture: two sibling iframes + a legacy `<frame>`)
 > - **R8 — closed shadow roots** *(done; re-done zero-footprint 2026-08-25)*. Observed from OUTSIDE
->   the page over CDP (`browser/closed_shadow.py`): `DOMSnapshot.captureSnapshot` detects documents
+>   the page over CDP (`browser/dom/closed_shadow.py`): `DOMSnapshot.captureSnapshot` detects documents
 >   with a closed tree, `DOM.describeNode(depth=-1, pierce=true)` — Patchright's own pierce — lists
 >   the closed roots, `DOM.resolveNode` hands them into an isolated world we create with
 >   `Page.createIsolatedWorld`, and `DOM_SNAPSHOT_JS` walks them there. No init script, no
@@ -775,7 +775,7 @@ record a capability flag.** *(cost: M–L)*
 > `stealth-after-patchright.md` says we must not ship it. The hook is gone; nothing of ours runs in the
 > main world any more.
 >
-> What replaced it, per snapshot (`v2/src/netgent/browser/closed_shadow.py`):
+> What replaced it, per snapshot (`v2/src/netgent/browser/dom/closed_shadow.py`):
 > 1. **One CDP session per target.** The page's session covers the top frame and every same-process
 >    child; each OOPIF gets `context.new_cdp_session(frame)`. Playwright refuses that call for a
 >    same-process frame ("This frame does not have a separate CDP session, it is a part of the parent

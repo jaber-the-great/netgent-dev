@@ -46,6 +46,18 @@ src/netgent/
 └── sessions/                  # auth: login NFAs, storage-state minting + freshness probes (later)
 ```
 
+**Realized (2026-08-25).** `v2/src/netgent/browser/` now has this shape, at NetGent's scale: `pw.py`
+(the single Playwright/Patchright import; `PATCHED_BROWSER`), `profile.py` (`BrowserProfile`),
+`factory.py` (`launch(profile, headless) -> BrowserHandle` / `close(handle)`: channel fallback,
+headless UA flag, CDP session, client-hints repair — the seam where capture will hook in),
+`session.py` (the thin `BrowserSession` facade the executor and agents drive), `resolution.py`
+(`LocatorResolver`), `actions.py` (`ActionDispatcher` — the doc's `executor.py`, named to avoid the
+top-level `executor/` package), `triggers.py` (`TriggerEngine`), and `dom/` — the doc's
+`observation/` — holding `models.py` (the pydantic snapshot models), `observer.py` (`DomObserver`:
+per-frame walk + closed-shadow join), `closed_shadow.py` (the CDP-only reader, quarantined) and
+`scripts/` (the injected JS as real `.js` files, loaded via `importlib.resources`). `capture/` is
+still pending. The schema/core packages live under `schema/` and `core/` rather than one `core/`.
+
 Import rule (the property that makes `run` trustworthy): `core` imports nothing, `browser` imports
 `core`, `synthesis` imports both. The browser layer must be importable and runnable with no model
 provider configured — enforced by a test, not a convention.

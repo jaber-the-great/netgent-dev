@@ -1,15 +1,21 @@
 """DOM layer: compile-time DOM observation.
 
-- snapshot.py — DomSnapshot: interactive-element extraction (shadow DOM + iframe aware).
+- models.py — DomSnapshot & friends: interactive-element extraction (shadow DOM + iframe aware).
+- observer.py — DomObserver: walks every frame and joins closed shadow roots by frame path.
+- closed_shadow.py — closed shadow roots read from OUTSIDE the page over CDP (R8).
+- scripts/ — the injected JavaScript (walker, frame selector, frame content origin) as .js files.
 
 The browser's environment configuration lives one level up in `browser/profile.py`.
 """
 
-from netgent.browser.dom.snapshot import BBox, DomElement, DomSnapshot, SelectorCandidate
+from netgent.browser.dom.models import BBox, DomElement, DomSnapshot, SelectorCandidate, TextBlock
+from netgent.browser.dom.observer import DomObserver
 
 __all__ = [
     "BBox",
     "DomElement",
+    "DomObserver",
     "DomSnapshot",
     "SelectorCandidate",
+    "TextBlock",
 ]

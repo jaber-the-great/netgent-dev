@@ -10,7 +10,7 @@ import re
 from collections.abc import Callable
 
 from netgent.agent.explore_agent.decision import AgentDecision
-from netgent.browser.dom.snapshot import DomElement, DomSnapshot
+from netgent.browser.dom import DomElement, DomSnapshot
 from netgent.schema.actions import (
     Action,
     ClickAction,

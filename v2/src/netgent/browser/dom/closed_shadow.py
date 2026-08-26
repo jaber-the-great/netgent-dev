@@ -26,8 +26,8 @@ Mechanism, per snapshot:
    walker descends into each closed root at its host's position (same element order).
 4. The result is keyed by the frame's selector path — `FRAME_SELECTOR_JS` run on the owner
    `<iframe>` (`DOM.getFrameOwner`) in each ancestor's isolated world — which is the same
-   string `BrowserSession._frame_info` computes with Playwright for the same frame, so the
-   session joins the two by an exact key instead of guessing frames by URL.
+   string `DomObserver._frame_info` (dom/observer.py) computes with Playwright for the same
+   frame, so the observer joins the two by an exact key instead of guessing frames by URL.
 
 Everything is best-effort: a frame that detaches mid-way, a world destroyed by a navigation
 (retried once in a fresh world — see `_in_world`), a target that closed — each is logged and
@@ -76,7 +76,7 @@ class ClosedShadowObserver:
 
     def __init__(self, page: Any, cdp: Any, walker_js: str, frame_selector_js: str):
         self._page = page
-        self._cdp = cdp  # the page target's session (owned by BrowserSession)
+        self._cdp = cdp  # the page target's session (owned by BrowserSession, via factory.launch)
         self._walker_js = walker_js
         self._frame_selector_js = frame_selector_js
         # frameId → executionContextId of our isolated world. Worlds live in the renderer, not

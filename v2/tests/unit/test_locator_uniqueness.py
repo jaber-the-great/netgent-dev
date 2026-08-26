@@ -3,7 +3,7 @@
 import asyncio
 
 from netgent.agent.explore_agent.observation import _locator_candidates, _locator_for, unique_locator_for
-from netgent.browser.dom.snapshot import BBox, DomElement, SelectorCandidate
+from netgent.browser.dom import BBox, DomElement, SelectorCandidate
 
 
 def _el(**kw) -> DomElement:

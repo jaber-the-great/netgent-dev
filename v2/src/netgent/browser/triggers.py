@@ -1,0 +1,78 @@
+"""Trigger evaluation: does the live page satisfy a state's conditions? Polling loop + value reads."""
+
+import asyncio
+import re
+import time
+
+from netgent.browser.pw import Page
+from netgent.browser.resolution import LocatorResolver
+from netgent.core.errors import TriggerTimeoutError
+from netgent.schema.control import ParamSource
+from netgent.schema.triggers import SelectorHidden, SelectorVisible, TitleContains, Trigger, UrlMatches
+from netgent.schema.workflow import State
+
+POLL_INTERVAL_S = 0.1
+
+
+class TriggerEngine:
+    """Evaluates state conditions and page-extracted parameter sources against the live page."""
+
+    def __init__(self, page: Page, resolver: LocatorResolver):
+        self._page = page
+        self._resolver = resolver
+
+    async def holds(self, trigger: Trigger) -> bool:
+        match trigger:
+            case UrlMatches():
+                return re.search(trigger.pattern, self._page.url) is not None
+            case TitleContains():
+                return trigger.text in await self._page.title()
+            case SelectorVisible():
+                locator = self._resolver.frame_scope(trigger.frame_path).locator(trigger.selector)
+                return await locator.first.is_visible()
+            case SelectorHidden():
+                # Resolved-and-hidden only: a selector matching nothing must not hold, or a
+                # typo'd selector would "recognize" every state (research doc, R2).
+                locator = self._resolver.frame_scope(trigger.frame_path).locator(trigger.selector)
+                if await locator.count() == 0:
+                    return False
+                return not await locator.first.is_visible()
+        return False
+
+    async def extract_value(self, source: "ParamSource", timeout_ms: int = 5000) -> str | None:
+        """Read a dynamic parameter's value from the live page (returns None if unavailable)."""
+        try:
+            if source.kind == "url_group":
+                if not source.pattern:
+                    return None
+                match = re.search(source.pattern, self._page.url)
+                return match.group(source.group) if match else None
+            locator = self._resolver.frame_scope(source.frame_path).locator(source.selector).first
+            if source.kind == "text":
+                return (await locator.inner_text(timeout=timeout_ms)).strip()
+            if source.kind == "input_value":
+                return await locator.input_value(timeout=timeout_ms)
+            if source.kind == "attribute":
+                return await locator.get_attribute(source.attribute, timeout=timeout_ms)
+        except Exception:  # noqa: BLE001 — a missing value is None (a healable signal), not a crash
+            return None
+        return None
+
+    async def condition_report(self, state: State) -> list[tuple[str, bool]]:
+        """Evaluate each of a state's conditions once; return [(type, met), ...]."""
+        return [(t.type, await self.holds(t)) for t in state.conditions]
+
+    async def wait_for_state(self, state: State) -> float:
+        """Poll until every condition of `state` holds; return recognition latency in ms.
+
+        Raises TriggerTimeoutError naming the unmet conditions — never a silent timeout.
+        """
+        start = time.monotonic()
+        deadline = start + state.timeout_ms / 1000
+        while True:
+            unmet = [t.type for t in state.conditions if not await self.holds(t)]
+            if not unmet:
+                return (time.monotonic() - start) * 1000
+            if time.monotonic() >= deadline:
+                raise TriggerTimeoutError(state.id, unmet, state.timeout_ms)
+            await asyncio.sleep(POLL_INTERVAL_S)

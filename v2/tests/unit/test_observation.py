@@ -4,7 +4,7 @@ import pytest
 
 from netgent.agent.explore_agent.decision import AgentDecision
 from netgent.agent.explore_agent.observation import format_observation, to_action
-from netgent.browser.dom.snapshot import BBox, DomElement, DomSnapshot, SelectorCandidate, TextBlock
+from netgent.browser.dom import BBox, DomElement, DomSnapshot, SelectorCandidate, TextBlock
 from netgent.schema.actions import ClickAction
 
 
