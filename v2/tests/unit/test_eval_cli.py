@@ -12,12 +12,12 @@ runner = CliRunner()
 def test_eval_group_lists_subcommands():
     result = runner.invoke(cli_app, ["eval", "--help"])
     assert result.exit_code == 0
-    for sub in ("dataset", "observation", "stress", "matrix"):
+    for sub in ("dataset", "observation", "interact", "stress", "matrix"):
         assert sub in result.output
 
 
 def test_each_subcommand_has_help():
-    for sub in ("dataset", "observation", "stress", "matrix"):
+    for sub in ("dataset", "observation", "interact", "stress", "matrix"):
         result = runner.invoke(cli_app, ["eval", sub, "--help"])
         assert result.exit_code == 0, sub
         assert "Usage" in result.output

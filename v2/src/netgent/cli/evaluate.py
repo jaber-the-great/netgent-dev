@@ -71,6 +71,35 @@ def observation(
     typer.secho(f"\nwrote {path} (+ .json)", bold=True)
 
 
+@eval_app.command("interact")
+def interact(
+    sites: Annotated[
+        list[str] | None,
+        typer.Option("--sites", help="Site names (default: forms) or name=url"),
+    ] = None,
+    out: Annotated[Path | None, typer.Option(help="Output dir (default: evals/results/interact/).")] = None,
+) -> None:
+    """Interactability (no LLM): dispatch every observed element's canonical action and verify.
+
+    A deterministic action-layer regression check — fill/select/check/upload/click each
+    element through the real dispatcher and read the effect back. Submit buttons and
+    top-frame links are skipped by design.
+    """
+    from netgent.evals import interact as mod
+
+    try:
+        site_map = mod.resolve_sites(sites or ["forms"])
+        rows, md = asyncio.run(mod.run(site_map, progress=typer.echo))
+    except ValueError as exc:
+        typer.secho(str(exc), fg="red", err=True)
+        raise typer.Exit(2) from exc
+    path = mod.write(rows, md, out or RESULTS / "interact")
+    typer.echo("\n" + md)
+    typer.secho(f"\nwrote {path} (+ .json)", bold=True)
+    if any(r["fail"] for r in rows):
+        raise typer.Exit(1)
+
+
 @eval_app.command("stress")
 def stress(
     kind: Annotated[str, typer.Argument(help="sweep (21 forms) or challenge (the challenge game).")],

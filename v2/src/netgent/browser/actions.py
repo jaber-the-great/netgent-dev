@@ -100,7 +100,7 @@ class ActionDispatcher:
         """
         first = locator.first
         try:
-            before = await first.evaluate(self._READBACK_JS)
+            before = await first.evaluate(self._READBACK_JS, timeout=2000)
         except Exception:  # noqa: BLE001
             before = None
 
@@ -111,7 +111,10 @@ class ActionDispatcher:
             rung opened a datepicker popup and garbled the field). Escalate only when the
             field ended empty or provably unchanged."""
             try:
-                current = await first.evaluate(self._READBACK_JS)
+                # Bounded: a widget that re-renders its editor mid-write (Quill) can leave the
+                # chain momentarily unresolved and an unbounded evaluate waits forever —
+                # measured 30 s hang on the Rich Text form. Unreadable ⇒ trust the write.
+                current = await first.evaluate(self._READBACK_JS, timeout=2000)
             except Exception:  # noqa: BLE001 — unreadable: trust the write
                 return True, None
             if current is None or current == text:
@@ -147,6 +150,7 @@ class ActionDispatcher:
                  el.dispatchEvent(new Event('blur', {bubbles: true}));
                }""",
             text,
+            timeout=3000,
         )
         ok, current = await verify()
         if not ok:
