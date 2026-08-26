@@ -39,7 +39,10 @@
     const s = getComputedStyle(el);
     return s.visibility !== 'hidden' && s.display !== 'none' && s.opacity !== '0';
   };
-  const clean = (s) => (s || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  // Zero-width characters count as content but carry none — MUI renders an empty select's
+  // display as U+200B, which otherwise becomes a "name"/"value" of invisible text.
+  const clean = (s) => (s || '').replace(/[\u200b\u200c\u200d\ufeff]/g, '')
+    .replace(/\s+/g, ' ').trim().slice(0, 120);
   const labelledBy = (el) => {
     // ARIA name computation step 2B (aria-labelledby): MUI selects carry their whole name
     // here ("Country") while their text content is a zero-width space — measured.
@@ -176,7 +179,13 @@
             invalid: el.willValidate ? !el.validity.valid : false,
             options: el.tagName === 'SELECT'
               ? [...el.options].map(o => o.value).filter(v => v).slice(0, 25) : null,
-            value: (el.value !== undefined ? String(el.value).slice(0, 200) : null),
+            // Native value, or — for popup widgets (MUI/ARIA selects: div[role=button]
+            // aria-haspopup, [role=combobox]) — the text they DISPLAY, which is their
+            // selection. Without it a chosen option is invisible in the observation and the
+            // model reopens the menu forever (measured: MUI Country dropdown).
+            value: (el.value !== undefined ? String(el.value).slice(0, 200)
+              : ((el.getAttribute('aria-haspopup') === 'listbox' || el.getAttribute('role') === 'combobox')
+                 ? (clean(el.textContent).slice(0, 60) || null) : null)),
             framePath: [],  // set by the Python layer from Playwright's frame tree
             requiresClosedShadow: !!inClosed,
             bbox: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },

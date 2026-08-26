@@ -107,3 +107,32 @@ def test_aria_pressed_state_is_observed(serve):
         return before.checked, after.checked
 
     assert asyncio.run(_run(ARIA_TOGGLE, steps)(serve)) == (False, True)
+
+
+POPUP_SELECT = """<!doctype html><html><head><title>P</title></head><body>
+<span id="lbl">Country</span>
+<div id="dd" role="button" aria-haspopup="listbox" aria-labelledby="lbl" tabindex="0">&#8203;</div>
+<ul role="listbox" style="display:none"><li role="option">Canada</li></ul>
+<script>
+document.getElementById('dd').addEventListener('click', () => {
+  document.querySelector('[role=listbox]').style.display = 'block';
+});
+document.querySelector('[role=option]').addEventListener('click', function () {
+  document.getElementById('dd').textContent = this.textContent;  // MUI displays the selection
+  document.querySelector('[role=listbox]').style.display = 'none';
+});
+</script></body></html>"""
+
+
+def test_popup_widget_selection_is_visible_as_value(serve):
+    async def steps(s):
+        before = next(e for e in (await s.snapshot()).elements if e.role == "button" and e.tag == "div")
+        action = SelectAction(locator=[LocatorStep(fn="locator", args=["#dd"])], value="Canada", timeout_ms=3000)
+        await s.dispatch(action)
+        after = next(e for e in (await s.snapshot()).elements if e.role == "button" and e.tag == "div")
+        return before.name, before.value, after.value
+
+    name, val_before, val_after = asyncio.run(_run(POPUP_SELECT, steps)(serve))
+    assert name == "Country"  # aria-labelledby
+    assert val_before is None  # zero-width placeholder cleans to nothing
+    assert val_after == "Canada"  # the selection is now observable
