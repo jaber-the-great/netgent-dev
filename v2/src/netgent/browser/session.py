@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from netgent.browser.actions import ActionDispatcher
+from netgent.browser.dialogs import DialogLog
 from netgent.browser.dom.closed_shadow import ClosedShadowObserver
 from netgent.browser.dom.models import DomSnapshot
 from netgent.browser.dom.observer import DomObserver
@@ -59,7 +60,7 @@ class BrowserSession:
         closed_shadow: ClosedShadowObserver | None = None
         if PATCHED_BROWSER and self._cdp is not None:
             closed_shadow = ClosedShadowObserver(self._page, self._cdp, DOM_SNAPSHOT_JS, FRAME_SELECTOR_JS)
-        self._dom = DomObserver(self._page, closed_shadow)
+        self._dom = DomObserver(self._page, closed_shadow, DialogLog(self._page))
         self._resolver = LocatorResolver(self._page)
         self._actions = ActionDispatcher(self._page, self._resolver)
         self._triggers = TriggerEngine(self._page, self._resolver)
@@ -79,6 +80,12 @@ class BrowserSession:
 
     async def snapshot(self) -> DomSnapshot:
         return await self._dom.snapshot()
+
+    def dialogs_seen(self) -> list[str]:
+        """Every JS dialog (alert/confirm/prompt) accepted this session, in order. Cumulative —
+        unlike `snapshot().dialogs`, which drains. Used to verify a success alert after the
+        fact (browser/dialogs.py)."""
+        return self._dom.dialogs_seen() if self._dom is not None else []
 
     async def screenshot(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

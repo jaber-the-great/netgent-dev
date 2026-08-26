@@ -67,6 +67,10 @@ class DomSnapshot(BaseModel):
     # see the observation shrank, instead of it silently looking complete (browser-use #4778).
     frames_skipped: int = 0
     skipped_frames: list[str] = Field(default_factory=list)  # "<url>: <error>" per skipped frame
+    # JavaScript dialogs (alert/confirm/prompt) the page raised since the previous snapshot,
+    # auto-accepted and recorded as "<type>: <message>" (browser/dialogs.py). Often the only
+    # success/error feedback a plain form gives — invisible in the DOM.
+    dialogs: list[str] = Field(default_factory=list)
 
     def interactive(self) -> list[DomElement]:
         return self.elements
@@ -86,4 +90,5 @@ class DomSnapshot(BaseModel):
             viewport_height=0,
             frames_skipped=self.frames_skipped,
             skipped_frames=self.skipped_frames,
+            dialogs=self.dialogs,  # page-modal: belongs to whichever form is being worked
         )

@@ -61,12 +61,21 @@ async def _form_frame_paths(session: BrowserSession) -> list[list[str]]:
     return [fp for fp in order if (by_frame[tuple(fp)] & fields) and "button" in by_frame[tuple(fp)]]
 
 
-async def _form_succeeded(session: BrowserSession, frame_path: list[str], markers: tuple[str, ...]) -> bool:
+async def _form_succeeded(
+    session: BrowserSession, frame_path: list[str], markers: tuple[str, ...], dialog_mark: int = 0
+) -> bool:
+    """True if the form under `frame_path` shows success: a marker in its in-frame text, or a
+    success dialog raised since `dialog_mark` (this attempt). Dialogs are page-modal and one-
+    shot — the agent's own snapshots already drained them, so we read the cumulative history
+    from `dialog_mark` onward, which scopes the alert to the form being worked."""
+    new_dialogs = session.dialogs_seen()[dialog_mark:]
+    if any(m in d.lower() for d in new_dialogs for m in markers):
+        return True
     snapshot = await session.snapshot()
-    for text in snapshot.texts:
-        if text.frame_path == frame_path and any(m in text.text.lower() for m in markers):
-            return True
-    return False
+    return any(
+        text.frame_path == frame_path and any(m in text.text.lower() for m in markers)
+        for text in snapshot.texts
+    )
 
 
 async def sweep_forms(
@@ -94,8 +103,9 @@ async def sweep_forms(
         for attempt in range(retries + 1):
             budget = max_steps_per_form + attempt * (max_steps_per_form // 2)  # more room each retry
             agent.note(f"--- now working form {i + 1} of {len(frame_paths)} (attempt {attempt + 1}) ---")
+            dialog_mark = len(session.dialogs_seen())  # only THIS attempt's dialogs count
             traj = await agent.run(session, FORM_TASK, frame_filter=frame_path, max_steps=budget)
-            verified = await _form_succeeded(session, frame_path, markers)
+            verified = await _form_succeeded(session, frame_path, markers, dialog_mark)
             if verified:
                 break
             logger.info("sweep: form %d attempt %d not verified, retrying", i + 1, attempt + 1)

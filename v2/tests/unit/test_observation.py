@@ -179,3 +179,13 @@ def test_iframe_headers_group_elements_by_frame():
     assert "|IFRAME" not in format_observation(single)
     scoped = DomSnapshot(url="u", title="t", elements=[a1, a2], viewport_height=0)
     assert "|IFRAME" not in format_observation(scoped)
+
+
+def test_dialogs_render_once_and_survive_scoping():
+    """A page's alert() is the only feedback some forms give; it must reach the observation
+    (so the stuck detector sees a change) and survive scoped_to (sweeps work one frame)."""
+    snap = DomSnapshot(url="u", title="t", elements=[], texts=[], dialogs=["alert: Form submitted successfully!"])
+    obs = format_observation(snap)
+    assert "DIALOGS" in obs and "alert: Form submitted successfully!" in obs
+    assert snap.scoped_to(["iframe#f"]).dialogs == snap.dialogs
+    assert "DIALOGS" not in format_observation(DomSnapshot(url="u", title="t"))

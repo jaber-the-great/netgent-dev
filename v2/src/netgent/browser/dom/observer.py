@@ -3,6 +3,7 @@
 Compile-time only — the observation feeds the explore agent; replay never calls it.
 """
 
+from netgent.browser.dialogs import DialogLog
 from netgent.browser.dom.closed_shadow import ClosedShadowObserver
 from netgent.browser.dom.models import DomElement, DomSnapshot, TextBlock
 from netgent.browser.dom.scripts import DOM_SNAPSHOT_JS, FRAME_CONTENT_ORIGIN_JS, FRAME_SELECTOR_JS
@@ -16,9 +17,15 @@ class DomObserver:
     """Snapshots interactive elements + text across all frames, joining closed shadow roots
     observed over CDP (`closed_shadow` is None under plain Playwright or without a CDP session)."""
 
-    def __init__(self, page: Page, closed_shadow: ClosedShadowObserver | None = None):
+    def __init__(
+        self, page: Page, closed_shadow: ClosedShadowObserver | None = None, dialogs: DialogLog | None = None
+    ):
         self._page = page
         self._closed_shadow = closed_shadow
+        self._dialogs = dialogs
+
+    def dialogs_seen(self) -> list[str]:
+        return self._dialogs.history if self._dialogs is not None else []
 
     async def _frame_info(
         self, frame: Frame, cache: dict[Frame, tuple[list[str], float, float]] | None = None
@@ -100,4 +107,5 @@ class DomObserver:
             viewport_height=int(viewport_height),
             frames_skipped=len(skipped),
             skipped_frames=skipped,
+            dialogs=self._dialogs.drain() if self._dialogs is not None else [],
         )

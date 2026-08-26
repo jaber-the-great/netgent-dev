@@ -92,6 +92,12 @@ def format_observation(snapshot: DomSnapshot, limit: int = 60, text_limit: int =
         lines.append(f"  [{i}] {kind}{name}{val}{state}")
     if below:
         lines.append(f"(↓ {below} more elements below — scroll down to reveal and reach them)")
+    if snapshot.dialogs:
+        # A dialog is the page's own message (often the success/error a plain form shows via
+        # alert()). Shown once, at the step it happened; it was accepted so the page moved on.
+        lines.append("DIALOGS (the page showed these; auto-accepted):")
+        for d in snapshot.dialogs:
+            lines.append(f"  !{d[:300]}")
     if snapshot.frames_skipped:
         lines.append(f"(⚠ {snapshot.frames_skipped} frame(s) could not be observed this step: "
                      + "; ".join(snapshot.skipped_frames[:3]) + ")")
