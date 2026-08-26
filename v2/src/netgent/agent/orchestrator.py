@@ -81,8 +81,14 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
     async def explore(state: OrchestrationState) -> Command[Literal["generate", "__end__"]]:
         emit("explore", f"exploring: {req.task}")
         agent = BrowserAgent(llm, max_steps=req.max_steps, run_dir=req.trajectory_dir)
+        # The sample param values are part of the task the explorer sees: it must USE them
+        # (type them, pick them) so the compiler can find and abstract them to ${name}.
+        task = req.task
+        if req.params:
+            values = "; ".join(f"{k} = {v!r}" for k, v in req.params.items())
+            task = f"{req.task}\n\nParameters — use these exact values where the task refers to them: {values}"
         async with BrowserSession(headless=req.headless) as session:
-            traj = await agent.run(session, req.task, req.url)
+            traj = await agent.run(session, task, req.url)
         for s in traj.steps:
             emit("explore", f"{s.n}. {s.kind} — {s.reasoning}" + (f" [FAILED: {s.error}]" if s.error else ""))
         if not traj.success:

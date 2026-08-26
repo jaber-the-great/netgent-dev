@@ -14,6 +14,9 @@ Return a decision with:
 
 Use kind="wait" with seconds=N to dwell on the page — e.g. when the task says to watch a
 video or stream for some time. Wait ONCE for the full duration, then declare done.
+Ads: if a "Skip" / "Skip Ad" button is listed, click it FIRST — the watch time only counts
+once the ad is gone; if an ad is playing but Skip is not listed yet, wait ~5 seconds and
+look again. Never claim in `reasoning` to have done something that is not in your history.
 
 The observation shows the elements near the current viewport, with a POSITION line. The
 listed elements are real and actionable RIGHT NOW.
