@@ -34,6 +34,7 @@ class AgentState(TypedDict, total=False):
     observation: str
     prev_observation: str | None
     no_progress: int
+    texts_seen: list[str]
     decision: Any  # AgentDecision for the current step
     steps: Annotated[list[AgentStep], operator.add]  # the trajectory, appended per step
     success: bool
@@ -74,6 +75,12 @@ def build_agent_graph(
             reason = f"stuck: {MAX_REPEAT} steps with no change on screen"
             stop = AgentStep(n=n, kind="done", reasoning=reason, url=snapshot.url, error=reason)
             return Command(update={"n": n, "steps": [stop], "stopped_reason": reason}, goto=END)
+        # Accumulate every text observed during the run: success banners are often transient
+        # (hidden again after ~3 s), so post-run verification must be able to check what was
+        # SEEN, not only what is still on screen (sweep._form_succeeded).
+        seen = list(state.get("texts_seen") or [])
+        known = set(seen)
+        seen += [t.text for t in snapshot.texts if t.text not in known][:50]
         return Command(
             update={
                 "n": n,
@@ -81,6 +88,7 @@ def build_agent_graph(
                 "observation": observation,
                 "prev_observation": observation,
                 "no_progress": no_progress,
+                "texts_seen": seen[-400:],
             },
             goto="decide",
         )

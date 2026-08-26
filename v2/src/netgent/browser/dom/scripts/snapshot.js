@@ -112,7 +112,13 @@
         // evaluates this walk inside EACH frame's own context (works cross-origin via CDP).
         if (el.tagName === 'IFRAME') continue;
         if (isInteractive(el)) {
-          if (!visible(el)) continue;
+          // A hidden file input is still ACTIONABLE: set_input_files works on it, and custom
+          // upload widgets (Bootstrap custom-file opacity:0, Material UI display:none behind a
+          // styled label) hide the real input on purpose — measured on browser-use's stress
+          // forms, where dropping them left the agent nothing valid to upload to.
+          const hiddenFileInput = el.tagName === 'INPUT'
+            && (el.getAttribute('type') || '').toLowerCase() === 'file' && !visible(el);
+          if (!visible(el) && !hiddenFileInput) continue;
           const r = el.getBoundingClientRect();
           results.push({
             tag: el.tagName.toLowerCase(),

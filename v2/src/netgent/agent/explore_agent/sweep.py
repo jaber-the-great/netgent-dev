@@ -62,14 +62,23 @@ async def _form_frame_paths(session: BrowserSession) -> list[list[str]]:
 
 
 async def _form_succeeded(
-    session: BrowserSession, frame_path: list[str], markers: tuple[str, ...], dialog_mark: int = 0
+    session: BrowserSession,
+    frame_path: list[str],
+    markers: tuple[str, ...],
+    dialog_mark: int = 0,
+    texts_seen: list[str] | None = None,
 ) -> bool:
-    """True if the form under `frame_path` shows success: a marker in its in-frame text, or a
-    success dialog raised since `dialog_mark` (this attempt). Dialogs are page-modal and one-
-    shot — the agent's own snapshots already drained them, so we read the cumulative history
-    from `dialog_mark` onward, which scopes the alert to the form being worked."""
+    """True if the form under `frame_path` showed success, in any of three page-observed ways:
+    a success dialog raised since `dialog_mark` (this attempt — dialogs are one-shot and the
+    agent's own snapshots already drained them), a marker in a text the agent's observations
+    SAW during the run (`texts_seen` — success banners are often transient, hidden again a few
+    seconds later, so a post-run snapshot alone misses them), or a marker still visible in the
+    frame's text right now. All three are the walker's own reads of the page, never the
+    agent's self-report."""
     new_dialogs = session.dialogs_seen()[dialog_mark:]
     if any(m in d.lower() for d in new_dialogs for m in markers):
+        return True
+    if any(m in t.lower() for t in (texts_seen or ()) for m in markers):
         return True
     snapshot = await session.snapshot()
     return any(
@@ -105,7 +114,7 @@ async def sweep_forms(
             agent.note(f"--- now working form {i + 1} of {len(frame_paths)} (attempt {attempt + 1}) ---")
             dialog_mark = len(session.dialogs_seen())  # only THIS attempt's dialogs count
             traj = await agent.run(session, FORM_TASK, frame_filter=frame_path, max_steps=budget)
-            verified = await _form_succeeded(session, frame_path, markers, dialog_mark)
+            verified = await _form_succeeded(session, frame_path, markers, dialog_mark, traj.texts_seen)
             if verified:
                 break
             logger.info("sweep: form %d attempt %d not verified, retrying", i + 1, attempt + 1)

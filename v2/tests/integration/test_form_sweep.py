@@ -61,3 +61,48 @@ def test_sweep_completes_and_verifies_each_form(tmp_path):
     assert result.total == 2
     assert result.submitted == 2, [(f.form, f.submitted) for f in result.forms]
     assert all(f.submitted for f in result.forms)
+
+
+TRANSIENT_FORM = """<!doctype html><html><body>
+<input id="e" placeholder="Email"><button id="go" type="button">Submit</button>
+<div id="ok" role="status" style="display:none">Form submitted successfully!</div>
+<script>
+document.getElementById('go').addEventListener('click', () => {
+  const ok = document.getElementById('ok');
+  ok.style.display = 'block';
+  setTimeout(() => { ok.style.display = 'none'; }, 700);  // transient: gone before post-run verify
+});
+</script></body></html>"""
+
+
+def test_transient_success_banner_still_verifies(serve):
+    """Formik-class banners hide themselves after a few seconds; the sweep verifies against
+    the texts the agent's own observations SAW (traj.texts_seen), not only the final page."""
+    import asyncio
+
+    from netgent.agent.explore_agent.decision import AgentDecision
+    from netgent.agent.explore_agent.sweep import sweep_forms
+
+    parent = serve({"/": TRANSIENT_FORM})
+    top = serve({"/": ('<!doctype html><html><body>'
+                       f'<iframe id="tf" src="{parent.url()}" width="400" height="150"></iframe></body></html>')})
+
+    class ScriptedLLM:
+        def __init__(self):
+            self._steps = iter([
+                AgentDecision(reasoning="fill", kind="fill", index=0, text="a@b.co"),
+                AgentDecision(reasoning="submit", kind="click", index=1),
+                AgentDecision(reasoning="banner seen", kind="done", success=True),
+            ])
+
+        async def decide(self, *a, **k):
+            return next(self._steps)
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(top.url(), wait_until="networkidle")
+            return await sweep_forms(s, ScriptedLLM(), max_steps_per_form=6, retries=0)
+
+    result = asyncio.run(_run())
+    assert result.total == 1
+    assert result.submitted == 1, result.forms[0]  # verified from texts_seen, not the (now hidden) banner

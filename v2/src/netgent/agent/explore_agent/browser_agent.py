@@ -45,9 +45,14 @@ class AgentStep(BaseModel):
 
 
 class AgentTrajectory(BaseModel):
+    # Every distinct text observed during the run (in observation scope). Success banners
+    # are often transient — hidden a few seconds after appearing — so verification reads
+    # what was seen, not only the final page.
+
     task: str
     success: bool = False
     stopped_reason: str = ""
+    texts_seen: list[str] = []
     steps: list[AgentStep] = Field(default_factory=list)
 
 
@@ -114,6 +119,7 @@ class BrowserAgent:
         traj.steps.extend(final.get("steps", []))
         traj.success = bool(final.get("success", False))
         traj.stopped_reason = final.get("stopped_reason", "")
+        traj.texts_seen = final.get("texts_seen") or []
 
         if self._run_dir is not None:
             self._run_dir.mkdir(parents=True, exist_ok=True)
