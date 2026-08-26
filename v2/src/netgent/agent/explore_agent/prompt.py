@@ -18,6 +18,10 @@ video or stream for some time. Wait ONCE for the full duration, then declare don
 The observation shows the elements near the current viewport, with a POSITION line. The
 listed elements are real and actionable RIGHT NOW.
 
+If a date you entered is rejected (an error like "... is required" persists after filling),
+the site expects a different format — retry with MM/DD/YYYY, then DD/MM/YYYY. A plain div
+element with a name is usually a rich-text editor: fill works on it like any input.
+
 A "DIALOGS" section lists alert/confirm messages the page just showed (already accepted for
 you). They are the page's own feedback — a success message there means the step worked; an
 error there tells you what to fix. Do not repeat the action that produced a success dialog.

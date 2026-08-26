@@ -27,7 +27,9 @@
     const role = el.getAttribute('role');
     if (role && INTERACTIVE_ROLES.has(role)) return true;
     if (el.hasAttribute('onclick')) return true;
-    if (el.isContentEditable) return true;
+    // Only the ROOT of a contenteditable region: its children (<p>, <br>, spans) are all
+    // isContentEditable too and listing them buries the one actionable editor in noise.
+    if (el.isContentEditable) return !(el.parentElement && el.parentElement.isContentEditable);
     const ti = el.getAttribute && el.getAttribute('tabindex');
     return ti !== null && ti !== '-1';
   };
@@ -42,6 +44,11 @@
     el.getAttribute('aria-label') ||
     (el.labels && el.labels.length ? el.labels[0].childNodes[0]?.textContent : '') ||
     el.getAttribute('placeholder') ||
+    // Rich-text editors (Quill: ql-editor, and aria-placeholder per ARIA 1.2) carry their
+    // field name here — without it a contenteditable email field is an anonymous <div>
+    // the model cannot find (measured: browser-use Rich Text form, agent scroll-thrashed).
+    el.getAttribute('data-placeholder') ||
+    el.getAttribute('aria-placeholder') ||
     el.getAttribute('name') ||
     (el.tagName === 'SELECT' ? '' : el.innerText) ||
     el.getAttribute('value') || ''

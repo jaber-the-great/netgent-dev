@@ -57,6 +57,30 @@ class ActionDispatcher:
             # context — this fires framework listeners a synthetic input click misses.
             await first.evaluate("el => (el.labels && el.labels[0] ? el.labels[0] : el).click()")
 
+    async def _upload(self, locator: Locator, action: UploadFileAction) -> None:
+        """set_input_files, with a file-chooser fallback for styled upload widgets.
+
+        Custom widgets can leave the real input un-settable, or the captured locator lands on
+        the styled label/button ("Node is not an HTMLInputElement"). Fall back to clicking the
+        control with a chooser interceptor armed and feeding the intercepted chooser —
+        Playwright suppresses the native dialog; Skyvern arms page.on("filechooser") around
+        the click the same way (webeye handler.py).
+        """
+        first = locator.first
+        try:
+            await first.set_input_files(action.paths, timeout=min(action.timeout_ms, 3000))
+            return
+        except Exception as exc:  # noqa: BLE001 — try the chooser route before giving up
+            reason = str(exc).splitlines()[0]
+        try:
+            async with self._page.expect_file_chooser(timeout=action.timeout_ms) as chooser:
+                # The label the input belongs to (or the element itself) is what opens the
+                # chooser on widgets that hide the real input.
+                await first.evaluate("el => (el.labels && el.labels[0] ? el.labels[0] : el).click()")
+            await (await chooser.value).set_files(action.paths)
+        except Exception as exc:
+            raise ActionDispatchError(f"upload failed directly ({reason}) and via file chooser: {exc}") from exc
+
     async def _scroll(self, action: ScrollAction) -> None:
         """Wheel-scroll whatever is under the cursor: the top frame by default, or the frame /
         inner scroller holding `action.locator` (mouse moved to its box centre first — the
@@ -108,7 +132,7 @@ class ActionDispatcher:
                 case ScrollAction():
                     await self._scroll(action)
                 case UploadFileAction():
-                    await resolve(action.locator).set_input_files(action.paths, timeout=action.timeout_ms)
+                    await self._upload(resolve(action.locator), action)
                 case GoBackAction():
                     await page.go_back(timeout=action.timeout_ms)
                 case WaitAction():
