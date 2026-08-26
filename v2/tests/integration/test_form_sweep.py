@@ -8,8 +8,8 @@ import asyncio
 import html
 
 from netgent.agent import AgentDecision, FakeLLM
-from netgent.agent.explorer.sweep import sweep_forms
 from netgent.browser.session import BrowserSession
+from netgent.evals.sweep import sweep_forms
 
 # Each form lives in its OWN iframe — matching forms-comparison.html, which the sweep
 # enumerates frame by frame. srcdoc iframes are same-origin (inherit the parent).
@@ -81,7 +81,7 @@ def test_transient_success_banner_still_verifies(serve):
     import asyncio
 
     from netgent.agent.explorer.decision import AgentDecision
-    from netgent.agent.explorer.sweep import sweep_forms
+    from netgent.evals.sweep import sweep_forms
 
     parent = serve({"/": TRANSIENT_FORM})
     top = serve({"/": ('<!doctype html><html><body>'

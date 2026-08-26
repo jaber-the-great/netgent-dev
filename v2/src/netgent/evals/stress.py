@@ -77,7 +77,7 @@ async def run_challenge(backend: str, max_steps: int, out_dir: Path, model: str 
 
 async def run_sweep(backend: str, max_steps: int, out_dir: Path, model: str = DEFAULT_MODEL) -> dict:
     from netgent.agent import make_llm
-    from netgent.agent.explorer.sweep import sweep_forms
+    from netgent.evals.sweep import sweep_forms
 
     del out_dir  # the sweep keeps its own per-form results inside the result
     llm = make_llm(model)
