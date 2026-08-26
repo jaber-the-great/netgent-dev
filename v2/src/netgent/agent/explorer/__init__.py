@@ -6,7 +6,7 @@ StateGraph (`graph.py`). Also hosts the form sweep harness. Its output — traje
 is the input to the workflow generator agent.
 """
 
-from netgent.agent.explore_agent.browser_agent import AgentStep, AgentTrajectory, BrowserAgent
-from netgent.agent.explore_agent.decision import AgentDecision
+from netgent.agent.explorer.browser_agent import AgentStep, AgentTrajectory, BrowserAgent
+from netgent.agent.explorer.decision import AgentDecision
 
 __all__ = ["AgentDecision", "AgentStep", "AgentTrajectory", "BrowserAgent"]

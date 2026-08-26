@@ -590,7 +590,7 @@ I ran our own `BrowserSession.snapshot()`, `_locator_for` and `_resolve` against
 > - **R3 — don't swallow per-frame failures; type-check `_resolve`** *(done)*. `snapshot()` logs and
 >   counts skipped frames (`DomSnapshot.frames_skipped`); `_resolve` and a schema `AfterValidator`
 >   reject chains that don't end on a `Locator`. Closes gaps #7 and #8. (fixture: self-removing iframe)
-> - **R4 — `Locator.normalize()` cross-check/fallback** *(done)*. `agent/explore_agent/normalized.py`
+> - **R4 — `Locator.normalize()` cross-check/fallback** *(done)*. `agent/explorer/normalized.py`
 >   parses the `internal:` selector back into our whitelist (total, else `UnmappableSelector`);
 >   `capture_locator` prefers Playwright's frame selectors when both agree. (fixture: the hostile page)
 > - **R5 — frame-aware scroll** *(done)*. `ScrollAction.locator` moves the cursor over the target
@@ -622,7 +622,7 @@ iframe. Worse, `SelectorHidden` returns **True** for anything not in the top fra
 to anchor on.
 
 **2. The `#id`-first rule is unsafe under shadow DOM.** `_locator_for` prefers a bare `#id`
-(`agent/explore_agent/observation.py:102-111`) with the comment that it "pierces open shadow DOM" —
+(`agent/explorer/observation.py:102-111`) with the comment that it "pierces open shadow DOM" —
 true, and that is the problem: an id inside a web component is *not* document-unique. Two instances of
 the same component both expose `#email`. Measured: `locator("#email")` resolved to 2 elements →
 `Locator.fill: strict mode violation`. `_click` survives on `.first` (`session.py:175`) but `fill`,

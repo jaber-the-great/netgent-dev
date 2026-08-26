@@ -546,9 +546,9 @@ Status is as of the two available transcripts plus the design doc; "code" cites 
 | 16 | Transition selection by NL-description matching against outgoing edges | Manni | M3 [24:51] | agreed | `description` fields exist |
 | 17 | Zero LLM at replay; the LLM only fills parameters | Manni (stated), doc thesis | M3 [30:11] | **agreed** | enforced — `tests/unit/test_import_boundaries.py`; `executor/`, `browser/` may not import langchain |
 | 18 | `{{ }}` parameter grammar over an input/output schema | Eugene | doc | agreed | implemented with different syntax — `Param` + `${name}`, plus dynamic `ParamSource` and a regex `guard` |
-| 19 | Four-agent pipeline (Planner / Discovery / Generator / Validation) | Eugene | doc; `image1` | partially built | `agent/explore_agent`, `workflow_generator_agent`, `validation_agent`, `orchestrator.py` — **no Planner package** |
+| 19 | Four-agent pipeline (Planner / Discovery / Generator / Validation) | Eugene | doc; `image1` | partially built | `agent/explorer`, `generator`, `validator`, `orchestrator.py` — **no Planner package** |
 | 20 | Generator falls back to the Planner on gaps; Validation loops back to the Generator | Eugene | doc; `image1` | open | not implemented |
-| 21 | Validation Agent generates test cases to prove "dynamism" | Eugene | doc | open | `validation_agent` today is a zero-LLM replay check, not a test-case generator |
+| 21 | Validation Agent generates test cases to prove "dynamism" | Eugene | doc | open | `validator` today is a zero-LLM replay check, not a test-case generator |
 | 22 | Discovery captures action logs, HTML, HAR, action summaries | Eugene | doc | agreed | partial — `--trajectory DIR` keeps screenshots + records (`schema/records.py`) |
 | 23 | Declarative YAML config; schema-constrained LLM output | Eugene | doc | agreed | YAML and JSON both parse to the same pydantic tree (`workflow.py` docstring) |
 | 24 | Breakage taxonomy: UI drift / flow drift / jitter | Eugene | doc | taxonomy agreed; response mapping only stated verbally (row 12) | not in code |

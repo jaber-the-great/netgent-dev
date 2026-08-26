@@ -5,9 +5,9 @@
                └─ failed ─┴───────────────► END
 
 One LangGraph StateGraph, one node per agent:
-- explore  (explore_agent)            LLM drives the browser; output: a trajectory
-- generate (workflow_generator_agent) pure code; output: the workflow (NFA) artifact
-- validate (validation_agent)         zero-LLM replay; output: a per-edge report
+- explore  (explorer)            LLM drives the browser; output: a trajectory
+- generate (generator) pure code; output: the workflow (NFA) artifact
+- validate (validator)         zero-LLM replay; output: a per-edge report
 
 `orchestrate()` is what `netgent generate` calls. Each stage opens its own fresh browser
 session, so exploration state can never leak into validation. The agents stay independent
@@ -20,10 +20,10 @@ from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
-from netgent.agent.explore_agent.browser_agent import AgentTrajectory, BrowserAgent
+from netgent.agent.explorer.browser_agent import AgentTrajectory, BrowserAgent
+from netgent.agent.generator.compiler import compile_trajectory
 from netgent.agent.llm import LLM
-from netgent.agent.validation_agent.validate import ValidationReport, validate_workflow
-from netgent.agent.workflow_generator_agent.compiler import compile_trajectory
+from netgent.agent.validator.validate import ValidationReport, validate_workflow
 from netgent.browser.session import BrowserSession
 from netgent.core.logger import get_logger
 from netgent.schema.workflow import Workflow, dump_workflow

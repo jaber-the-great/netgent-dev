@@ -6,6 +6,6 @@ URLs become state conditions, and caller-named sample values become ${name} para
 joins this package when merged.)
 """
 
-from netgent.agent.workflow_generator_agent.compiler import compile_trajectory
+from netgent.agent.generator.compiler import compile_trajectory
 
 __all__ = ["compile_trajectory"]

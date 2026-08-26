@@ -8,7 +8,7 @@ import asyncio
 import html
 
 from netgent.agent import AgentDecision, FakeLLM
-from netgent.agent.explore_agent.sweep import sweep_forms
+from netgent.agent.explorer.sweep import sweep_forms
 from netgent.browser.session import BrowserSession
 
 # Each form lives in its OWN iframe — matching forms-comparison.html, which the sweep
@@ -80,8 +80,8 @@ def test_transient_success_banner_still_verifies(serve):
     the texts the agent's own observations SAW (traj.texts_seen), not only the final page."""
     import asyncio
 
-    from netgent.agent.explore_agent.decision import AgentDecision
-    from netgent.agent.explore_agent.sweep import sweep_forms
+    from netgent.agent.explorer.decision import AgentDecision
+    from netgent.agent.explorer.sweep import sweep_forms
 
     parent = serve({"/": TRANSIENT_FORM})
     top = serve({"/": ('<!doctype html><html><body>'

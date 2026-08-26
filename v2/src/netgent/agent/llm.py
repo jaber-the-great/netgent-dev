@@ -8,7 +8,7 @@ means swapping frameworks later is a one-file change, not a sprawl.
 
 from typing import Protocol
 
-from netgent.agent.explore_agent.decision import AgentDecision
+from netgent.agent.explorer.decision import AgentDecision
 
 # litellm-style "provider/model" → langchain model_provider id.
 _PROVIDER_ALIAS = {

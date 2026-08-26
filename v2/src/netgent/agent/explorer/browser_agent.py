@@ -99,7 +99,7 @@ class BrowserAgent:
         frame_filter: list[str] | None = None,
         max_steps: int | None = None,
     ) -> AgentTrajectory:
-        from netgent.agent.explore_agent.graph import build_agent_graph  # lazy: langgraph is in the `generate` extra
+        from netgent.agent.explorer.graph import build_agent_graph  # lazy: langgraph is in the `generate` extra
 
         traj = AgentTrajectory(task=task)
         if url:

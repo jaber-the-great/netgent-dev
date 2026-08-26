@@ -12,7 +12,7 @@ become ${name} parameters, so the compiled workflow replays for other values:
 import re
 from urllib.parse import quote_plus
 
-from netgent.agent.explore_agent.browser_agent import AgentTrajectory
+from netgent.agent.explorer.browser_agent import AgentTrajectory
 from netgent.schema.actions import Action, ClickAction, FillAction, GotoAction, HoverAction, SelectAction
 from netgent.schema.workflow import Param, State, Transition, Workflow
 

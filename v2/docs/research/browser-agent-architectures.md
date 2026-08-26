@@ -36,9 +36,9 @@ don't — **role decomposition and inter-role protocol**, rather than artifact r
 
 | Package | Role | LLM? | Input | Output |
 |---|---|---|---|---|
-| `explore_agent/` | drive the browser, one atomic action per step | **yes** | task string, `DomSnapshot` → `format_observation` text, last 10 history lines | `AgentTrajectory` (steps carrying a resolved `Action`, `dialogs`, `error`, screenshot path) |
-| `workflow_generator_agent/` | trajectory → NFA | no (pure) | `AgentTrajectory` + `params` | `Workflow` (states with `conditions`, transitions with one `Action`, `control_sequence`) |
-| `validation_agent/` | prove it replays | no (zero-LLM) | `Workflow` + param sets | `ValidationReport` (per-replay `edges_ok`, `failed_edge`, `error`) |
+| `explorer/` | drive the browser, one atomic action per step | **yes** | task string, `DomSnapshot` → `format_observation` text, last 10 history lines | `AgentTrajectory` (steps carrying a resolved `Action`, `dialogs`, `error`, screenshot path) |
+| `generator/` | trajectory → NFA | no (pure) | `AgentTrajectory` + `params` | `Workflow` (states with `conditions`, transitions with one `Action`, `control_sequence`) |
+| `validator/` | prove it replays | no (zero-LLM) | `Workflow` + param sets | `ValidationReport` (per-replay `edges_ok`, `failed_edge`, `error`) |
 
 The seams are already typed pydantic models, which is the thing most surveyed systems do *not* have
 (browser-use hands prose between steps; Magentic-One hands chat messages).
@@ -46,7 +46,7 @@ The seams are already typed pydantic models, which is the thing most surveyed sy
 Facts about the current implementation that constrain any proposal:
 
 - **The explore loop is itself a `StateGraph`** — `observe → decide → act → observe`, `Command`-routed
-  (`explore_agent/graph.py:150-157`). Stuck detection is observation-equality with `MAX_REPEAT = 3`
+  (`explorer/graph.py:150-157`). Stuck detection is observation-equality with `MAX_REPEAT = 3`
   (`graph.py:74-77`); an invalid LLM response costs a step and re-observes rather than crashing
   (`graph.py:100-103`).
 - **One LLM call site.** `LLM.decide(system, task, observation, history)` (`agent/llm.py:22-23`). Any
@@ -64,7 +64,7 @@ Facts about the current implementation that constrain any proposal:
   agent's self-report." This is the single most important existing principle and §5 preserves it.
 - **The compiler's conditions are already action-derived, not model-derived.** `_element_condition`
   mints a `selector_visible` guard from the *next* step's in-iframe target
-  (`workflow_generator_agent/compiler.py:32-63`), and a `dialog_matches` guard from the step's own
+  (`generator/compiler.py:32-63`), and a `dialog_matches` guard from the step's own
   dialog (`compiler.py:96-102`). No LLM is asked "what makes this state recognizable".
 - **The trigger vocabulary on this branch is** `url_matches`, `title_contains`, `selector_visible`,
   `selector_hidden`, `dialog_matches` (`schema/triggers.py`). The discovery branch adds
@@ -381,7 +381,7 @@ Four mechanisms, in increasing order of how well they fit NetGent:
 
 1. **Execution as the admission test** (SkillWeaver, ASI, Go-Browse). The artifact is not in the
    library until it has run. NetGent already does the strongest version of this: replay through the
-   *production* `Executor` with zero LLM calls (`validation_agent/validate.py:29-56`).
+   *production* `Executor` with zero LLM calls (`validator/validate.py:29-56`).
 2. **Deterministic merge over multiple witnesses** (ReUseIt's variation runs; the discovery branch's
    LCS alignment). ReUseIt merges with one LLM call; NetGent's `synthesis.py` on `eugene/v2-discovery`
    merges with pure code — strictly better, and the reason its output is unit-testable.
@@ -650,5 +650,5 @@ WebJudge), 2503.13657 (MAST), 2510.14308 (ReUseIt, via [`reuseit.md`](reuseit.md
   distillation and change observation. Do not cite it as evidence that a planner/navigator split works.
 - **`eugene/v2-discovery`** is cited from `git show eugene/v2-discovery:v2/...` in this working tree,
   not from a remote SHA; the branch is unmerged and its file layout (`agent/synthesis.py`, flat
-  package) predates the `explore_agent/` / `workflow_generator_agent/` / `validation_agent/` split on
+  package) predates the `explorer/` / `generator/` / `validator/` split on
   `eugene/v2-scaffold`.

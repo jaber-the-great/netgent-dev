@@ -739,7 +739,7 @@ ReUseIt never reports.
 | `simular-ai/Agent-S` | `bffdb59` (2026-07-31) | `gui_agents/s2/core/knowledge.py` |
 | `healenium/healenium-web` | `c1e4f83` (2026-03-03) | `SelfHealingEngine.java`, `service/HealingService.java`, README defaults |
 | `SALT-NLP/PopupAttack` | (cloned 2026-08-21) | `VisualWebArena/browser_env/attack_utils.py`, `attack_config/*.json`, README |
-| `netgent-dev` v2 (this repo) | `eugene/v2-scaffold` | `schema/{workflow,control,triggers,actions}.py`, `agent/workflow_generator_agent/compiler.py`, `agent/validation_agent/validate.py`, `browser/session.py` |
+| `netgent-dev` v2 (this repo) | `eugene/v2-scaffold` | `schema/{workflow,control,triggers,actions}.py`, `agent/generator/compiler.py`, `agent/validator/validate.py`, `browser/session.py` |
 
 **Confirmed from official docs, not source:** Playwright `retries` / `testInfo.retry` /
 `test.describe.configure({retries})` / passed-flaky-failed classification (`playwright.dev/docs/test-retries`);

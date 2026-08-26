@@ -2,9 +2,9 @@
 
 import asyncio
 
-from netgent.agent.explore_agent.browser_agent import AgentStep, AgentTrajectory
-from netgent.agent.validation_agent import validate_workflow
-from netgent.agent.workflow_generator_agent.compiler import compile_trajectory
+from netgent.agent.explorer.browser_agent import AgentStep, AgentTrajectory
+from netgent.agent.generator.compiler import compile_trajectory
+from netgent.agent.validator import validate_workflow
 
 FIXTURE = """<!doctype html><html><head><title>Hello</title></head><body>
 <input id="name" placeholder="name">
@@ -13,7 +13,7 @@ FIXTURE = """<!doctype html><html><head><title>Hello</title></head><body>
 </body></html>"""
 
 
-def test_validation_agent_replays_compiled_workflow(tmp_path):
+def test_validator_replays_compiled_workflow(tmp_path):
     page = tmp_path / "p.html"
     page.write_text(FIXTURE)
     traj = AgentTrajectory(
@@ -36,7 +36,7 @@ def test_validation_agent_replays_compiled_workflow(tmp_path):
     assert [r.edges_ok for r in report.replays] == [3, 3]
 
 
-def test_validation_agent_reports_a_failing_edge(tmp_path):
+def test_validator_reports_a_failing_edge(tmp_path):
     page = tmp_path / "p.html"
     page.write_text(FIXTURE)
     traj = AgentTrajectory(

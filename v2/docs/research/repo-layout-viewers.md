@@ -18,7 +18,7 @@ imports **only** `netgent.schema.records` — no Playwright, no LLM SDK. Its con
 
 Where should this live: `core/`, `cli/`, a new `report/`, or somewhere else? And should the
 future exploration-trajectory viewer (for the agent's `trajectory.json`, written at
-`agent/explore_agent/browser_agent.py:113`) sit beside it?
+`agent/explorer/browser_agent.py:113`) sit beside it?
 
 ## Per-project findings
 
@@ -284,7 +284,7 @@ Reasoning, mapped to the evidence:
 - **Why a package rather than leaving a flat `netgent/report.py`.** A flat module would be
   defensible today (pytest and pytest-html both stay flat at ~1,000 lines). But NetGent is
   about to have a *second* record type to render — the exploration `trajectory.json` from
-  `agent/explore_agent/browser_agent.py:113` — and probably a third (validation diffs). Two
+  `agent/explorer/browser_agent.py:113` — and probably a third (validation diffs). Two
   renderers of two artifacts is precisely the point where Playwright reaches for `reporters/`
   and Magnitude for `renderer/`. Making it a package now costs one `__init__.py`.
 

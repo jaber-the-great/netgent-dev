@@ -5,6 +5,6 @@ parameter set, and reports per-replay edge outcomes. A workflow that does not va
 reported loudly; it is never silently accepted.
 """
 
-from netgent.agent.validation_agent.validate import ReplayResult, ValidationReport, validate_workflow
+from netgent.agent.validator.validate import ReplayResult, ValidationReport, validate_workflow
 
 __all__ = ["ReplayResult", "ValidationReport", "validate_workflow"]

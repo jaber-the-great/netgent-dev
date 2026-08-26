@@ -8,7 +8,7 @@ from the element's most durable candidate selector (role → test-id → label �
 import re
 from collections.abc import Callable
 
-from netgent.agent.explore_agent.decision import AgentDecision
+from netgent.agent.explorer.decision import AgentDecision
 from netgent.browser.dom import DomElement, DomSnapshot
 from netgent.schema.actions import (
     Action,
@@ -123,7 +123,7 @@ async def capture_locator(session, el: DomElement) -> tuple[list[LocatorStep], s
        whole chain — a semantically keyed locator beats css+index.
     Returns (chain, note) — the note is what the trajectory records.
     """
-    from netgent.agent.explore_agent.normalized import UnmappableSelector, chain_from_normalized, frame_steps
+    from netgent.agent.explorer.normalized import UnmappableSelector, chain_from_normalized, frame_steps
 
     ours = await unique_locator_for(session, el)
     try:

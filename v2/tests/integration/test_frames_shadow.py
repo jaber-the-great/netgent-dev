@@ -8,7 +8,7 @@ import asyncio
 
 import pytest
 
-from netgent.agent.explore_agent.observation import _locator_for, unique_locator_for
+from netgent.agent.explorer.observation import _locator_for, unique_locator_for
 from netgent.browser.session import BrowserSession
 
 # ── R1: two instances of one web component, each exposing #email / #go in an open root ──
@@ -253,8 +253,8 @@ customElements.define('shadow-host', class extends HTMLElement {{
 
 
 def test_r4_our_chains_agree_with_playwrights_normalized_chains(serve):
-    from netgent.agent.explore_agent.normalized import chain_from_normalized
-    from netgent.agent.explore_agent.observation import capture_locator
+    from netgent.agent.explorer.normalized import chain_from_normalized
+    from netgent.agent.explorer.observation import capture_locator
 
     leaf = serve({"/": HOSTILE_LEAF})
     mid = serve({"/": HOSTILE_MID.format(leaf=leaf.url())})
@@ -301,8 +301,8 @@ TALL_CHILD = """<!doctype html><html><head><title>Tall</title></head><body style
 
 
 def test_r5_scroll_reaches_into_a_cross_origin_iframe(serve):
-    from netgent.agent.explore_agent.decision import AgentDecision
-    from netgent.agent.explore_agent.observation import to_action
+    from netgent.agent.explorer.decision import AgentDecision
+    from netgent.agent.explorer.observation import to_action
 
     child = serve({"/": TALL_CHILD})
     parent = serve({"/": (
@@ -429,7 +429,7 @@ document.getElementById('leak').textContent = sealed ? 'still-closed' : 'LEAKED'
 
 @pytest.mark.skipif(not PATCHED_BROWSER, reason="closed-shadow observation requires Patchright")
 def test_r8a_closed_root_over_http_observed_acted_flagged(serve):
-    from netgent.agent.explore_agent.observation import capture_locator
+    from netgent.agent.explorer.observation import capture_locator
     from netgent.browser.dom import format_observation
 
     srv = serve({"/": CLOSED_ROOT})
@@ -478,7 +478,7 @@ def test_r8b_closed_root_inside_cross_origin_iframe(serve):
             ci = next((e for e in snap.elements if e.name == "closed input"), None)
             assert ci is not None, "closed root inside a cross-origin iframe must be observed"
             assert ci.frame_path == ["iframe#cf"] and ci.requires_closed_shadow
-            from netgent.agent.explore_agent.observation import unique_locator_for
+            from netgent.agent.explorer.observation import unique_locator_for
 
             chain = await unique_locator_for(s, ci)
             await s.resolve(chain).fill("xframe-secret", timeout=3000)
@@ -509,7 +509,7 @@ def test_r8c_declarative_closed_shadow_is_observed_and_flagged(serve):
     page-side registry could not see it. The CDP read (DOM.describeNode pierce) lists it like
     any other closed root: observed, flagged, and — Patchright's pierce is the same call —
     actionable."""
-    from netgent.agent.explore_agent.observation import capture_locator
+    from netgent.agent.explorer.observation import capture_locator
 
     srv = serve({"/": DECLARATIVE_CLOSED})
 

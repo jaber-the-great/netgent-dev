@@ -24,11 +24,11 @@ NetGent code read first, as instructed:
 | File | What it is |
 |---|---|
 | `v2/src/netgent/agent/orchestrator.py` | the pipeline `StateGraph`: `explore → generate → validate`, `Command` routing, no checkpointer |
-| `v2/src/netgent/agent/explore_agent/graph.py` | the browser agent's own `StateGraph`: `observe → decide → act` |
-| `v2/src/netgent/agent/explore_agent/browser_agent.py` | `BrowserAgent.run()` — builds and `ainvoke`s the explore graph per run |
-| `v2/src/netgent/agent/explore_agent/sweep.py` | one agent, many forms, deterministic outer loop, page-verified outcomes |
-| `v2/src/netgent/agent/workflow_generator_agent/compiler.py` | `compile_trajectory()` — **pure code**, no LLM |
-| `v2/src/netgent/agent/validation_agent/validate.py` | `validate_workflow()` — **zero-LLM replay** through `Executor` |
+| `v2/src/netgent/agent/explorer/graph.py` | the browser agent's own `StateGraph`: `observe → decide → act` |
+| `v2/src/netgent/agent/explorer/browser_agent.py` | `BrowserAgent.run()` — builds and `ainvoke`s the explore graph per run |
+| `v2/src/netgent/agent/explorer/sweep.py` | one agent, many forms, deterministic outer loop, page-verified outcomes |
+| `v2/src/netgent/agent/generator/compiler.py` | `compile_trajectory()` — **pure code**, no LLM |
+| `v2/src/netgent/agent/validator/validate.py` | `validate_workflow()` — **zero-LLM replay** through `Executor` |
 | `v2/src/netgent/agent/llm.py` | the `LLM` protocol seam; `LangChainLLM` imports langchain lazily |
 | `v2/src/netgent/cli/generate.py` | the `netgent generate` flags |
 | `v2/tests/unit/test_import_boundaries.py` | the rule that makes all of this enforceable |
@@ -89,7 +89,7 @@ These are the parts NetGent actually touches. All verified against `langgraph 1.
 - **Private channels are not redacted when streaming.** `stream_mode="values"` emits all channels including private ones; pass `output_keys=[...]` to restrict. (`graph-api.md`, the Warning under "Multiple schemas".) This matters for NetGent because a `DomSnapshot` in state would be streamed in full.
 - Each key gets its own reducer. No reducer = overwrite. `Annotated[list, operator.add]` = append. Without a reducer, **two nodes writing the same key in one super-step raises `INVALID_CONCURRENT_GRAPH_UPDATE`** (`errors/INVALID_CONCURRENT_GRAPH_UPDATE.md`). This is *the* failure mode of every fan-out pattern.
 
-`explore_agent/graph.py:39` already gets this right — `steps: Annotated[list[AgentStep], operator.add]`.
+`explorer/graph.py:39` already gets this right — `steps: Annotated[list[AgentStep], operator.add]`.
 
 ### 2.2 `Command` — update + route in one return
 
@@ -300,7 +300,7 @@ It reads the **top-level** `RunnableConfig` key (`max_concurrency` is a document
 ## 6. What NetGent has today
 
 ```
-orchestrator.py            explore_agent/graph.py
+orchestrator.py            explorer/graph.py
   START → explore            START → observe → decide → act ↺
             ↓ Command                    │        ├─ done → END
          generate                        └─ stuck ──────→ END
@@ -308,14 +308,14 @@ orchestrator.py            explore_agent/graph.py
          validate → END
 ```
 
-Read against the taxonomy: **`orchestrator.py` is the Custom workflow pattern, and `explore_agent/graph.py` is one agentic node inside it.** Not "a supervisor we haven't finished", not "a degenerate swarm" — the pattern the docs recommend for exactly this shape.
+Read against the taxonomy: **`orchestrator.py` is the Custom workflow pattern, and `explorer/graph.py` is one agentic node inside it.** Not "a supervisor we haven't finished", not "a degenerate swarm" — the pattern the docs recommend for exactly this shape.
 
 What is already right:
 
 - **Deterministic order.** `explore → generate → validate` is a compiler pipeline. No model chooses it. `Command(goto=END)` on failure is a real early-exit, not a model-chosen one.
 - **Zero-LLM downstream, structurally.** `compile_trajectory` (`compiler.py:66`) takes `(traj, name, params, version)` — no `llm` parameter exists. `validate_workflow` (`validate.py:29`) takes `(workflow, param_sets, headless)` and drives `Executor`. Neither *can* call a model; `test_import_boundaries.py` guarantees `netgent.executor` never even imports langgraph.
 - **Session isolation per stage.** Each of `explore` and `validate` opens its own `BrowserSession` (`orchestrator.py:84`, `validate.py:43`), so exploration state cannot leak into validation. This is the file docstring's stated intent and it holds.
-- **Lazy imports.** Both graphs import `langgraph.graph` **inside** the builder function (`orchestrator.py:73`, `explore_agent/graph.py:53`), keeping `netgent[generate]` optional.
+- **Lazy imports.** Both graphs import `langgraph.graph` **inside** the builder function (`orchestrator.py:73`, `explorer/graph.py:53`), keeping `netgent[generate]` optional.
 - **A correct reducer already.** `steps: Annotated[list[AgentStep], operator.add]`.
 - **The sweep is the right instinct, at the wrong altitude.** `sweep_forms` is a deterministic outer loop around one agent with continuous memory, verifying outcomes from the page rather than the agent's self-report (`sweep.py:99-135`). That philosophy — *deterministic orchestration, verified outcomes* — is what the whole orchestrator should say. It is currently written in Python `for`-loops rather than in the graph, which is fine, but it means the sweep gets no checkpointing, no streaming, no fan-out.
 
@@ -326,7 +326,7 @@ What is weak:
 3. **No checkpointer anywhere.** A crash during `validate` throws away the whole exploration — the expensive part.
 4. **`orchestration_graph_mermaid()` duplicates the topology** (`orchestrator.py:136-155`) with stub nodes, because the real builder needs `req`/`llm`/`listen`. Two definitions of the same graph will drift.
 5. **The `listen` callback is not concurrency-safe.** `emit(stage, text)` (`orchestrator.py:76`) writes an unqualified line. Under `Send` fan-out, three exploration runs interleave into one terminal with no run index.
-6. **`snapshot: Any  # DomSnapshot`** sits in the explore graph's state (`explore_agent/graph.py:34`). `DomSnapshot` *is* a pydantic model (`browser/dom/models.py`), so it would serialise — but it is a full multi-frame DOM walk with per-element candidate selector lists, checkpointed **once per step**. Attaching a checkpointer to that graph naively is a footgun.
+6. **`snapshot: Any  # DomSnapshot`** sits in the explore graph's state (`explorer/graph.py:34`). `DomSnapshot` *is* a pydantic model (`browser/dom/models.py`), so it would serialise — but it is a full multi-frame DOM walk with per-element candidate selector lists, checkpointed **once per step**. Attaching a checkpointer to that graph naively is a footgun.
 
 ---
 
@@ -415,18 +415,18 @@ Four things to get right, each a documented failure mode:
 - **`Annotated[list[...], operator.add]` on `trajectories` is mandatory.** Without it, N concurrent `explore_run` nodes writing the same key raise `INVALID_CONCURRENT_GRAPH_UPDATE`.
 - **Cap the browsers.** `await graph.ainvoke({}, {"max_concurrency": req.concurrency})` — top level, not under `configurable` (§5.4). Default 2; N headed Chromes will thrash a laptop.
 - **`add_edge("explore_run", "select")` is the fan-in.** All `Send` branches converge before `select` runs. If a later design gives branches different lengths, `add_node("select", select, defer=True)` makes the wait explicit.
-- **`select` must stay pure code.** It is where the "choose the best trajectory / merge N trajectories into one NFA" logic goes, and it is the single most tempting place in the whole pipeline to sneak an LLM in. Don't. If merging N trajectories into one NFA turns out to need judgement, that judgement belongs in `workflow_generator_agent/` as a documented algorithm (`docs/OVERVIEW.md` §7 lists the Discovery algorithm as still unspecified), not as a model call.
+- **`select` must stay pure code.** It is where the "choose the best trajectory / merge N trajectories into one NFA" logic goes, and it is the single most tempting place in the whole pipeline to sneak an LLM in. Don't. If merging N trajectories into one NFA turns out to need judgement, that judgement belongs in `generator/` as a documented algorithm (`docs/OVERVIEW.md` §7 lists the Discovery algorithm as still unspecified), not as a model call.
 
 `_choose` starts as "first successful trajectory" and can grow into "the shortest", "the one whose states the others agree with", or an actual multi-trajectory merge — all pure code, all testable without a network.
 
-### 7.3 Keep `explore_agent` as a *called* subgraph, but type the boundary
+### 7.3 Keep `explorer` as a *called* subgraph, but type the boundary
 
-Do **not** convert `BrowserAgent.run()` into `add_node("explore", compiled_subgraph)`. The explore graph is deliberately rebuilt per run because its nodes close over the live `BrowserSession`, the task, and the agent's cross-run `history` (`explore_agent/graph.py:9-13`, `:56`). That is the "call a subgraph inside a node" mode from §2.4, and it is correct — it also happens to preserve `get_state(subgraphs=True)` discoverability (§2.4 Note), which the tool-calling alternative would destroy.
+Do **not** convert `BrowserAgent.run()` into `add_node("explore", compiled_subgraph)`. The explore graph is deliberately rebuilt per run because its nodes close over the live `BrowserSession`, the task, and the agent's cross-run `history` (`explorer/graph.py:9-13`, `:56`). That is the "call a subgraph inside a node" mode from §2.4, and it is correct — it also happens to preserve `get_state(subgraphs=True)` discoverability (§2.4 Note), which the tool-calling alternative would destroy.
 
 What to change is the *contract*. `AgentState` currently mixes durable output (`steps`, `success`, `stopped_reason`, `texts_seen`) with loop scratch (`snapshot`, `observation`, `prev_observation`, `no_progress`, `decision`). Split it:
 
 ```python
-# explore_agent/graph.py
+# explorer/graph.py
 
 class ExploreInput(TypedDict):
     steps: Annotated[list[AgentStep], operator.add]
@@ -459,7 +459,7 @@ class AgentState(ExploreOutput, total=False):
 `generate` and `validate` are nodes. Keep them that way, and make it enforceable rather than conventional:
 
 - Neither node body should have `llm` in scope. Today both are closures inside `build_orchestration_graph(req, llm, listen)`, so `llm` *is* reachable — nothing stops a future edit. Lift them to module-level functions taking `(state, req)` and bind with `functools.partial`, so the graph's construction proves the property. Cheap, and it is the kind of thing a reviewer can check in one line.
-- Extend `tests/unit/test_import_boundaries.py` with the compile-time counterpart: assert that importing `netgent.agent.workflow_generator_agent` and `netgent.agent.validation_agent` does **not** pull in `langchain`/`langgraph`. The existing test only covers `schema`/`core`/`browser`/`executor`/`report`; these two packages are inside `agent/` yet are supposed to be model-free, which is precisely the boundary most likely to erode.
+- Extend `tests/unit/test_import_boundaries.py` with the compile-time counterpart: assert that importing `netgent.agent.generator` and `netgent.agent.validator` does **not** pull in `langchain`/`langgraph`. The existing test only covers `schema`/`core`/`browser`/`executor`/`report`; these two packages are inside `agent/` yet are supposed to be model-free, which is precisely the boundary most likely to erode.
 
 ### 7.5 Persistence: yes at the pipeline level, no inside the explore loop
 
@@ -577,6 +577,6 @@ Fetched 2026-08-26. All `docs.langchain.com` URLs also serve a `.md` variant (ap
 - `swarm` — unrelated to `langgraph-swarm`; see §9.1
 
 **NetGent**
-- `v2/src/netgent/agent/{orchestrator.py, llm.py}`, `agent/explore_agent/{graph.py, browser_agent.py, sweep.py}`, `agent/workflow_generator_agent/compiler.py`, `agent/validation_agent/validate.py`, `cli/generate.py`, `executor/engine.py`, `browser/dom/models.py`, `schema/workflow.py`, `evals/{stress.py, matrix.py}`, `tests/unit/test_import_boundaries.py`, `pyproject.toml`
+- `v2/src/netgent/agent/{orchestrator.py, llm.py}`, `agent/explorer/{graph.py, browser_agent.py, sweep.py}`, `agent/generator/compiler.py`, `agent/validator/validate.py`, `cli/generate.py`, `executor/engine.py`, `browser/dom/models.py`, `schema/workflow.py`, `evals/{stress.py, matrix.py}`, `tests/unit/test_import_boundaries.py`, `pyproject.toml`
 - `v2/docs/OVERVIEW.md` §3.1 (the compile-side pipeline and the Discovery fleet), §4.1–4.3 (the T0–T3 repair ladder), §7 (what is still unspecified)
 - `CLAUDE.md` — the hard rules this recommendation is written to respect

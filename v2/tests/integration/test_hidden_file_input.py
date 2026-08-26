@@ -37,7 +37,7 @@ def test_hidden_file_inputs_are_observed_and_fillable(serve, tmp_path):
             assert len(files) == 2, [(e.tag, e.type, e.name) for e in snap.elements]
             # ordinary hidden elements are still filtered — only file inputs are exempt
             assert not any(e.type == "text" for e in snap.elements)
-            from netgent.agent.explore_agent.observation import unique_locator_for
+            from netgent.agent.explorer.observation import unique_locator_for
 
             for e in files:
                 await s.resolve(await unique_locator_for(s, e)).set_input_files(str(sample))

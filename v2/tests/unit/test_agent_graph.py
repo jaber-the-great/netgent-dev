@@ -1,6 +1,6 @@
 """The browser agent's loop is a LangGraph StateGraph with the expected shape."""
 
-from netgent.agent.explore_agent.graph import agent_graph_mermaid
+from netgent.agent.explorer.graph import agent_graph_mermaid
 
 
 def test_agent_loop_is_a_langgraph_with_observe_decide_act():
