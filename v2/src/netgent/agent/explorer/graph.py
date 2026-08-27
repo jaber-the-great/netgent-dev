@@ -34,7 +34,9 @@ logger = get_logger(__name__)
 SETTLE_WATCH_S = 6.0  # how long after an action the page is sampled for text that appears (then vanishes)
 
 
-async def _watch_texts(session: BrowserSession, known: set[str], seconds: float, found: list[str]) -> None:
+async def _watch_texts(
+    session: BrowserSession, known: set[str], seconds: float, found: list[str], frame_filter: list[str] | None = None
+) -> None:
     """Sample the page for NEW text for `seconds`, appending finds to `found` (alerts first).
 
     Success banners are often transient: Formik's shows 1 s after Submit and hides 3 s later,
@@ -47,6 +49,8 @@ async def _watch_texts(session: BrowserSession, known: set[str], seconds: float,
     while asyncio.get_running_loop().time() < deadline:
         try:
             snap = await session.snapshot()
+            if frame_filter is not None:  # a sweep: ONLY this form's frame, never a neighbour's banner
+                snap = snap.scoped_to(frame_filter)
         except Exception:  # noqa: BLE001 — mid-navigation: try again on the next tick
             await asyncio.sleep(0.5)
             continue
@@ -224,7 +228,9 @@ def build_agent_graph(
                         action = action.model_copy(update={"requires_closed_shadow": True})
                 if isinstance(action, WaitAction):
                     # Watch WHILE waiting: the dwell is exactly when a banner comes and goes.
-                    watch = asyncio.create_task(_watch_texts(session, known, action.seconds, agent.noticed))
+                    watch = asyncio.create_task(
+                        _watch_texts(session, known, action.seconds, agent.noticed, frame_filter)
+                    )
                     try:
                         await session.dispatch(action)
                     finally:
@@ -277,7 +283,7 @@ def build_agent_graph(
                 break
         # Keep sampling while the next observation is rendered and the model decides.
         if steps and steps[-1].error is None and not isinstance(steps[-1].action, WaitAction):
-            agent.start_watch(_watch_texts(session, known, SETTLE_WATCH_S, agent.noticed))
+            agent.start_watch(_watch_texts(session, known, SETTLE_WATCH_S, agent.noticed, frame_filter))
         drained = agent.drain_noticed()
         seen += [t for t in drained if t not in seen]
         return Command(update={"steps": steps, "texts_seen": seen[-400:]}, goto="observe")
