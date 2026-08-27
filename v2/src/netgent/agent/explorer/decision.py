@@ -41,3 +41,11 @@ class AgentDecision(BaseModel):
     success: bool = Field(
         default=False, description="For done: whether the task was achieved (false = giving up; explain why)."
     )
+    # Parameter conveyance (docs/research/browser-agent-prompting.md §7.3): the model DECLARES
+    # which ${name} a value came from, so the compiler binds structurally instead of
+    # string-matching the sample value back out of the artifact.
+    param: str | None = Field(
+        default=None,
+        description="If text/value/url (or a clicked element's name) is a PARAMETER's sample value, that "
+        "parameter's name (without ${}). Null for a literal that is not a parameter.",
+    )

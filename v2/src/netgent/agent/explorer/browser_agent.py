@@ -42,6 +42,9 @@ class AgentStep(BaseModel):
     # How the action's locator was cross-checked at capture time (R4): whether Playwright's
     # own generator agreed, and which chain was kept. Compile-time provenance, not replayed.
     locator_check: str | None = None
+    # The ${param} the explorer declared this step's value came from (decision.param), so the
+    # compiler binds the placeholder structurally. Compile-time provenance, not replayed.
+    param: str | None = None
 
 
 class AgentTrajectory(BaseModel):

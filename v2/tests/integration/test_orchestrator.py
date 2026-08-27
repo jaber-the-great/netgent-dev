@@ -43,7 +43,7 @@ def test_orchestrate_explores_generates_and_validates(tmp_path):
     assert result.workflow is not None and [t.id for t in result.workflow.transitions] == ["t1", "t2", "t3"]
     assert result.workflow.transition("t2").action.text == "${who}"  # sample value became a param
     # the explorer was TOLD the sample values (else it cannot use them and nothing abstracts)
-    assert "who = 'Ada'" in result.trajectory.task and result.trajectory.task.startswith(req.task)
+    assert "${who} = 'Ada'" in result.trajectory.task and result.trajectory.task.startswith(req.task)
     assert (tmp_path / "hello.yaml").is_file()
     assert result.validated, [(r.failed_edge, r.error) for r in result.report.replays]
     assert [s for s, _ in events][0] == "explore" and "validate" in {s for s, _ in events}

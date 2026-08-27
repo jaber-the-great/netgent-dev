@@ -135,7 +135,10 @@ def build_agent_graph(
             error = str(exc)
             logger.warning("step %d failed: %s", n, error)
 
-        step = AgentStep(n=n, kind=decision.kind, reasoning=decision.reasoning, url=session.page.url, error=error)
+        step = AgentStep(
+            n=n, kind=decision.kind, reasoning=decision.reasoning, url=session.page.url, error=error,
+            param=decision.param or None,
+        )
         if error is None:
             step.action = action  # the compilable record of what actually ran
             step.locator_check = note
