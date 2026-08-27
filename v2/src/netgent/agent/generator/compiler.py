@@ -21,7 +21,9 @@ from netgent.schema.actions import (
     HoverAction,
     Locator,
     SelectAction,
+    WaitAction,
 )
+from netgent.schema.control import ControlNode, EdgeStep, Interrupt, Repeat
 from netgent.schema.workflow import Param, State, Transition, Workflow
 
 NAVIGATION_TIMEOUT_MS = 30_000  # a page load needs a navigation-scale budget, not an element-action one
@@ -30,6 +32,16 @@ NAVIGATION_TIMEOUT_MS = 30_000  # a page load needs a navigation-scale budget, n
 # visible" is a sound guard for the state the action fires from. (upload_file and press
 # are excluded: set_input_files works on hidden file inputs, press only needs focus.)
 _VISIBILITY_GATED = (ClickAction, FillAction, SelectAction, HoverAction)
+
+# Steps whose reasoning marks them as interruption-handling (ads, cookie walls, pop-ups).
+# Deliberately excludes bare "skip": fast-forward reasoning says "skip ahead 10 seconds".
+_INTERRUPTION_RE = re.compile(
+    r"\b(ads?|advert\w+|pop-?ups?|cookies?|consent|banners?|dismiss\w*|no thanks)\b",
+    re.IGNORECASE,
+)
+
+DWELL_SLICE_S = 1.0  # dwells compile to Repeat(wait 1s) so interrupt sweeps run between slices
+DWELL_MIN_SLICED_S = 3.0  # shorter waits stay a single atomic action
 
 
 def _base_url(url: str) -> str:
@@ -114,12 +126,29 @@ def compile_trajectory(
     locators, where substring matches over-abstracted names. Anything the compiler could not
     bind is reported in `warnings` (appended in place) instead of failing silently.
     """
-    steps = [s for s in traj.steps if s.action is not None and s.error is None]
-    if not steps:
+    all_steps = [s for s in traj.steps if s.action is not None and s.error is None]
+    if not all_steps:
         raise ValueError("trajectory has no successful action steps to compile")
+
+    # Interruption-handling clicks (ad-skip, cookie-dismiss, …) leave the main word and
+    # become scoped ε-interrupts: the executor fires them whenever their anchor holds,
+    # so a replay that gets no ad (or an ad at a different moment) still walks the word.
+    def _is_interruption(step) -> bool:
+        return (
+            step.action.type == "click"
+            and bool(_INTERRUPTION_RE.search(step.reasoning or ""))
+            and _target_selector(step.action) is not None
+        )
+
+    interruption_steps = [s for s in all_steps if _is_interruption(s)]
+    steps = [s for s in all_steps if not _is_interruption(s)]
+    if not steps:
+        raise ValueError("trajectory has no main-path steps to compile (all were interruptions)")
 
     states = [State(id="init")]
     transitions: list[Transition] = []
+    control: list[ControlNode] = []
+    state_base: dict[str, str] = {}  # state id -> base URL it lives on (for interrupt scoping)
     prev_base: str | None = None
     for i, step in enumerate(steps, 1):
         base = _base_url(step.url)
@@ -148,13 +177,46 @@ def compile_trajectory(
         prev_base = base
         state_id = f"s{i}"
         states.append(State(id=state_id, conditions=conditions))
+        state_base[state_id] = base
         action = step.action
         if isinstance(action, GotoAction) and action.timeout_ms < NAVIGATION_TIMEOUT_MS:
             # Exploration navigated with Playwright's 30 s default; the artifact must too,
             # or a slow real site fails replay on its very first edge.
             action = action.model_copy(update={"timeout_ms": NAVIGATION_TIMEOUT_MS})
-        transitions.append(Transition(id=f"t{i}", source=states[-2].id, target=state_id, action=action))
+        if isinstance(action, WaitAction) and action.seconds >= DWELL_MIN_SLICED_S:
+            # Dwell as bounded Repeat of 1 s slices: the interrupt sweep runs between slices,
+            # so an ad striking mid-dwell is handled without splitting an atomic action.
+            slices = max(1, round(action.seconds / DWELL_SLICE_S))
+            slice_action = action.model_copy(update={"seconds": DWELL_SLICE_S})
+            transitions.append(Transition(id=f"t{i}", source=states[-2].id, target=state_id, action=slice_action))
+            control.append(EdgeStep(edge=f"t{i}"))
+            if slices > 1:
+                transitions.append(
+                    Transition(id=f"t{i}_dwell", source=state_id, target=state_id, action=slice_action)
+                )
+                control.append(Repeat(body=[EdgeStep(edge=f"t{i}_dwell")], max_iterations=slices - 1))
+        else:
+            transitions.append(Transition(id=f"t{i}", source=states[-2].id, target=state_id, action=action))
+            control.append(EdgeStep(edge=f"t{i}"))
 
+    interrupts: list[Interrupt] = []
+    for k, intr in enumerate(interruption_steps, 1):
+        sel = _target_selector(intr.action)  # non-None by _is_interruption
+        anchor_state = f"i{k}"
+        done_state = f"i{k}_done"
+        states.append(State(id=anchor_state, conditions=[{"type": "selector_visible", "selector": sel}]))
+        states.append(State(id=done_state, conditions=[{"type": "selector_hidden", "selector": sel}]))
+        transitions.append(Transition(id=f"ti{k}", source=anchor_state, target=done_state, action=intr.action))
+        base = _base_url(intr.url)
+        scope = [sid for sid, b in state_base.items() if b == base]
+        if not scope:  # interruption on a page no main state lives on — arm it where it happened
+            prior = [j for j, s in enumerate(steps, 1) if s.n < intr.n]
+            scope = [f"s{prior[-1]}" if prior else "init"]
+        interrupts.append(
+            Interrupt(id=f"int{k}", state=anchor_state, resolve=[f"ti{k}"], scope=scope, max_fires=3)
+        )
+
+    uses_program = interrupts or any(isinstance(n, Repeat) for n in control)
     wf = Workflow(
         name=name,
         version=version,
@@ -162,7 +224,11 @@ def compile_trajectory(
         start_state="init",
         states=states,
         transitions=transitions,
-        control_sequence=[t.id for t in transitions],
+        # A plain linear run keeps the legacy control_sequence shape; repeats/interrupts
+        # need the richer control program.
+        control=control if uses_program else None,
+        control_sequence=None if uses_program else [n.edge for n in control],
+        interrupts=interrupts,
     )
 
     if params:

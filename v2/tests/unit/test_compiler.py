@@ -185,3 +185,56 @@ def test_step_dialog_becomes_a_dialog_matches_condition():
     dialog = [c for c in final.conditions if c.type == "dialog_matches"]
     assert len(dialog) == 1
     assert "dumbledore" in dialog[0].pattern
+
+
+def _ad_traj() -> AgentTrajectory:
+    """A watch-page trajectory with an ad-skip click and a 15 s dwell."""
+    return AgentTrajectory(
+        task="watch a video, skip ads",
+        success=True,
+        steps=[
+            AgentStep(n=1, kind="goto", reasoning="open", url="https://yt.com/watch?v=x",
+                      action={"type": "goto", "url": "https://yt.com/watch?v=x"}),
+            AgentStep(n=2, kind="click", reasoning="A skip ads button is visible; skip the ad.",
+                      url="https://yt.com/watch?v=x",
+                      action={"type": "click", "locator": [{"fn": "locator", "args": ["#skip-ad"]}]}),
+            AgentStep(n=3, kind="wait", reasoning="watch for 15 seconds", url="https://yt.com/watch?v=x",
+                      action={"type": "wait", "seconds": 15.0}),
+            AgentStep(n=4, kind="press", reasoning="fast forward", url="https://yt.com/watch?v=x",
+                      action={"type": "press", "keys": "l"}),
+        ],
+    )
+
+
+def test_interruption_clicks_become_scoped_interrupts():
+    wf = compile_trajectory(_ad_traj(), name="yt")
+    # The ad-skip click left the main word...
+    assert [t.id for t in wf.transitions if not t.id.startswith("ti")] != []
+    assert all("skip-ad" not in str(t.action) for t in wf.transitions if t.source.startswith("s") or t.source == "init")
+    # ...and became an interrupt anchored on the skip button, scoped to watch-page states.
+    (intr,) = wf.interrupts
+    (anchor_cond,) = wf.state(intr.state).conditions
+    assert anchor_cond.type == "selector_visible" and anchor_cond.selector == "#skip-ad"
+    assert intr.max_fires == 3 and intr.resolve == ["ti1"]
+    assert set(intr.scope) <= {s.id for s in wf.states}
+    # resolution edge verifies the pop-up went away
+    (done_cond,) = wf.state(wf.transition("ti1").target).conditions
+    assert done_cond.type == "selector_hidden"
+
+
+def test_dwells_compile_to_bounded_repeats():
+    wf = compile_trajectory(_ad_traj(), name="yt")
+    assert wf.control_sequence is None  # rich program in use
+    repeats = [n for n in wf.control if n.kind == "repeat"]
+    (rep,) = repeats
+    assert rep.max_iterations == 14  # 15 s = 1 s edge + 14 repeated 1 s slices
+    (body,) = rep.body
+    dwell_edge = wf.transition(body.edge)
+    assert dwell_edge.source == dwell_edge.target  # self-loop: sweeps run between slices
+    assert dwell_edge.action.seconds == 1.0
+
+
+def test_linear_no_interrupt_trajectories_keep_control_sequence():
+    wf = compile_trajectory(_traj(), name="yt")
+    assert wf.control_sequence == ["t1", "t2", "t3"]
+    assert wf.control is None and wf.interrupts == []
