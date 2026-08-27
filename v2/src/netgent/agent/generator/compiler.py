@@ -40,6 +40,14 @@ _INTERRUPTION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# ...and whose click TARGET also looks like a dismissal control. Reasoning alone is too
+# loose — "maybe it restarted after the ad" flagged a seek-slider click as an interrupt
+# (v3 run, 2026-08-27). Both signals must agree.
+_INTERRUPTION_TARGET_RE = re.compile(
+    r"skip|dismiss|consent|cookie|no.?thanks|close|reject|accept|got.?it",
+    re.IGNORECASE,
+)
+
 DWELL_SLICE_S = 1.0  # dwells compile to Repeat(wait 1s) so interrupt sweeps run between slices
 DWELL_MIN_SLICED_S = 3.0  # shorter waits stay a single atomic action
 
@@ -134,11 +142,10 @@ def compile_trajectory(
     # become scoped ε-interrupts: the executor fires them whenever their anchor holds,
     # so a replay that gets no ad (or an ad at a different moment) still walks the word.
     def _is_interruption(step) -> bool:
-        return (
-            step.action.type == "click"
-            and bool(_INTERRUPTION_RE.search(step.reasoning or ""))
-            and _target_selector(step.action) is not None
-        )
+        if step.action.type != "click" or not _INTERRUPTION_RE.search(step.reasoning or ""):
+            return False
+        sel = _target_selector(step.action)
+        return sel is not None and bool(_INTERRUPTION_TARGET_RE.search(sel))
 
     interruption_steps = [s for s in all_steps if _is_interruption(s)]
     steps = [s for s in all_steps if not _is_interruption(s)]

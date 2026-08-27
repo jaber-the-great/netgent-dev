@@ -238,3 +238,23 @@ def test_linear_no_interrupt_trajectories_keep_control_sequence():
     wf = compile_trajectory(_traj(), name="yt")
     assert wf.control_sequence == ["t1", "t2", "t3"]
     assert wf.control is None and wf.interrupts == []
+
+
+def test_reasoning_mention_alone_does_not_make_an_interrupt():
+    """'maybe it restarted after the ad' on a seek-slider click must stay in the main word."""
+    traj = AgentTrajectory(
+        task="t",
+        success=True,
+        steps=[
+            AgentStep(n=1, kind="goto", reasoning="open", url="https://yt.com/watch?v=x",
+                      action={"type": "goto", "url": "https://yt.com/watch?v=x"}),
+            AgentStep(n=2, kind="click", reasoning="video is at 0:03, maybe it restarted after the ad",
+                      url="https://yt.com/watch?v=x",
+                      action={"type": "click",
+                              "locator": [{"fn": "get_by_role", "args": ["slider"],
+                                           "kwargs": {"name": "Seek slider"}}]}),
+        ],
+    )
+    wf = compile_trajectory(traj, name="x")
+    assert wf.interrupts == []  # target is not a dismissal control → main word
+    assert len(wf.transitions) == 2
