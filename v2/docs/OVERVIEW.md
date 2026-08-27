@@ -8,7 +8,9 @@ with a note on which is newer.
 **Status:** orientation doc, written 2026-08-17 from the design record in [`research/`](research/),
 the browser-layer conclusion in [`browser-layer-design.md`](browser-layer-design.md), and the V1
 source tree under `v1/src/netgent/`. It is not a spec — the spec (repair path, Discovery algorithm)
-does not exist yet; see §7.
+does not exist yet; see §7. **§6 (repo state) refreshed 2026-08-27**; formalism amendments made
+after the meeting record live in [`decisions/`](decisions/) — start with
+[`2026-08-27-anchored-states-and-interrupts.md`](decisions/2026-08-27-anchored-states-and-interrupts.md).
 
 ---
 
@@ -63,7 +65,7 @@ locked in". This is **Manni Moghimi's** model. It is normative; Eugene Vuong's m
 | **State** | A node carrying a **hook/anchor** — an element/HTML condition that answers "am I here?". States carry no actions. |
 | **Transition** | An edge carrying **exactly one atomic action** (`click`, `type`, `wait`, `fast-forward`, …). Re-decided in M3 as single, not a set. |
 | **Atomic action set** | Closed and parameterized, fewer than 15 ops — `wait(t)`, `click(element)`, `type(x, y)`. Handed to the planner as context. Parameterization is what prevents graph explosion (M2, "strongest, least contested agreement"). |
-| **ε-transition** | A forced transition with no action. This is how an interruption/pop-up is modeled: each pop-up type gets its own state; resolving it (click X / Decline) is an ordinary transition back. |
+| **ε-transition** | A forced transition with no action. This is how an interruption/pop-up is modeled: each pop-up type gets its own state; resolving it (click X / Decline) is an ordinary transition back. *Implemented 2026-08-27 as scoped, bounded `Interrupt`s swept by the executor between atomic steps — see [`decisions/2026-08-27-anchored-states-and-interrupts.md`](decisions/2026-08-27-anchored-states-and-interrupts.md).* |
 | **Word / control sequence** | The finite transition sequence the planner emits to reach the goal. Renamed from "word" to "control" in M3. Traversal is therefore bounded and no determinization is needed (M2). |
 
 **Why single-atomic transitions.** Action *sets* break more easily and can hide a mid-sequence state
@@ -379,49 +381,48 @@ healing, and no compile-time state-distinctness check (`research/github-recon.md
 
 ## 6. Current repo state
 
-**Exists and works:**
+*Refreshed 2026-08-27. The 2026-08-17 snapshot this section replaced described an empty skeleton;
+the pipeline has since been built. The authoritative day-to-day map is the repo-root `CLAUDE.md`;
+this is the orientation summary.*
 
-- `v2/pyproject.toml` — package `netgent` 2.0.0a0, Python ≥3.11, hatchling, ruff (line-length 120,
-  `E,F,I,PLE,ASYNC,B`), pytest. **One runtime dependency: `typer`.** Entry point
-  `netgent = netgent.cli:main`.
-- `v2/src/netgent/cli/` — a Typer app with four commands registered in `commands.py`, one module
-  each, plus `--version`. `netgent doctor` is **fully implemented** (`cli/doctor.py`): checks Python
-  version, `.env` presence, LLM keys matched against the provider prefix of
-  `NETGENT_GENERATOR_MODEL`, Chrome/Chromium detection with a candidate-path list plus `which`
-  fallback, and credentials-file validity — exits 1 on any error.
-- `v2/.env.example` — the config contract. Notable: *"Only `netgent generate` and `netgent eval` need
-  an LLM key; `netgent run` executes compiled workflows with no LLM calls"* — the thesis restated as
-  an operational invariant. litellm-style `provider/model` strings
-  (`NETGENT_GENERATOR_MODEL=gemini/gemini-2.5-pro`), an optional cheap `NETGENT_SECONDARY_MODEL`,
-  browser settings, and **site credentials kept separate from LLM keys**
-  (`NETGENT_CREDENTIALS_FILE`).
-- `v2/evals/` — `datasets/` and `results/` (both `.gitkeep`), with `evals/README.md` stating the rule
-  taken from the survey: evals are offline and LLM-judged, `tests/` is deterministic and gates CI,
-  **nothing in `evals/` runs in CI**, and raw per-task results are committed so numbers stay
-  verifiable (`browser-agents.md` §4, takeaways 1 and 5).
-- `v2/docs/` — this document plus `browser-layer-design.md`, `browser-agents.md`, and
-  `research/` (16 files: the meeting/design record, the three browser-layer deep dives, and seven
-  browser-agent survey batches).
+**The pipeline works end to end.** `netgent generate "<task>" --url … -p name=sample` runs
+explore (LLM agent) → synthesize (pure code) → validate (zero-LLM replay), chained by a LangGraph
+orchestrator (`agent/orchestrator.py`); `netgent run workflow.yaml --param name=value` replays
+deterministically with zero LLM calls. Validated example artifacts live in `v2/examples/`
+(YouTube search-and-watch with ad-interrupts, Twitch, Wikipedia).
 
-**Skeleton only — exits 1 with "not implemented yet":** `netgent run` (`cli/run.py:17`),
-`netgent generate` (`cli/generate.py:19`), `netgent eval` (`cli/evaluate.py:19`).
+**Packages** (final naming per decision #10; import boundary `schema ← browser ← executor ← agent`
+enforced by `tests/unit/test_import_boundaries.py`):
 
-**Empty:** `v2/src/netgent/__init__.py` is a zero-byte file. There is no `core/`, no `browser/`, no
-`synthesis/`, no `sessions/` — the entire structure in `browser-layer-design.md`
-§"Package structure" is unbuilt. `v2/tests/` contains only `ci/.gitkeep`: **zero tests**, despite the
-testing plan in `browser-layer-design.md` §7 (local fixture pages via `pytest-httpserver`, pure-unit
-tests for the serializer/fingerprint/action IR, live-site tests quarantined to `generate` only).
+- `schema/` — the artifact models: actions (11-op closed set, whitelist-reflected locator chains),
+  triggers (`url_matches`, `selector_visible/hidden`, `title_contains`), control
+  (`Branch`/`Repeat`/`Interrupt`/`Call`/`Param`), workflow + graph validation, run records.
+  JSON Schema on demand via `netgent schema`.
+- `browser/` — Playwright/Patchright session (stealth verified on bot-detection suites), DOM
+  snapshot across frames/shadow DOM, trigger evaluation (`wait_for_state` polling with typed
+  `TriggerTimeoutError` naming unmet conditions), action dispatch.
+- `executor/` — the control-program interpreter: per-edge contract (source current → dispatch one
+  atomic action → await target conditions), `Branch`/`Repeat`, scoped bounded ε-interrupt sweep
+  between atomic steps, static + page-extracted params with guards. `Call` is schema-only.
+- `agent/` — compile-time only: `explore_agent/` (LangGraph observe→decide→act, stuck-detection,
+  per-run usage accounting), `workflow_generator_agent/` (trajectory → NFA: state anchoring on the
+  next edge's target, dwells → bounded repeats, interruption clicks → scoped interrupts — see
+  `decisions/2026-08-27-anchored-states-and-interrupts.md`), `validation_agent/` (zero-LLM replay),
+  LLM seam in `llm.py` (LangChain `init_chat_model` + structured output, one call site).
+- `cli/` — `run`, `generate`, `agent`, `trajectory`, `schema`, `doctor`, `eval` group.
+  `report/` — self-contained HTML viewers for run + exploration trajectories.
+  `evals/` — importable runners behind `netgent eval` (dataset/observation/stress/matrix);
+  results under `v2/evals/results/`, never in CI.
 
-**Version control:** most of `v2/` is still untracked (`docs/research/`, `docs/browser-*.md`,
-`evals/`, `src/netgent/cli/`, `.env.example` all show as `??`). The staged v2 files are the package
-skeleton only. Branch: `dev/v2`; `v1/` is the V1 tree relocated wholesale in the staged rename.
+**Tests & CI:** ~67 unit + ~20 integration tests; integration drives real headless Chromium against
+local `file://` fixtures ("mock only the LLM, never the browser"), gated by `NETGENT_BROWSER_TESTS=1`.
+GitHub Actions runs lint, unit + integration, and a replay benchmark.
 
-**Designed but unbuilt, in dependency order:** the action IR and NFA types (`core/`), the Playwright
-chokepoint + capture factory, the trigger engine, resolution + `ElementDriftError`, the executor,
-then the healing ladder, then Discovery. `research/proposed-ai-agent.md` §6 phases this deliberately
-so that phases 1–3 (executor, identity + T0/T1, T2/T3 + write-back) need **no Discovery work at all**
-— hand-authored graphs suffice — which keeps the hardest research question off the critical path and
-doubles as the small-scale prototype that settles the remaining design disagreements empirically.
+**Still unbuilt from the design record:** element fingerprints + ranked locator chains and
+`ElementDriftError` (resolution today is bare locator chains), the T0–T3 healing ladder,
+HAR/tracing capture as a construction-time contract, multi-run exploration (`--runs N`) and the
+Discovery fleet, `sessions/` (auth). Selector quality is a live gap: per-snapshot-suffix IDs
+(e.g. `#skip-button\:2`) still reach artifacts.
 
 ---
 
@@ -487,6 +488,11 @@ doubles as the small-scale prototype that settles the remaining design disagreem
   set, or the grammar accommodates a terminal (`research/design-doc-review.md` §2). **No non-goals
   are stated anywhere** — for a project whose named central risk is uncontrolled state growth, this
   is a live omission.
+- **Word-driven vs reactive execution** (Manni, 2026-08-27, on hold): drop the control word;
+  the executor tracks its graph node and fires whichever in-scope trigger activates. Would
+  overturn decision #4 ("no determinization needed") and needs sibling-guard exclusivity,
+  per-edge fire caps, and load-bearing accept states — see
+  [`decisions/2026-08-27-anchored-states-and-interrupts.md`](decisions/2026-08-27-anchored-states-and-interrupts.md) §4.
 - **Is "NFA" the right word?** There is no alphabet, no start/accept states, no transition relation,
   and nothing actually nondeterministic once the planner emits an explicit control sequence — the
   runtime object is a deterministically-traversed labelled transition system. Either commit to the
