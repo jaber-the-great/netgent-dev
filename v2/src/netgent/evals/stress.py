@@ -52,21 +52,23 @@ def _challenge_kinds() -> frozenset[str]:
 CHALLENGE_KINDS = _challenge_kinds()
 
 
-def _session(backend: str):
+def _session(backend: str, headless: bool = True):
     """A BrowserSession for `backend`; the DOM walk is the only backend on this branch."""
     from netgent.browser.session import BrowserSession
 
     if backend not in BACKENDS:
         raise ValueError(f"backend must be one of {BACKENDS}")
-    return BrowserSession(headless=True)
+    return BrowserSession(headless=headless)
 
 
-async def run_challenge(backend: str, max_steps: int, out_dir: Path, model: str = DEFAULT_MODEL) -> dict:
+async def run_challenge(
+    backend: str, max_steps: int, out_dir: Path, model: str = DEFAULT_MODEL, headless: bool = True
+) -> dict:
     from netgent.agent import BrowserAgent, make_llm
 
     llm = make_llm(model)
     t0 = time.perf_counter()
-    async with _session(backend) as s:
+    async with _session(backend, headless) as s:
         # The challenge's cards demand hover and key presses; goto stays off (a re-navigation
         # resets the page's score — measured in the Stage 1 A/B).
         agent = BrowserAgent(
@@ -97,14 +99,16 @@ async def run_challenge(backend: str, max_steps: int, out_dir: Path, model: str 
     }
 
 
-async def run_sweep(backend: str, max_steps: int, out_dir: Path, model: str = DEFAULT_MODEL) -> dict:
+async def run_sweep(
+    backend: str, max_steps: int, out_dir: Path, model: str = DEFAULT_MODEL, headless: bool = True
+) -> dict:
     from netgent.agent import make_llm
     from netgent.evals.sweep import sweep_forms
 
     del out_dir  # the sweep keeps its own per-form results inside the result
     llm = make_llm(model)
     t0 = time.perf_counter()
-    async with _session(backend) as s:
+    async with _session(backend, headless) as s:
         await s.page.goto(FORMS_URL, wait_until="networkidle")
         result = await sweep_forms(s, llm, max_steps_per_form=max_steps, retries=1, max_actions_per_step=_max_actions())
     usage = getattr(llm, "usage", None)
@@ -133,6 +137,7 @@ async def run(
     tag: str = "",
     out_dir: Path = Path("evals/results/stress"),
     progress=None,
+    headless: bool = True,
 ) -> list[dict]:
     """Run `runs` repetitions; each result is written to <out_dir>/<kind>-<backend><tag>-r<i>/."""
     from netgent.core.settings import get_settings
@@ -142,7 +147,7 @@ async def run(
     results = []
     for i in range(runs):
         d = out_dir / f"{kind}-{backend}{tag}-r{i}"
-        r = await (run_challenge if kind == "challenge" else run_sweep)(backend, steps, d, model)
+        r = await (run_challenge if kind == "challenge" else run_sweep)(backend, steps, d, model, headless)
         d.mkdir(parents=True, exist_ok=True)
         (d / "result.json").write_text(json.dumps(r, indent=2) + "\n")
         results.append(r)

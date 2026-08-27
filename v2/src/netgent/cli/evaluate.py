@@ -109,6 +109,7 @@ def stress(
     model: Annotated[str, typer.Option(help="LLM as provider/model.")] = "anthropic/claude-haiku-4-5-20251001",
     tag: Annotated[str, typer.Option(help="Suffix for the result dir, e.g. '-M' (use --tag=-M).")] = "",
     out: Annotated[Path | None, typer.Option(help="Results root (default: evals/results/stress/).")] = None,
+    headless: Annotated[bool, typer.Option("--headless/--headed", help="Run the browser headless.")] = True,
 ) -> None:
     """Stress tests with the cheap model (LLM): the 21-form sweep or the 15-card challenge game.
 
@@ -125,7 +126,7 @@ def stress(
         raise typer.Exit(2)
     results = asyncio.run(
         mod.run(kind, backend, runs=runs, max_steps=max_steps, model=model, tag=tag,
-                out_dir=out or RESULTS / "stress", progress=typer.echo)
+                out_dir=out or RESULTS / "stress", progress=typer.echo, headless=headless)
     )
     typer.echo("\n" + mod.summary_table(results))
 
