@@ -42,8 +42,8 @@ class GenerateRequest(BaseModel):
     name: str = "workflow"
     params: dict[str, str] = Field(default_factory=dict)  # name -> sample value used in exploration
     max_steps: int = 25
-    # Extra action kinds to offer the explorer beyond decision.DEFAULT_KINDS (hover/press/goto
-    # are opt-in: rarely needed, and measured to cost steps when always available).
+    # Extra action kinds to offer the explorer beyond decision.DEFAULT_KINDS (hover/press/goto/
+    # go_back are opt-in: rarely needed, and measured to cost steps when always available).
     allow_kinds: list[str] = Field(default_factory=list)
     max_actions_per_step: int = 1  # >1 lets one decision carry a bounded batch (each item = one transition)
     headless: bool = True

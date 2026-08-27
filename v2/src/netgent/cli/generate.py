@@ -29,7 +29,7 @@ def generate(
     headless: Annotated[bool, typer.Option("--headless/--headed")] = True,
     allow: Annotated[
         list[str] | None,
-        typer.Option("--allow", help="Extra action kinds to offer the explorer: hover, press, goto (repeatable)."),
+        typer.Option("--allow", help="Extra kinds to offer the explorer: hover, press, goto, go_back (repeatable)."),
     ] = None,
     max_actions: Annotated[
         int, typer.Option(help="Atomic actions one decision may batch (1-4; each is still one transition).")

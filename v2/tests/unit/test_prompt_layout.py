@@ -19,10 +19,10 @@ def test_prompt_reflects_the_allowed_kinds_only():
     kinds_line = next(ln for ln in default.splitlines() if ln.startswith("- kind:"))
     for kind in DEFAULT_KINDS:
         assert kind in kinds_line.split("(not available")[0], kind
-    assert "not available in this task: hover, press, goto" in kinds_line
+    assert "not available in this task: hover, press, goto, go_back" in kinds_line
     assert "keys (press" not in default and "url (goto)" not in default
     with_press = build_system_prompt(DEFAULT_KINDS | {"press"})
-    assert "keys (press" in with_press and "not available in this task: hover, goto" in with_press
+    assert "keys (press" in with_press and "not available in this task: hover, goto, go_back" in with_press
     assert AgentDecision(reasoning="r", done=True, success=True).kind is None
 
 

@@ -21,8 +21,11 @@ AgentActionKind = Literal[
 ]
 ALL_KINDS: frozenset[str] = frozenset(AgentActionKind.__args__)
 # The convergent core every surveyed DOM agent has. hover/press/goto are opt-in per task:
-# AgentOccam's largest single gain (+9.4 SR on WebArena) came from deleting them.
-DEFAULT_KINDS: frozenset[str] = frozenset({"click", "fill", "select", "upload", "scroll", "go_back", "wait"})
+# AgentOccam's largest single gain (+9.4 SR on WebArena) came from deleting them. go_back is
+# opt-in too, by our own measurement: offered by default, Haiku used it 41 times in one
+# 21-form sweep (0 in the baseline), once navigating to about:blank and losing 8 forms
+# (docs/research/explorer-optimisation.md §2.2).
+DEFAULT_KINDS: frozenset[str] = frozenset({"click", "fill", "select", "upload", "scroll", "wait"})
 OPT_IN_KINDS: frozenset[str] = ALL_KINDS - DEFAULT_KINDS
 
 # Aliases a model emits for our kinds (Skyvern's action_type.upper() + legacy-alias map).
