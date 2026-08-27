@@ -12,8 +12,9 @@ compile time; every replay is **zero-LLM**.
 An NFA: **states carry conditions** (triggers: `url_matches`, `selector_visible`,
 `selector_hidden`, `title_contains`, …), **transitions carry exactly one atomic action** from a
 closed set (goto, click, fill, press, select, scroll, upload_file, go_back, wait, hover, noop).
-Pop-ups are ε-transitions (`noop`). Control flow is a bounded regular expression
-(`control_sequence`, `Branch`, `Repeat`) — no code in artifacts, ever.
+Pop-ups are ε-transitions (`noop`): scoped, bounded `Interrupt`s swept by the executor between
+atomic steps. Control flow is a bounded regular expression (`control_sequence`, `Branch`,
+`Repeat`) — no code in artifacts, ever.
 
 ## The pipeline
 
@@ -39,7 +40,7 @@ netgent run workflow.yaml --param name=value        # deterministic, zero LLM
 
 | Package | Role |
 |---|---|
-| `schema/` | pydantic artifact models: workflow, actions, triggers, control (`Branch`/`Repeat`/`Param`), records |
+| `schema/` | pydantic artifact models: workflow, actions, triggers, control (`Branch`/`Repeat`/`Interrupt`/`Param`), records |
 | `browser/` | the Playwright layer, split by role: `pw.py` (the single Playwright/Patchright import, `PATCHED_BROWSER`), `profile.py` (`BrowserProfile`: real Chrome, nothing spoofed), `factory.py` (launch → context → page → CDP, client-hints repair; capture hooks in here), `session.py` (`BrowserSession` facade), `resolution.py` (locator chains), `actions.py` (dispatch), `triggers.py` (state conditions, polling), `dom/` (`models.py`, `observer.py` — snapshot across frames/shadow DOM, `serializer.py` — the observation text the agent reads, `closed_shadow.py` — closed roots over CDP, `scripts/*.js` — the injected walker) |
 | `executor/` | control-program interpreter + parameter resolution (static + page-extracted, with guards) |
 | `agent/` | the compile-time agents, one package each: `explorer/` (one `BrowserAgent`: LangGraph observe→decide→act loop, observation, prompt), `generator/` (trajectories → NFA), `validator/` (zero-LLM replay check); `orchestrator.py` chains them (the entry behind `netgent generate`, itself a LangGraph); shared LLM seam in `llm.py` |

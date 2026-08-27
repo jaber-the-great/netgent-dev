@@ -12,7 +12,7 @@ import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from netgent.schema.actions import Action
-from netgent.schema.control import Branch, ControlNode, EdgeStep, Milestone, Param, Repeat
+from netgent.schema.control import Branch, ControlNode, EdgeStep, Interrupt, Milestone, Param, Repeat
 from netgent.schema.triggers import Trigger
 
 DEFAULT_STATE_TIMEOUT_MS = 10_000
@@ -90,6 +90,9 @@ class Workflow(BaseModel):
     # Empty = legacy behavior (success = every edge ok).
     accept_states: list[str] = Field(default_factory=list)
     milestones: list[Milestone] = Field(default_factory=list)
+    # Scoped, bounded ε-interrupt handlers (pop-ups/ads), swept by the executor between
+    # control-program nodes. See schema/control.py::Interrupt.
+    interrupts: list[Interrupt] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_graph(self) -> Self:
@@ -127,6 +130,27 @@ class Workflow(BaseModel):
         unknown_accept = set(self.accept_states) - known
         if unknown_accept:
             raise ValueError(f"accept_states reference unknown states: {sorted(unknown_accept)}")
+        interrupt_ids = [i.id for i in self.interrupts]
+        if len(interrupt_ids) != len(set(interrupt_ids)):
+            raise ValueError("duplicate interrupt ids")
+        for interrupt in self.interrupts:
+            if interrupt.state not in known:
+                raise ValueError(f"interrupt {interrupt.id!r}: unknown state {interrupt.state!r}")
+            if unknown_scope := set(interrupt.scope) - known:
+                raise ValueError(f"interrupt {interrupt.id!r}: unknown scope states {sorted(unknown_scope)}")
+            if unknown_resolve := set(interrupt.resolve) - known_edges:
+                raise ValueError(f"interrupt {interrupt.id!r}: unknown resolve transitions {sorted(unknown_resolve)}")
+            # The resolution must be a chain rooted at the interrupt state, so the executor
+            # can run it as ordinary edges and know where it stands after each one.
+            at = interrupt.state
+            for edge_id in interrupt.resolve:
+                t = self.transition(edge_id)
+                if t.source != at:
+                    raise ValueError(
+                        f"interrupt {interrupt.id!r}: resolve edge {edge_id!r} fires from {t.source!r},"
+                        f" expected {at!r} (resolution must chain from the interrupt state)"
+                    )
+                at = t.target
         return self
 
     def as_control(self) -> list[ControlNode]:

@@ -53,10 +53,13 @@ def run(
 
     for edge in record.edges:
         ok = edge.outcome == "ok"
-        color = "green" if ok else "red"
+        recovered = edge.outcome == "recovered"
+        color = "green" if ok else ("yellow" if recovered else "red")
+        symbol = "✓" if ok else ("↻" if recovered else "✗")
         latency = f" ({edge.trigger_latency_ms:.0f}ms to recognize {edge.target})" if ok else ""
-        typer.secho(f" {'✓' if ok else '✗'} {edge.transition_id}: {edge.action_type}{latency}", fg=color)
-        if edge.error:
+        note = " (did not settle — anchor re-checked)" if recovered else ""
+        typer.secho(f" {symbol} {edge.transition_id}: {edge.action_type}{latency}{note}", fg=color)
+        if edge.error and not recovered:
             typer.secho(f"   {edge.error}", fg="red")
 
     if save:

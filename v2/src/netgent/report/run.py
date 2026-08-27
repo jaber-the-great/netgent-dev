@@ -10,7 +10,7 @@ from pathlib import Path
 
 from netgent.schema.records import RunRecord
 
-_SYMBOL = {"ok": "✓", "trigger_timeout": "✗", "action_error": "✗", "param_error": "✗"}
+_SYMBOL = {"ok": "✓", "recovered": "↻", "trigger_timeout": "✗", "action_error": "✗", "param_error": "✗"}
 
 
 def load_record(path: Path) -> RunRecord:

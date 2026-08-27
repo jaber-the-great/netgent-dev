@@ -227,3 +227,160 @@ def test_dialog_matches_trigger_round_trips():
     state = State(id="submitted", conditions=[{"type": "dialog_matches", "pattern": "alert: Form submitted"}])
     assert isinstance(state.conditions[0], DialogMatches)
     assert State.model_validate(state.model_dump()).conditions[0].pattern == "alert: Form submitted"
+
+
+def _interrupt_workflow(**interrupt_overrides) -> Workflow:
+    """A 2-edge word plus an ad pop-up interrupt anchored on #ad, resolved by one click."""
+    interrupt = dict(
+        id="ad",
+        state="s_ad",
+        resolve=["t_skip"],
+        scope=["home"],
+        max_fires=2,
+    )
+    interrupt.update(interrupt_overrides)
+    return Workflow(
+        name="demo",
+        start_state="home",
+        states=[
+            State(id="home", conditions=[{"type": "url_matches", "pattern": "example\\.com"}]),
+            State(id="done", conditions=[{"type": "selector_visible", "selector": "#result"}]),
+            State(id="s_ad", conditions=[{"type": "selector_visible", "selector": "#ad"}]),
+            State(id="s_ad_gone", conditions=[{"type": "selector_hidden", "selector": "#ad"}]),
+        ],
+        transitions=[
+            Transition(
+                id="t1",
+                source="home",
+                target="done",
+                action=ClickAction(locator=[LocatorStep(fn="locator", args=["#go"])]),
+            ),
+            Transition(
+                id="t_skip",
+                source="s_ad",
+                target="s_ad_gone",
+                action=ClickAction(locator=[LocatorStep(fn="locator", args=["#skip"])]),
+            ),
+        ],
+        control_sequence=["t1"],  # the word: resolution edges are NOT word members
+        interrupts=[interrupt],
+    )
+
+
+def test_interrupt_validation():
+    wf = _interrupt_workflow()
+    assert wf.interrupts[0].max_fires == 2
+    with pytest.raises(ValidationError, match="unknown state"):
+        _interrupt_workflow(state="nope")
+    with pytest.raises(ValidationError, match="unknown scope states"):
+        _interrupt_workflow(scope=["nope"])
+    with pytest.raises(ValidationError, match="unknown resolve transitions"):
+        _interrupt_workflow(resolve=["nope"])
+    with pytest.raises(ValidationError, match="resolution must chain from the interrupt state"):
+        _interrupt_workflow(resolve=["t1"])  # t1 fires from home, not from s_ad
+    with pytest.raises(ValidationError):
+        _interrupt_workflow(max_fires=0)  # the red-line backstop is mandatory and positive
+    with pytest.raises(ValidationError):
+        _interrupt_workflow(scope=[])  # in-scope ε-edges, never global-by-omission
+
+
+def test_executor_sweeps_interrupt_then_continues():
+    import asyncio
+
+    wf = _interrupt_workflow()
+    fired: list[str] = []
+
+    class FakeSession:
+        def __init__(self):
+            self.ad_showing = True
+
+        async def dispatch(self, action):
+            fired.append(getattr(action, "locator", [LocatorStep(fn="locator", args=["?"])])[0].args[0])
+            if fired[-1] == "#skip":
+                self.ad_showing = False
+
+        async def wait_for_state(self, state):
+            return 0.0
+
+        async def condition_report(self, state):
+            if state.id == "s_ad":
+                return [("selector_visible", self.ad_showing)]
+            return [(c.type, True) for c in state.conditions]
+
+        class page:
+            url = "https://example.com"
+
+    record = asyncio.run(Executor(FakeSession(), wf).run())
+    assert record.success
+    # The sweep saw the ad before t1, resolved it, then the word proceeded.
+    assert fired == ["#skip", "#go"]
+    assert [e.transition_id for e in record.edges] == ["t_skip", "t1"]
+
+
+def test_executor_interrupt_respects_max_fires():
+    import asyncio
+
+    wf = _interrupt_workflow(max_fires=1)
+    dispatched: list[str] = []
+
+    class FakeSession:  # the "ad" never goes away — the cap must stop the loop, not the page
+        async def dispatch(self, action):
+            dispatched.append(action.type)
+
+        async def wait_for_state(self, state):
+            return 0.0
+
+        async def condition_report(self, state):
+            if state.id == "s_ad":
+                return [("selector_visible", True)]
+            return [(c.type, True) for c in state.conditions]
+
+        class page:
+            url = "https://example.com"
+
+    record = asyncio.run(Executor(FakeSession(), wf).run())
+    assert record.success
+    skips = [e for e in record.edges if e.transition_id == "t_skip"]
+    assert len(skips) == 1  # fired once, capped, word completed
+
+
+def test_executor_refires_interrupt_when_popup_chains():
+    """Chained pop-ups (YouTube 'ad 1 of 2'): dismissing the first re-shows the same
+    selector, so the resolve edge's selector_hidden target never settles. Resolution is
+    the anchor going away (or max_fires), so the sweep re-fires instead of aborting."""
+    import asyncio
+
+    from netgent.core.errors import TriggerTimeoutError
+
+    wf = _interrupt_workflow(max_fires=3)
+    skips_dispatched: list[str] = []
+
+    class FakeSession:
+        def __init__(self):
+            self.ads_remaining = 2  # a chain of two ads, same #skip selector
+
+        async def dispatch(self, action):
+            sel = getattr(action, "locator", None)
+            if sel and sel[0].args[0] == "#skip":
+                skips_dispatched.append("#skip")
+                self.ads_remaining -= 1
+
+        async def wait_for_state(self, state):
+            if state.id == "s_ad_gone" and self.ads_remaining > 0:
+                # ad 2's skip button is already visible again: selector_hidden unmet
+                raise TriggerTimeoutError("s_ad_gone", ["selector_hidden"], 10000)
+            return 0.0
+
+        async def condition_report(self, state):
+            if state.id == "s_ad":
+                return [("selector_visible", self.ads_remaining > 0)]
+            return [(c.type, True) for c in state.conditions]
+
+        class page:
+            url = "https://example.com"
+
+    record = asyncio.run(Executor(FakeSession(), wf).run())
+    assert record.success
+    assert skips_dispatched == ["#skip", "#skip"]  # both ads skipped, then the word ran
+    skip_edges = [e for e in record.edges if e.transition_id == "t_skip"]
+    assert [e.outcome for e in skip_edges] == ["recovered", "ok"]

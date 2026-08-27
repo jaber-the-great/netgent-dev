@@ -32,10 +32,61 @@ def test_actions_become_transitions_and_urls_become_conditions():
     wf = compile_trajectory(_traj(), name="yt")
     assert [t.id for t in wf.transitions] == ["t1", "t2", "t3"]  # failed + done steps dropped
     assert wf.control_sequence == ["t1", "t2", "t3"]
-    # step 2 stayed on the same page -> unconditioned state; step 3 moved -> url condition
-    assert wf.state("s2").conditions == []
+    # step 2 stayed on the same page -> no url condition, but it IS anchored on the next
+    # edge's target element (t3 presses Enter on input#q)
+    (anchor,) = wf.state("s2").conditions
+    assert anchor.type == "selector_visible" and anchor.selector == "input#q"
+    # step 3 moved -> url condition; final state has no next edge -> no anchor
     (cond,) = wf.state("s3").conditions
     assert cond.pattern == "https://youtube\\.com/results"  # query stripped, regex-escaped
+
+
+def test_states_anchor_on_next_edges_target_element():
+    wf = compile_trajectory(_traj(), name="yt")
+    # s1 (after goto): url condition AND the anchor for t2's fill target
+    url_cond, anchor = wf.state("s1").conditions
+    assert url_cond.type == "url_matches"
+    assert anchor.type == "selector_visible" and anchor.selector == "input#q"
+
+
+def test_get_by_role_locator_becomes_role_selector_anchor():
+    traj = AgentTrajectory(
+        task="t",
+        success=True,
+        steps=[
+            AgentStep(n=1, kind="goto", reasoning="open", url="https://x.com/",
+                      action={"type": "goto", "url": "https://x.com"}),
+            AgentStep(n=2, kind="click", reasoning="click", url="https://x.com/",
+                      action={"type": "click",
+                              "locator": [{"fn": "get_by_role", "args": ["button"],
+                                           "kwargs": {"name": "Search"}}]}),
+        ],
+    )
+    wf = compile_trajectory(traj, name="x")
+    _, anchor = wf.state("s1").conditions
+    assert anchor.selector == 'role=button[name="Search" i]'
+
+
+def test_untranslatable_locators_get_no_anchor():
+    traj = AgentTrajectory(
+        task="t",
+        success=True,
+        steps=[
+            AgentStep(n=1, kind="goto", reasoning="open", url="https://x.com/",
+                      action={"type": "goto", "url": "https://x.com"}),
+            # multi-step chain: conservatively no anchor (open gate, never a wrong guard)
+            AgentStep(n=2, kind="click", reasoning="click", url="https://x.com/",
+                      action={"type": "click",
+                              "locator": [{"fn": "locator", "args": ["#a"]},
+                                          {"fn": "nth", "args": [0]}]}),
+            # locator-less action: nothing to anchor on
+            AgentStep(n=3, kind="press", reasoning="key", url="https://x.com/",
+                      action={"type": "press", "keys": "l"}),
+        ],
+    )
+    wf = compile_trajectory(traj, name="x")
+    assert all(c.type == "url_matches" for c in wf.state("s1").conditions)  # no anchor added
+    assert wf.state("s2").conditions == []  # next action has no locator
 
 
 def test_sample_values_become_params():
@@ -69,8 +120,9 @@ def test_compiler_anchors_states_on_the_next_steps_element_with_frame_path():
                       action=FillAction(locator=[frame, LocatorStep(fn="locator", args=["#card"])], text="4242")),
             AgentStep(n=2, kind="click", reasoning="", url="http://shop/checkout",
                       action=ClickAction(locator=[frame, LocatorStep(fn="locator", args=["#pay"])])),
-            # nth-disambiguated chains are not expressible as a CSS trigger; top-frame
-            # elements and uploads are deliberately not anchored → no derived condition
+            # nth-disambiguated chains are not expressible as a CSS trigger; uploads are
+            # deliberately not anchored → no derived condition. Top-frame single-step
+            # targets ARE anchored (selector_visible, no frame_path).
             AgentStep(n=3, kind="click", reasoning="", url="http://shop/done",
                       action=ClickAction(locator=[frame, LocatorStep(fn="locator", args=["#dup"]),
                                                   LocatorStep(fn="nth", args=[1])])),
@@ -92,7 +144,10 @@ def test_compiler_anchors_states_on_the_next_steps_element_with_frame_path():
         {"type": "selector_visible", "selector": "#pay", "frame_path": ['iframe[name="payframe"]']}
     ]
     assert by_id["s3"].conditions == []  # next: nth chain
-    assert [c.type for c in by_id["s4"].conditions] == ["url_matches"]  # next: top-frame click
+    # next: top-frame click — anchored by _target_selector (merged behavior), frame-free
+    s4 = [c.model_dump() for c in by_id["s4"].conditions]
+    assert [c["type"] for c in s4] == ["url_matches", "selector_visible"]
+    assert s4[1]["selector"] == "#top-level" and not s4[1].get("frame_path")
     assert by_id["s5"].conditions == []  # next: upload
     assert by_id["s6"].conditions == []  # last state
 
@@ -130,3 +185,94 @@ def test_step_dialog_becomes_a_dialog_matches_condition():
     dialog = [c for c in final.conditions if c.type == "dialog_matches"]
     assert len(dialog) == 1
     assert "dumbledore" in dialog[0].pattern
+
+
+def _ad_traj() -> AgentTrajectory:
+    """A watch-page trajectory with an ad-skip click and a 15 s dwell."""
+    return AgentTrajectory(
+        task="watch a video, skip ads",
+        success=True,
+        steps=[
+            AgentStep(n=1, kind="goto", reasoning="open", url="https://yt.com/watch?v=x",
+                      action={"type": "goto", "url": "https://yt.com/watch?v=x"}),
+            AgentStep(n=2, kind="click", reasoning="A skip ads button is visible; skip the ad.",
+                      url="https://yt.com/watch?v=x",
+                      action={"type": "click", "locator": [{"fn": "locator", "args": ["#skip-ad"]}]}),
+            AgentStep(n=3, kind="wait", reasoning="watch for 15 seconds", url="https://yt.com/watch?v=x",
+                      action={"type": "wait", "seconds": 15.0}),
+            AgentStep(n=4, kind="press", reasoning="fast forward", url="https://yt.com/watch?v=x",
+                      action={"type": "press", "keys": "l"}),
+        ],
+    )
+
+
+def test_interruption_clicks_become_scoped_interrupts():
+    wf = compile_trajectory(_ad_traj(), name="yt")
+    # The ad-skip click left the main word...
+    assert [t.id for t in wf.transitions if not t.id.startswith("ti")] != []
+    assert all("skip-ad" not in str(t.action) for t in wf.transitions if t.source.startswith("s") or t.source == "init")
+    # ...and became an interrupt anchored on the skip button, scoped to watch-page states.
+    (intr,) = wf.interrupts
+    (anchor_cond,) = wf.state(intr.state).conditions
+    assert anchor_cond.type == "selector_visible" and anchor_cond.selector == "#skip-ad"
+    assert intr.max_fires == 3 and intr.resolve == ["ti1"]
+    assert set(intr.scope) <= {s.id for s in wf.states}
+    # resolution edge verifies the pop-up went away
+    (done_cond,) = wf.state(wf.transition("ti1").target).conditions
+    assert done_cond.type == "selector_hidden"
+
+
+def test_dwells_compile_to_bounded_repeats():
+    wf = compile_trajectory(_ad_traj(), name="yt")
+    assert wf.control_sequence is None  # rich program in use
+    repeats = [n for n in wf.control if n.kind == "repeat"]
+    (rep,) = repeats
+    assert rep.max_iterations == 14  # 15 s = 1 s edge + 14 repeated 1 s slices
+    (body,) = rep.body
+    dwell_edge = wf.transition(body.edge)
+    assert dwell_edge.source == dwell_edge.target  # self-loop: sweeps run between slices
+    assert dwell_edge.action.seconds == 1.0
+
+
+def test_linear_no_interrupt_trajectories_keep_control_sequence():
+    wf = compile_trajectory(_traj(), name="yt")
+    assert wf.control_sequence == ["t1", "t2", "t3"]
+    assert wf.control is None and wf.interrupts == []
+
+
+def test_reasoning_mention_alone_does_not_make_an_interrupt():
+    """'maybe it restarted after the ad' on a seek-slider click must stay in the main word."""
+    traj = AgentTrajectory(
+        task="t",
+        success=True,
+        steps=[
+            AgentStep(n=1, kind="goto", reasoning="open", url="https://yt.com/watch?v=x",
+                      action={"type": "goto", "url": "https://yt.com/watch?v=x"}),
+            AgentStep(n=2, kind="click", reasoning="video is at 0:03, maybe it restarted after the ad",
+                      url="https://yt.com/watch?v=x",
+                      action={"type": "click",
+                              "locator": [{"fn": "get_by_role", "args": ["slider"],
+                                           "kwargs": {"name": "Seek slider"}}]}),
+        ],
+    )
+    wf = compile_trajectory(traj, name="x")
+    assert wf.interrupts == []  # target is not a dismissal control → main word
+    assert len(wf.transitions) == 2
+
+
+def test_params_bind_on_trajectories_with_interrupts_and_dwells():
+    """Regression: _bind_params zipped steps against ALL transitions (strict), but dwell
+    twins (t{i}_dwell) and interrupt resolutions (ti{k}) have no originating step — the
+    zip must pair steps with the word's primary edges t1..tN only."""
+    steps = list(_ad_traj().steps)
+    steps.insert(1, AgentStep(n=10, kind="fill", reasoning="search", url="https://yt.com/watch?v=x",
+                              param="query",
+                              action={"type": "fill", "locator": [{"fn": "locator", "args": ["input#q"]}],
+                                      "text": "cat videos"}))
+    traj = AgentTrajectory(task="t", success=True, steps=steps)
+    warnings: list[str] = []
+    wf = compile_trajectory(traj, name="yt", params={"query": "cat videos"}, warnings=warnings)
+    assert wf.interrupts and any(t.id.endswith("_dwell") for t in wf.transitions)  # the crash shape
+    (fill_edge,) = [t for t in wf.transitions if t.action.type == "fill"]
+    assert fill_edge.action.text == "${query}"
+    assert not warnings

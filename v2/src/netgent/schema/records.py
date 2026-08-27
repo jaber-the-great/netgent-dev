@@ -10,7 +10,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-EdgeOutcome = Literal["ok", "trigger_timeout", "action_error", "param_error"]
+# "recovered": a resolve edge whose target didn't settle but whose interrupt re-checked
+# its anchor and moved on (chained pop-ups) — non-fatal, distinct from a real timeout.
+EdgeOutcome = Literal["ok", "recovered", "trigger_timeout", "action_error", "param_error"]
 
 
 def utcnow() -> datetime:
