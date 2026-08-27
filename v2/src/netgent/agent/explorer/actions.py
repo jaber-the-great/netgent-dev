@@ -80,6 +80,11 @@ def to_action(
         case "hover":
             return HoverAction(locator=locator_for(element()))
         case "press":
+            # With an index the key goes to that element (focus first); without, to the page.
+            # Index-less Enter after a fill was the baseline's stuck loop: focus had moved.
+            elems = snapshot.interactive()
+            if decision.index is not None and 0 <= decision.index < len(elems):
+                return PressAction(keys=decision.keys or "Enter", locator=locator_for(elems[decision.index]))
             return PressAction(keys=decision.keys or "Enter")
         case "scroll":
             down = decision.down if decision.down is not None else True

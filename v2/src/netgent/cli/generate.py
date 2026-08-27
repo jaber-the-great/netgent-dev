@@ -27,6 +27,10 @@ def generate(
         Path | None, typer.Option("--trajectory", help="Also write the exploration trajectory here.")
     ] = None,
     headless: Annotated[bool, typer.Option("--headless/--headed")] = True,
+    allow: Annotated[
+        list[str] | None,
+        typer.Option("--allow", help="Extra action kinds to offer the explorer: hover, press, goto (repeatable)."),
+    ] = None,
     validate: Annotated[
         bool, typer.Option("--validate/--no-validate", help="Replay the compiled workflow with zero LLM calls.")
     ] = True,
@@ -56,6 +60,7 @@ def generate(
         name=name or (out.stem if out.stem != "workflow" else "workflow"),
         params=dict(p.split("=", 1) for p in (param or [])),
         max_steps=max_steps,
+        allow_kinds=[k.strip() for item in (allow or []) for k in item.split(",") if k.strip()],
         headless=headless,
         out=out,
         trajectory_dir=trajectory_dir,

@@ -25,7 +25,7 @@ def test_orchestrate_explores_generates_and_validates(tmp_path):
         [
             AgentDecision(reasoning="type the name", kind="fill", index=0, text="Ada"),
             AgentDecision(reasoning="press go", kind="click", index=1),
-            AgentDecision(reasoning="welcome is shown", kind="done", success=True),
+            AgentDecision(reasoning="welcome is shown", done=True, success=True),
         ]
     )
     events: list[tuple[str, str]] = []
@@ -52,7 +52,7 @@ def test_orchestrate_explores_generates_and_validates(tmp_path):
 def test_orchestrate_stops_when_exploration_fails(tmp_path):
     page = tmp_path / "p.html"
     page.write_text(FIXTURE)
-    llm = FakeLLM([AgentDecision(reasoning="a CAPTCHA blocks the task", kind="done", success=False)])
+    llm = FakeLLM([AgentDecision(reasoning="a CAPTCHA blocks the task", done=True, success=False)])
     req = GenerateRequest(task="impossible", url=page.as_uri(), out=tmp_path / "never.yaml")
     result = asyncio.run(orchestrate(req, llm))
 

@@ -1,16 +1,29 @@
 """The system prompt's contract and the LLM seam's message layout (no model, no network)."""
 
 from netgent.agent.explorer.browser_agent import StepRecord
-from netgent.agent.explorer.decision import AgentDecision
-from netgent.agent.explorer.prompt import SYSTEM_PROMPT
+from netgent.agent.explorer.decision import ALL_KINDS, DEFAULT_KINDS, AgentDecision
+from netgent.agent.explorer.prompt import SYSTEM_PROMPT, build_system_prompt
 from netgent.agent.llm import HISTORY_WINDOW, render_prompt
 
 
 def test_prompt_lists_every_kind_the_schema_accepts():
     """Defect fixed: `upload` was mandated by a later rule but missing from the kind list."""
     kinds_line = next(ln for ln in SYSTEM_PROMPT.splitlines() if ln.startswith("- kind:"))
-    for kind in AgentDecision.model_fields["kind"].annotation.__args__:
+    for kind in ALL_KINDS:
         assert kind in kinds_line, kind
+    assert "upload" in kinds_line and "done" not in kinds_line  # done is a boolean, not a kind
+
+
+def test_prompt_reflects_the_allowed_kinds_only():
+    default = build_system_prompt()
+    kinds_line = next(ln for ln in default.splitlines() if ln.startswith("- kind:"))
+    for kind in DEFAULT_KINDS:
+        assert kind in kinds_line.split("(not available")[0], kind
+    assert "not available in this task: hover, press, goto" in kinds_line
+    assert "keys (press" not in default and "url (goto)" not in default
+    with_press = build_system_prompt(DEFAULT_KINDS | {"press"})
+    assert "keys (press" in with_press and "not available in this task: hover, goto" in with_press
+    assert AgentDecision(reasoning="r", done=True, success=True).kind is None
 
 
 def test_prompt_has_the_rule_sections_the_survey_converged_on():

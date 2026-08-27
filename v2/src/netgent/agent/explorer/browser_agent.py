@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
+from netgent.agent.explorer.decision import ALL_KINDS, DEFAULT_KINDS
 from netgent.browser.session import BrowserSession
 from netgent.core.logger import get_logger
 from netgent.schema.actions import Action, GotoAction
@@ -57,7 +58,7 @@ class StepRecord(BaseModel):
         tail = {
             "ok": "",
             "failed": f" -> FAILED: {self.error}",
-            "no_change": " -> ran, but nothing on screen changed",
+            "no_change": " -> ran; no visible change in the listed elements/text (it may still have taken effect)",
             "waited": f" -> DONE WAITING: {self.error or 'the dwell is complete'}. Do NOT wait again.",
             "invalid": f" -> INVALID: {self.error}",
         }[self.outcome]
@@ -115,9 +116,23 @@ class AgentTrajectory(BaseModel):
 
 
 class BrowserAgent:
-    def __init__(self, llm: "LLM", max_steps: int = 25, run_dir: Path | None = None, upload_file: Path | None = None):
+    def __init__(
+        self,
+        llm: "LLM",
+        max_steps: int = 25,
+        run_dir: Path | None = None,
+        upload_file: Path | None = None,
+        allowed_kinds: frozenset[str] | set[str] | None = None,
+    ):
         self.llm = llm
         self._max_steps = max_steps
+        # The action kinds this agent may emit. hover/press/goto are opt-in (decision.py
+        # DEFAULT_KINDS); the prompt and the structured-output schema both reflect the set.
+        kinds = frozenset(allowed_kinds) if allowed_kinds is not None else DEFAULT_KINDS
+        unknown = kinds - ALL_KINDS
+        if unknown:
+            raise ValueError(f"unknown action kinds {sorted(unknown)}; choose from {sorted(ALL_KINDS)}")
+        self.allowed_kinds: frozenset[str] = kinds
         self._run_dir = run_dir
         # File the agent offers to any file input via kind="upload". A default sample is
         # created on demand so uploads work autonomously without the caller supplying one.

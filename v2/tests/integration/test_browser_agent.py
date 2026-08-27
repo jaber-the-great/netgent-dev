@@ -50,7 +50,7 @@ def test_agent_completes_a_form_with_scripted_llm(form_url, tmp_path):
         AgentDecision(reasoning="type the name", kind="fill", index=name_i, text="Ada"),
         AgentDecision(reasoning="type the email", kind="fill", index=email_i, text="ada@example.com"),
         AgentDecision(reasoning="submit the form", kind="click", index=names.index("Submit")),
-        AgentDecision(reasoning="the form was submitted", kind="done", success=True),
+        AgentDecision(reasoning="the form was submitted", done=True, success=True),
     ]
 
     async def _run():
@@ -67,7 +67,7 @@ def test_agent_completes_a_form_with_scripted_llm(form_url, tmp_path):
 
 def test_agent_stops_on_captcha_signal(form_url, tmp_path):
     # On a CAPTCHA the model returns done(success=False); the agent must not attempt anything.
-    script = [AgentDecision(reasoning="a CAPTCHA is blocking the task", kind="done", success=False)]
+    script = [AgentDecision(reasoning="a CAPTCHA is blocking the task", done=True, success=False)]
 
     async def _run():
         async with BrowserSession(headless=True) as s:
@@ -108,14 +108,14 @@ def test_agent_sees_new_elements_starred_and_new_text_after_its_own_action(tmp_p
     seen: list[str] = []
 
     class Capturing(FakeLLM):
-        async def decide(self, system, task, observation, history):
+        async def decide(self, system, task, observation, history, **kw):
             seen.append(observation)
-            return await super().decide(system, task, observation, history)
+            return await super().decide(system, task, observation, history, **kw)
 
     script = [
         AgentDecision(reasoning="open the menu", kind="click", index=0, memory="opening", next_goal="pick Canada"),
         AgentDecision(reasoning="pick", kind="click", index=1, evaluation="menu opened. Verdict: Success"),
-        AgentDecision(reasoning="done", kind="done", success=True),
+        AgentDecision(reasoning="done", done=True, success=True),
     ]
 
     async def _run():
@@ -127,7 +127,7 @@ def test_agent_sees_new_elements_starred_and_new_text_after_its_own_action(tmp_p
     traj, history = asyncio.run(_run())
     assert traj.success
     assert "CHANGED SINCE LAST STEP" not in seen[0] and "*[" not in seen[0]
-    assert "CHANGED SINCE LAST STEP: 1 new, 0 gone" in seen[1]
+    assert "CHANGED SINCE LAST STEP: 1 new element (marked *), 1 new text line (see NEW TEXT)." in seen[1]
     assert ' *[1] div (option) "Canada"' in seen[1] and '  [0] button "Country"' in seen[1]
     assert "NEW TEXT SINCE LAST STEP:\n  !ALERT Menu opened" in seen[1]
     # the typed memory carries the model's own fields and the element name, not just an index

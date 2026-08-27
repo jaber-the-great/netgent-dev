@@ -37,6 +37,15 @@ CHALLENGE_TASK = (
 )
 
 
+def _challenge_kinds() -> frozenset[str]:
+    from netgent.agent.explorer.decision import DEFAULT_KINDS
+
+    return DEFAULT_KINDS | {"hover", "press"}
+
+
+CHALLENGE_KINDS = _challenge_kinds()
+
+
 def _session(backend: str):
     """A BrowserSession for `backend`; the DOM walk is the only backend on this branch."""
     from netgent.browser.session import BrowserSession
@@ -52,7 +61,9 @@ async def run_challenge(backend: str, max_steps: int, out_dir: Path, model: str 
     llm = make_llm(model)
     t0 = time.perf_counter()
     async with _session(backend) as s:
-        agent = BrowserAgent(llm, max_steps=max_steps, run_dir=out_dir)
+        # The challenge's cards demand hover and key presses; goto stays off (a re-navigation
+        # resets the page's score — measured in the Stage 1 A/B).
+        agent = BrowserAgent(llm, max_steps=max_steps, run_dir=out_dir, allowed_kinds=CHALLENGE_KINDS)
         traj = await agent.run(s, CHALLENGE_TASK, CHALLENGE_URL)
         score = await s.page.locator(".score").inner_text()
         done_ids = await s.page.eval_on_selector_all(".task.completed", "els => els.map(e => e.id)")

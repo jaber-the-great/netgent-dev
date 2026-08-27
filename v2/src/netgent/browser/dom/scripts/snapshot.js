@@ -198,7 +198,10 @@
           // Salient visible text (headings, messages, labels) so the agent can read
           // confirmations and status — not just interactive elements.
           const t = directText(el);
-          if (t && t.length > 1 && !seenText.has(t)) {
+          // Single characters are kept only when they carry state (a score digit, a check
+          // mark): "Score: <span>1</span>" is otherwise invisible, and a click that only
+          // bumps it reads as a no-op (measured on the challenge page).
+          if (t && (t.length > 1 || /^[0-9✓✔✗]$/.test(t)) && !seenText.has(t)) {
             const alert = el.getAttribute('role') === 'alert' || el.getAttribute('role') === 'status';
             seenText.add(t);
             texts.push({ text: t.slice(0, 200), alert });

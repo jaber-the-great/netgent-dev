@@ -19,8 +19,8 @@ from typing import Annotated, Any, Literal, TypedDict
 
 from netgent.agent.explorer.actions import to_action
 from netgent.agent.explorer.browser_agent import MAX_REPEAT, AgentStep, BrowserAgent, StepRecord
-from netgent.agent.explorer.prompt import SYSTEM_PROMPT
-from netgent.browser.dom import element_key, format_observation
+from netgent.agent.explorer.prompt import build_system_prompt
+from netgent.browser.dom import element_lines, format_observation
 from netgent.browser.locators import capture_locator, durable_locator
 from netgent.browser.session import BrowserSession
 from netgent.core.errors import ExecutionError
@@ -35,7 +35,7 @@ class AgentState(TypedDict, total=False):
     snapshot: Any  # DomSnapshot for the current step
     observation: str
     prev_observation: str | None  # the diff-free rendering of the previous step (equality check)
-    prev_keys: set[str] | None  # element keys of the previous snapshot (the * markers)
+    prev_keys: dict[str, str] | None  # element key → rendered line of the previous snapshot (the diff)
     prev_texts: set[str] | None  # text blocks of the previous snapshot (NEW TEXT section)
     prev_url: str | None
     no_progress: int
@@ -60,6 +60,8 @@ def build_agent_graph(
 
     history = agent.history  # shared across runs (sweeps), mutated in place
     llm = agent.llm
+    allowed = agent.allowed_kinds
+    system_prompt = build_system_prompt(allowed)
 
     async def observe(state: AgentState) -> Command[Literal["decide", "__end__"]]:
         n = state.get("n", 0) + 1
@@ -104,7 +106,7 @@ def build_agent_graph(
                 "snapshot": snapshot,
                 "observation": observation,
                 "prev_observation": plain,
-                "prev_keys": {element_key(e) for e in snapshot.interactive()},
+                "prev_keys": element_lines(snapshot),
                 "prev_texts": {t.text for t in snapshot.texts},
                 "prev_url": snapshot.url,
                 "no_progress": no_progress,
@@ -116,16 +118,16 @@ def build_agent_graph(
     async def decide(state: AgentState) -> Command[Literal["act", "observe", "__end__"]]:
         n = state["n"]
         try:
-            decision = await llm.decide(SYSTEM_PROMPT, task, state["observation"], history)
+            decision = await llm.decide(system_prompt, task, state["observation"], history, allowed_kinds=allowed)
         except Exception as exc:  # noqa: BLE001 — a bad LLM response shouldn't crash the run
             logger.warning("step %d: LLM decision failed: %s", n, exc)
             history.append(StepRecord(n=n, kind="invalid", outcome="invalid", error=str(exc)[:200],
                                       reasoning="(your last response was invalid) — return a valid decision"))
             return Command(update={"prev_observation": None}, goto="observe")  # not a no-change step
-        logger.info("step %d: %s — %s", n, decision.kind, decision.reasoning)
+        logger.info("step %d: %s — %s", n, "done" if decision.done else decision.kind, decision.reasoning)
 
-        if decision.kind == "done":
-            step = AgentStep(n=n, kind=decision.kind, reasoning=decision.reasoning, url=state["snapshot"].url)
+        if decision.done:
+            step = AgentStep(n=n, kind="done", reasoning=decision.reasoning, url=state["snapshot"].url)
             return Command(
                 update={
                     "steps": [step],
@@ -141,6 +143,10 @@ def build_agent_graph(
         error = None
         action = None
         try:
+            if decision.kind not in allowed:
+                raise ValueError(
+                    f"{decision.kind} is not available in this task; use one of {', '.join(sorted(allowed))}"
+                )
             upload = agent.upload_path() if decision.kind == "upload" else None
             locator_for, note = await _verified_locator(session, snapshot, decision.index)
             action = to_action(decision, snapshot, upload_path=upload, locator_for=locator_for)

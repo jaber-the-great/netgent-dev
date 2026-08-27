@@ -23,7 +23,7 @@ import os
 
 from netgent.browser.dom.models import DomElement, DomSnapshot, TextBlock
 
-__all__ = ["element_key", "format_observation"]
+__all__ = ["element_key", "element_lines", "format_observation"]
 
 # Format hints for date/time inputs, copied from browser-use (dom/serializer/serializer.py:1157-1167):
 # the model cannot miss the required format when it is on the element's own line.
@@ -49,22 +49,28 @@ def element_key(el: DomElement) -> str:
     return "|".join(["/".join(el.frame_path), el.tag, el.type or "", el.role or "", el.name, cand])
 
 
+def element_lines(snapshot: DomSnapshot) -> dict[str, str]:
+    """`element_key` → rendered line (index-free) for every element: what the next step's
+    observation is diffed against, so a changed value / checked state counts as a change."""
+    return {element_key(el): _render(el) for el in snapshot.interactive()}
+
+
 def format_observation(
     snapshot: DomSnapshot,
     limit: int = 60,
     text_limit: int = 25,
-    previous: set[str] | None = None,
+    previous: dict[str, str] | None = None,
     previous_texts: set[str] | None = None,
 ) -> str:
     """Render the page slice around the viewport. Elements keep their original snapshot
     index (what the agent references); scrolling shifts which slice is shown.
 
-    `previous` / `previous_texts`: element keys (`element_key`) and text blocks from the
-    PREVIOUS step's snapshot of the same page. When given, elements absent from `previous`
-    are starred (`*[12]`) and a one-line change summary plus a "NEW TEXT SINCE LAST STEP"
-    section are emitted (browser-use's `*[` markers; docs/research/browser-agent-memory.md
-    §6.2c). Pass None on the first step and after a navigation, so a new page is not
-    starred wholesale.
+    `previous` / `previous_texts`: `element_lines()` and text blocks from the PREVIOUS step's
+    snapshot of the same page. When given, elements absent from `previous` are starred
+    (`*[12]`), a one-line change summary counts new/changed/gone elements, new text and
+    dialogs, and a "NEW TEXT SINCE LAST STEP" section is emitted (browser-use's `*[` markers;
+    docs/research/browser-agent-memory.md §6.2c). Pass None on the first step and after a
+    navigation, so a new page is not starred wholesale.
     """
     lines = [f"URL: {snapshot.url}", f"TITLE: {snapshot.title}"]
 
@@ -113,14 +119,29 @@ def format_observation(
             lines.append("POSITION: middle of page.")
         else:
             lines.append("POSITION: the whole page is listed. Nothing is hidden above or below.")
+    fresh_texts = [t for t in snapshot.texts if t.text not in previous_texts] if previous_texts is not None else []
     if previous is not None:
-        new = sum(1 for _, el in shown if element_key(el) not in previous)
-        current = {element_key(el) for _, el in indexed}
+        current = element_lines(snapshot)
+        new = sum(1 for k in current if k not in previous)
+        changed = sum(1 for k, line in current.items() if k in previous and previous[k] != line)
         gone = sum(1 for k in previous if k not in current)
-        if new or gone:
-            lines.append(f"CHANGED SINCE LAST STEP: {new} new, {gone} gone (new elements are marked *).")
-        else:
-            lines.append("CHANGED SINCE LAST STEP: nothing changed on screen.")
+        parts = []
+        if new:
+            parts.append(f"{new} new element{'s' if new != 1 else ''} (marked *)")
+        if changed:
+            parts.append(f"{changed} element{'s' if changed != 1 else ''} changed value/state")
+        if gone:
+            parts.append(f"{gone} element{'s' if gone != 1 else ''} gone")
+        if fresh_texts:
+            parts.append(f"{len(fresh_texts)} new text line{'s' if len(fresh_texts) != 1 else ''} (see NEW TEXT)")
+        if snapshot.dialogs:
+            parts.append(f"{len(snapshot.dialogs)} dialog{'s' if len(snapshot.dialogs) != 1 else ''}")
+        # Only claimed over what is LISTED: a click that flips a score digit or a status line
+        # must not read as a no-op (measured: it made the agent re-click a completed card
+        # until the stuck stop). The loop's own no-change verdict is written into the step
+        # record instead (graph.py).
+        summary = ", ".join(parts) + "." if parts else "no listed element or text changed."
+        lines.append(f"CHANGED SINCE LAST STEP: {summary}")
     if above:
         lines.append(f"(↑ {above} elements further above — scroll up to reach them)")
     lines.append("INTERACTIVE ELEMENTS:")
@@ -134,34 +155,8 @@ def format_observation(
                 label = " › ".join(key)
                 count = sum(1 for _, e in shown if tuple(e.frame_path) == key)
                 lines.append(f"|IFRAME {frame_number[key]}| {label[:80]} ({count} element{'s' if count != 1 else ''})")
-        # Mark elements inside a CLOSED shadow root (browser-use's |SHADOW(closed)| prefix,
-        # dom/serializer/serializer.py:1030-1062). Open roots get no marker — Playwright's
-        # engines pierce them and the model gains nothing (Eugene addendum item 2).
-        shadow = "|SHADOW(closed)| " if el.requires_closed_shadow else ""
-        kind = shadow + el.tag
-        if el.type:  # input[date], input[file], input[email] — the agent needs the type
-            kind += f"[{el.type}]"
-        elif el.role and el.role != el.tag:
-            kind += f" ({el.role})"
-        # Never echo a password: it would sit in the prompt where page text could exfiltrate
-        # it (browser-use serializer.py:1220-1227 treats this as a security boundary).
-        val = f' value="{el.value}"' if el.value and el.type != "password" else ""
-        if el.options:
-            val += f" options=[{', '.join(el.options)}]"
-        name = f' "{el.name}"' if el.name else ""
-        if el.type in _FORMAT_HINT:
-            name += f" format={_FORMAT_HINT[el.type]}"
-        state = ""
-        if el.checked is not None:
-            state += " [checked]" if el.checked else " [unchecked]"
-        if el.disabled:
-            state += " [disabled]"
-        if el.required:
-            state += " [required]"
-        if el.invalid:
-            state += " [invalid: still needs a valid value]"
         star = "*" if previous is not None and element_key(el) not in previous else " "
-        lines.append(f" {star}[{i}] {kind}{name}{val}{state}")
+        lines.append(f" {star}[{i}] {_render(el)}")
     if below:
         lines.append(f"(↓ {below} more elements below — scroll down to reveal and reach them)")
     if snapshot.dialogs:
@@ -173,14 +168,12 @@ def format_observation(
     if snapshot.frames_skipped:
         lines.append(f"(⚠ {snapshot.frames_skipped} frame(s) could not be observed this step: "
                      + "; ".join(snapshot.skipped_frames[:3]) + ")")
-    if previous_texts is not None:
-        fresh = [t for t in snapshot.texts if t.text not in previous_texts]
-        if fresh:
-            # Transient banners ("Thanks — recorded") appear for one step and vanish; naming
-            # them here is how the model learns the submit worked (memory doc §6.2c).
-            lines.append("NEW TEXT SINCE LAST STEP:")
-            for t in sorted(fresh, key=lambda t: not t.alert)[:8]:
-                lines.append(("  !ALERT " if t.alert else "  ") + t.text)
+    if fresh_texts:
+        # Transient banners ("Thanks — recorded") appear for one step and vanish; naming
+        # them here is how the model learns the submit worked (memory doc §6.2c).
+        lines.append("NEW TEXT SINCE LAST STEP:")
+        for t in sorted(fresh_texts, key=lambda t: not t.alert)[:8]:
+            lines.append(("  !ALERT " if t.alert else "  ") + t.text)
     texts = _visible_texts(snapshot, text_limit)
     if texts:
         lines.append("VISIBLE TEXT:")
@@ -188,6 +181,37 @@ def format_observation(
             prefix = "  !ALERT " if t.alert else "  "
             lines.append(f"{prefix}{t.text}")
     return "\n".join(lines)
+
+
+def _render(el: DomElement) -> str:
+    """One element's line, without its index."""
+    # Mark elements inside a CLOSED shadow root (browser-use's |SHADOW(closed)| prefix,
+    # dom/serializer/serializer.py:1030-1062). Open roots get no marker — Playwright's
+    # engines pierce them and the model gains nothing (Eugene addendum item 2).
+    shadow = "|SHADOW(closed)| " if el.requires_closed_shadow else ""
+    kind = shadow + el.tag
+    if el.type:  # input[date], input[file], input[email] — the agent needs the type
+        kind += f"[{el.type}]"
+    elif el.role and el.role != el.tag:
+        kind += f" ({el.role})"
+    # Never echo a password: it would sit in the prompt where page text could exfiltrate
+    # it (browser-use serializer.py:1220-1227 treats this as a security boundary).
+    val = f' value="{el.value}"' if el.value and el.type != "password" else ""
+    if el.options:
+        val += f" options=[{', '.join(el.options)}]"
+    name = f' "{el.name}"' if el.name else ""
+    if el.type in _FORMAT_HINT:
+        name += f" format={_FORMAT_HINT[el.type]}"
+    state = ""
+    if el.checked is not None:
+        state += " [checked]" if el.checked else " [unchecked]"
+    if el.disabled:
+        state += " [disabled]"
+    if el.required:
+        state += " [required]"
+    if el.invalid:
+        state += " [invalid: still needs a valid value]"
+    return f"{kind}{name}{val}{state}"
 
 
 def _visible_texts(snapshot: DomSnapshot, text_limit: int) -> list[TextBlock]:

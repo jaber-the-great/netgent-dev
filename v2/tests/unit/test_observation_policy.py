@@ -11,6 +11,7 @@ from netgent.browser.dom import (
     SelectorCandidate,
     TextBlock,
     element_key,
+    element_lines,
     format_observation,
 )
 
@@ -101,15 +102,24 @@ def test_element_diff_marks_new_elements_and_new_text():
         _el("Country", y=0, tag="div", role="combobox"),
         _el("Canada", y=30, tag="div", role="option"),
     ], texts=[TextBlock(text="Pick a country"), TextBlock(text="Saved!", alert=True)])
-    prev_keys = {element_key(e) for e in prev.elements}
-    obs = format_observation(now, previous=prev_keys, previous_texts={t.text for t in prev.texts})
-    assert "CHANGED SINCE LAST STEP: 1 new, 0 gone" in obs
+    obs = format_observation(now, previous=element_lines(prev), previous_texts={t.text for t in prev.texts})
+    assert "CHANGED SINCE LAST STEP: 1 new element (marked *), 1 new text line (see NEW TEXT)." in obs
     assert ' *[1] div (option) "Canada"' in obs
     assert '  [0] div (combobox) "Country"' in obs
     assert "NEW TEXT SINCE LAST STEP:\n  !ALERT Saved!" in obs
     # nothing changed → say so (the soft stuck signal); no diff section without a previous
-    same = format_observation(now, previous={element_key(e) for e in now.elements}, previous_texts=set())
-    assert "CHANGED SINCE LAST STEP: nothing changed on screen." in same
+    same = format_observation(now, previous=element_lines(now), previous_texts={t.text for t in now.texts})
+    assert "CHANGED SINCE LAST STEP: no listed element or text changed." in same
+    # a text-only change (a score, a status) is a change — never "nothing changed"
+    text_only = format_observation(now, previous=element_lines(now), previous_texts={"Pick a country"})
+    assert "CHANGED SINCE LAST STEP: 1 new text line (see NEW TEXT)." in text_only
+    # a value/state change on an existing element is a change too (a fill, a toggle)
+    filled = DomSnapshot(url="u", title="t", elements=[
+        _el("Country", y=0, tag="div", role="combobox", value="Canada"),
+        _el("Canada", y=30, tag="div", role="option"),
+    ], texts=now.texts)
+    changed = format_observation(filled, previous=element_lines(now), previous_texts={t.text for t in now.texts})
+    assert "CHANGED SINCE LAST STEP: 1 element changed value/state." in changed
     assert "CHANGED SINCE LAST STEP" not in format_observation(now)
 
 

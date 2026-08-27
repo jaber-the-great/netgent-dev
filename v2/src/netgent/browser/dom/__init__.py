@@ -11,7 +11,7 @@ The browser's environment configuration lives one level up in `browser/profile.p
 
 from netgent.browser.dom.models import BBox, DomElement, DomSnapshot, SelectorCandidate, TextBlock
 from netgent.browser.dom.observer import DomObserver
-from netgent.browser.dom.serializer import element_key, format_observation
+from netgent.browser.dom.serializer import element_key, element_lines, format_observation
 
 __all__ = [
     "BBox",
@@ -21,5 +21,6 @@ __all__ = [
     "SelectorCandidate",
     "TextBlock",
     "element_key",
+    "element_lines",
     "format_observation",
 ]

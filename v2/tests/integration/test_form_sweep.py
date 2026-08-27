@@ -35,7 +35,7 @@ def test_sweep_completes_and_verifies_each_form(tmp_path):
             [
                 AgentDecision(reasoning="fill the name", kind="fill", index=0, text="Ada"),
                 AgentDecision(reasoning="submit", kind="click", index=1),
-                AgentDecision(reasoning="submitted", kind="done", success=True),
+                AgentDecision(reasoning="submitted", done=True, success=True),
             ]
         )
 
@@ -92,7 +92,7 @@ def test_transient_success_banner_still_verifies(serve):
             self._steps = iter([
                 AgentDecision(reasoning="fill", kind="fill", index=0, text="a@b.co"),
                 AgentDecision(reasoning="submit", kind="click", index=1),
-                AgentDecision(reasoning="banner seen", kind="done", success=True),
+                AgentDecision(reasoning="banner seen", done=True, success=True),
             ])
 
         async def decide(self, *a, **k):

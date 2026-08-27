@@ -16,6 +16,10 @@ def agent(
         Path | None, typer.Option("--trajectory", help="Write the agent trajectory here.")
     ] = None,
     headless: Annotated[bool, typer.Option("--headless/--headed")] = True,
+    allow: Annotated[
+        list[str] | None,
+        typer.Option("--allow", help="Extra action kinds to offer the explorer: hover, press, goto (repeatable)."),
+    ] = None,
     show_graph: Annotated[
         bool, typer.Option("--graph", help="Print the agent loop's LangGraph (Mermaid) and exit.")
     ] = False,
@@ -37,10 +41,15 @@ def agent(
 
     resolved_model = model or get_settings().generator_model
 
+    from netgent.agent.explorer.decision import DEFAULT_KINDS
+
+    kinds = DEFAULT_KINDS | {k.strip() for item in (allow or []) for k in item.split(",") if k.strip()}
+
     async def _run():
         llm = make_llm(resolved_model)
         async with BrowserSession(headless=headless) as session:
-            return await BrowserAgent(llm, max_steps=max_steps, run_dir=trajectory_dir).run(session, task, url)
+            agent = BrowserAgent(llm, max_steps=max_steps, run_dir=trajectory_dir, allowed_kinds=kinds)
+            return await agent.run(session, task, url)
 
     traj = asyncio.run(_run())
     for s in traj.steps:

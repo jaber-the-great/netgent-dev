@@ -42,6 +42,9 @@ class GenerateRequest(BaseModel):
     name: str = "workflow"
     params: dict[str, str] = Field(default_factory=dict)  # name -> sample value used in exploration
     max_steps: int = 25
+    # Extra action kinds to offer the explorer beyond decision.DEFAULT_KINDS (hover/press/goto
+    # are opt-in: rarely needed, and measured to cost steps when always available).
+    allow_kinds: list[str] = Field(default_factory=list)
     headless: bool = True
     out: Path | None = None  # write the artifact here (yaml/json by suffix)
     trajectory_dir: Path | None = None
@@ -80,7 +83,11 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
 
     async def explore(state: OrchestrationState) -> Command[Literal["generate", "__end__"]]:
         emit("explore", f"exploring: {req.task}")
-        agent = BrowserAgent(llm, max_steps=req.max_steps, run_dir=req.trajectory_dir)
+        from netgent.agent.explorer.decision import DEFAULT_KINDS
+
+        agent = BrowserAgent(
+            llm, max_steps=req.max_steps, run_dir=req.trajectory_dir, allowed_kinds=DEFAULT_KINDS | set(req.allow_kinds)
+        )
         # The params are declared to the explorer as ${name} = 'sample' placeholders (Stagehand's
         # %var% contract): it types the sample AND reports `param` on the step that used it, so
         # the compiler binds ${name} structurally (the prompt's PARAMETERS rule).

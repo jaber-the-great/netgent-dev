@@ -22,7 +22,7 @@ import os
 from typing import Protocol
 
 from netgent.agent.explorer.browser_agent import StepRecord
-from netgent.agent.explorer.decision import AgentDecision
+from netgent.agent.explorer.decision import ALL_KINDS, AgentDecision
 
 # litellm-style "provider/model" → langchain model_provider id.
 _PROVIDER_ALIAS = {
@@ -35,10 +35,18 @@ _PROVIDER_ALIAS = {
 HISTORY_WINDOW = 10  # acted records shown per step
 FULL_BLOCKS = 3  # of which the most recent are rendered with eval/memory/goal
 MEMORY_FIELDS = ("evaluation", "memory", "next_goal")
+PARSE_RETRIES = 2  # in-place retries with the validation error fed back, before the step is lost
 
 
 class LLM(Protocol):
-    async def decide(self, system: str, task: str, observation: str, history: list[StepRecord]) -> AgentDecision: ...
+    async def decide(
+        self,
+        system: str,
+        task: str,
+        observation: str,
+        history: list[StepRecord],
+        allowed_kinds: frozenset[str] | None = None,
+    ) -> AgentDecision: ...
 
 
 def render_history(history: list[StepRecord]) -> str:
@@ -70,19 +78,27 @@ def memory_fields_enabled() -> bool:
     return os.getenv("NETGENT_MEMORY_FIELDS", "1") != "0"
 
 
-def decision_schema(memory_fields: bool = True) -> type:
-    """The structured-output schema: AgentDecision, or a variant without the working-memory
-    fields. Built with pydantic so the two never drift."""
-    if memory_fields:
+def decision_schema(memory_fields: bool = True, allowed_kinds: frozenset[str] | None = None) -> type:
+    """The structured-output schema the model fills: AgentDecision, or a variant without the
+    working-memory fields and/or with `kind` narrowed to the task's allowed set. Built with
+    pydantic from AgentDecision's own fields so the variants never drift; `decide()` converts
+    the result back to an AgentDecision (which re-runs the coercion validators)."""
+    kinds = frozenset(allowed_kinds) if allowed_kinds is not None else ALL_KINDS
+    if memory_fields and kinds == ALL_KINDS:
         return AgentDecision
+    from typing import Literal
+
     from pydantic import create_model
 
-    fields = {
-        name: (f.annotation, f)
-        for name, f in AgentDecision.model_fields.items()
-        if name not in MEMORY_FIELDS
-    }
-    return create_model("AgentDecisionCore", __doc__=AgentDecision.__doc__, **fields)
+    fields = {}
+    for name, f in AgentDecision.model_fields.items():
+        if not memory_fields and name in MEMORY_FIELDS:
+            continue
+        ann = f.annotation
+        if name == "kind" and kinds != ALL_KINDS:
+            ann = Literal[tuple(sorted(kinds))] | None  # type: ignore[valid-type]
+        fields[name] = (ann, f)
+    return create_model("AgentDecisionVariant", __doc__=AgentDecision.__doc__, **fields)
 
 
 class LangChainLLM:
@@ -95,8 +111,8 @@ class LangChainLLM:
         if not name:  # bare model name, no provider prefix
             provider, name = "gemini", provider
         self._provider = _PROVIDER_ALIAS.get(provider, provider)
-        chat = init_chat_model(name, model_provider=self._provider, temperature=0)
-        self._model = chat.with_structured_output(decision_schema(memory_fields_enabled()), include_raw=True)
+        self._chat = init_chat_model(name, model_provider=self._provider, temperature=0)
+        self._structured: dict[frozenset[str], object] = {}  # per allowed-kinds set
         # Running totals across decide() calls — what an exploration cost (the evals under
         # `netgent eval stress` report these per run). `input_tokens` is the provider's total
         # (cache reads and writes included), so it stays comparable across layouts.
@@ -124,8 +140,14 @@ class LangChainLLM:
             content = static  # OpenAI/Gemini cache stable prefixes implicitly
         return [SystemMessage(content=content), HumanMessage(content=dynamic)]
 
-    async def decide(self, system: str, task: str, observation: str, history: list[StepRecord]) -> AgentDecision:
-        result = await self._model.ainvoke(self._messages(system, task, observation, history))
+    def _structured_model(self, allowed_kinds: frozenset[str] | None):
+        key = frozenset(allowed_kinds) if allowed_kinds is not None else ALL_KINDS
+        if key not in self._structured:
+            schema = decision_schema(memory_fields_enabled(), key)
+            self._structured[key] = self._chat.with_structured_output(schema, include_raw=True)
+        return self._structured[key]
+
+    def _record(self, result: dict, observation: str, history: list[StepRecord]) -> None:
         meta = getattr(result.get("raw"), "usage_metadata", None) or {}
         details = meta.get("input_token_details") or {}
         call = {
@@ -140,12 +162,42 @@ class LangChainLLM:
         self.usage["calls"] += 1
         for k, v in call.items():
             self.usage[k] += v
-        parsed = result.get("parsed")
-        if parsed is None:
-            raise ValueError(f"structured output failed: {result.get('parsing_error')}")
-        if not isinstance(parsed, AgentDecision):  # the memory-less variant → the real model
-            parsed = AgentDecision.model_validate(parsed.model_dump())
-        return parsed
+
+    async def decide(
+        self,
+        system: str,
+        task: str,
+        observation: str,
+        history: list[StepRecord],
+        allowed_kinds: frozenset[str] | None = None,
+    ) -> AgentDecision:
+        """One decision. Notte's ladder (browser-agent-tool-calling.md §5.5): a response that
+        fails validation is retried in place with the validator's errors appended, up to
+        PARSE_RETRIES times, before the failure costs the agent a step."""
+        from langchain_core.messages import HumanMessage
+
+        model = self._structured_model(allowed_kinds)
+        messages = self._messages(system, task, observation, history)
+        last_error = "no response"
+        for _attempt in range(PARSE_RETRIES + 1):
+            result = await model.ainvoke(messages)
+            self._record(result, observation, history)
+            parsed = result.get("parsed")
+            if parsed is not None:
+                try:
+                    if isinstance(parsed, AgentDecision):
+                        return parsed
+                    return AgentDecision.model_validate(parsed.model_dump())
+                except Exception as exc:  # noqa: BLE001 — a validator refused the variant's content
+                    last_error = str(exc)
+            else:
+                last_error = str(result.get("parsing_error"))
+            self.usage["parse_retries"] = self.usage.get("parse_retries", 0) + 1
+            messages = [
+                *messages,
+                HumanMessage(content=f"Your response was invalid: {last_error[:600]}\nReturn a valid decision."),
+            ]
+        raise ValueError(f"structured output failed after {PARSE_RETRIES + 1} attempts: {last_error}")
 
 
 class FakeLLM:
@@ -155,7 +207,7 @@ class FakeLLM:
         self._script = list(script)
         self._i = 0
 
-    async def decide(self, system: str, task: str, observation: str, history: list[StepRecord]) -> AgentDecision:
+    async def decide(self, system, task, observation, history, allowed_kinds=None) -> AgentDecision:
         if self._i >= len(self._script):
             raise AssertionError("FakeLLM script exhausted")
         decision = self._script[self._i]
