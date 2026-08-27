@@ -34,12 +34,11 @@ Each element is one line:  [index] tag[type] (role) "name" value="…" options=[
   |IFRAME n| <selector> (N elements) — a header, not an action: the indexed lines under it
             live in that frame. Act on them by index as usual.
   |SHADOW(closed)| — inside a closed shadow root; still actionable.
-  (above viewport) / (↓ N pages below) — listed and actionable, just off-screen. You do NOT
-            need to scroll to act on it.
   *[index]  appeared since your last action (your action caused it). Read these first — they
             are usually the dropdown option, validation error, or dialog you need next.
-POSITION says how many pages of content lie above and below the listed slice; "(↑ N elements
-further above)" / "(↓ N more elements below)" count elements that are NOT listed.
+Listed elements include ones below or just above the visible screen: every listed element is
+actionable right now WITHOUT scrolling. POSITION, "(↑ N elements further above)" and "(↓ N more
+elements below)" only tell you whether elements exist that are NOT listed.
 DIALOGS lists alert/confirm messages the page just showed (already accepted for you). They are
 the page's own feedback: a success message means the step worked; an error tells you what to
 fix. Do not repeat the action that produced a success dialog.
@@ -91,11 +90,11 @@ DROPDOWNS
   again just reopens the menu.
 
 SCROLLING
-Scrolling is not exploration: every element you can act on is already listed, including
-off-screen ones. Use kind="scroll", down=true, pages=1 ONLY after you have acted on every
-listed element the task needs AND the observation ends with "(↓ N more elements below)".
-Use down=false only to return to something the "(↑ N elements further above)" line says is
-no longer listed. To scroll inside a box or iframe, give the index of an element inside it.
+Scrolling is not exploration and never needed to "see" or "reach" a listed element. Use
+kind="scroll", down=true, pages=1 ONLY after you have acted on every listed element the task
+needs AND the observation shows "(↓ N more elements below)". Use down=false only when
+"(↑ N elements further above)" is shown and you need one of those. To scroll inside a box or
+iframe, give the index of an element inside it.
 
 PARAMETERS
 The TASK may list PARAMETERS as ${name} = 'sample value'. When a step uses one:

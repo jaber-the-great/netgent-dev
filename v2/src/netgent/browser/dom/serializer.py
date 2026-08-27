@@ -11,8 +11,12 @@ Viewport policy (docs/research/browser-agent-prompting.md §6.3, §7.2 S2/S3): o
 scrollback is KEPT and marked "(above viewport)" instead of being dropped — the old 60 px cut
 was the strictest in the survey and hid a video player's controls (the Skip button) after a
 single scroll. browser-use keeps ±1000 px; a viewport is the same idea in the page's own units.
-Below-fold elements are listed (up to `limit`) with a "(↓ N pages below)" marker, and a
-POSITION line states how many pages lie above/below in browser-use's `page_info` shape.
+Below-fold elements are listed (up to `limit`) like any other. Deliberately NO per-element
+off-screen markers and no page magnitudes: the first A/B (docs/research/explorer-optimisation.md,
+Stage 1) showed a "(↓ 1.2 pages below)" marker turns into "scroll down to see the slider task"
+— 35 scrolls in a 58-step run. Every listed element is actionable without scrolling (Playwright
+scrolls it into view), so the only position facts worth stating are the counts of elements that
+are NOT listed.
 """
 
 import os
@@ -100,16 +104,15 @@ def format_observation(
         shown = sorted(shown, key=lambda ie: (distinct_frames.index(tuple(ie[1].frame_path)), ie[1].bbox.y))
         frame_number = {k: n for n, k in enumerate((k for k in distinct_frames if k), start=1)}
     if vh:
-        # browser-use's page_info shape: magnitude in pages, emitted whenever the viewport
-        # is known so its meaning is learnable (it used to appear only on long pages).
-        top = min((el.bbox.y for _, el in indexed), default=0)
-        bottom = max((el.bbox.y + el.bbox.h for _, el in indexed), default=0)
-        pages_above = max(0.0, -top) / vh
-        pages_below = max(0.0, bottom - vh) / vh
-        position = f"POSITION: {pages_above:.1f} pages above, {pages_below:.1f} pages below"
-        if pages_below > 0.2:
-            position += " — more content below the viewport"
-        lines.append(position)
+        # Only the counts of UNLISTED elements matter for a scroll decision.
+        if not above and below:
+            lines.append("POSITION: top of page. Every element up to the cut-off below is listed; act on them.")
+        elif above and not below:
+            lines.append("POSITION: bottom of page. Nothing more below; do not scroll down further.")
+        elif above and below:
+            lines.append("POSITION: middle of page.")
+        else:
+            lines.append("POSITION: the whole page is listed. Nothing is hidden above or below.")
     if previous is not None:
         new = sum(1 for _, el in shown if element_key(el) not in previous)
         current = {element_key(el) for _, el in indexed}
@@ -157,14 +160,8 @@ def format_observation(
             state += " [required]"
         if el.invalid:
             state += " [invalid: still needs a valid value]"
-        offscreen = ""
-        if vh:
-            if el.bbox.y + el.bbox.h < 0:
-                offscreen = " (above viewport)"
-            elif el.bbox.y > vh:
-                offscreen = f" (↓ {el.bbox.y / vh:.1f} pages below)"
         star = "*" if previous is not None and element_key(el) not in previous else " "
-        lines.append(f" {star}[{i}] {kind}{name}{val}{state}{offscreen}")
+        lines.append(f" {star}[{i}] {kind}{name}{val}{state}")
     if below:
         lines.append(f"(↓ {below} more elements below — scroll down to reveal and reach them)")
     if snapshot.dialogs:

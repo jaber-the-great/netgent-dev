@@ -1,5 +1,5 @@
-"""Observation rendering policy (no browser): viewport scrollback, position line, off-screen
-markers, format hints, password redaction, alert-first text, and the element diff
+"""Observation rendering policy (no browser): viewport scrollback, position line, format hints,
+password redaction, alert-first text, and the element diff
 (docs/research/browser-agent-prompting.md §7.2, browser-agent-memory.md §6.2c)."""
 
 import os
@@ -20,9 +20,10 @@ def _el(name, y, tag="button", h=20, **kw):
                       candidates=[SelectorCandidate(kind="css", value=f"#{name}")], **kw)
 
 
-def test_one_viewport_of_scrollback_is_kept_and_marked():
-    """The YouTube Skip case: a control that scrolled just above the viewport must stay listed
-    (marked), not vanish behind an 'already handled' count."""
+def test_one_viewport_of_scrollback_is_kept_without_magnitude_markers():
+    """The YouTube Skip case: a control that scrolled just above the viewport must stay listed,
+    not vanish behind an 'already handled' count. No per-element off-screen markers: the first
+    A/B showed '(↓ 1.2 pages below)' becomes 'scroll down to see it' (35 scrolls in 58 steps)."""
     snap = DomSnapshot(url="u", title="t", viewport_height=800, elements=[
         _el("far-above", y=-2000),  # more than a viewport up → counted, not listed
         _el("skip", y=-300),        # within one viewport above → listed, marked
@@ -30,13 +31,12 @@ def test_one_viewport_of_scrollback_is_kept_and_marked():
         _el("comments", y=1500),    # below the fold → listed with a pages marker
     ])
     obs = format_observation(snap)
-    assert '[1] button "skip" (above viewport)' in obs
-    assert '[2] button "play"' in obs and "(above viewport)" not in obs.split('"play"')[1].split("\n")[0]
-    assert '[3] button "comments" (↓ 1.9 pages below)' in obs
+    assert obs.endswith('  [1] button "skip"\n  [2] button "play"\n  [3] button "comments"')
+    assert "pages" not in obs and "viewport" not in obs  # no magnitudes, no off-screen markers
     assert "far-above" not in obs
     assert "(↑ 1 elements further above — scroll up to reach them)" in obs
     assert "already handled" not in obs
-    assert "POSITION: 2.5 pages above, 0.9 pages below" in obs
+    assert "POSITION: bottom of page" in obs  # unlisted above, nothing unlisted below
 
 
 def test_legacy_60px_cut_is_available_as_the_ab_arm(monkeypatch):
@@ -56,15 +56,16 @@ def test_above_viewport_elements_do_not_crowd_out_the_working_set():
     obs = format_observation(snap, limit=60)
     listed = [ln for ln in obs.splitlines() if ln.startswith(("  [", " *[", " ["))]
     assert len(listed) == 60
-    assert sum("(above viewport)" in ln for ln in listed) == 15
+    assert sum(f'"a{i}"' in obs for i in range(40)) == 15
     assert '"a39"' in obs and '"a0"' not in obs  # nearest to the viewport kept
     assert "(↑ 25 elements further above" in obs
     assert "(↓ 5 more elements below" in obs
 
 
-def test_position_line_always_present_when_viewport_known():
-    snap = DomSnapshot(url="u", title="t", viewport_height=800, elements=[_el("x", y=10)])
-    assert "POSITION: 0.0 pages above, 0.0 pages below" in format_observation(snap)
+def test_position_line_states_only_whether_unlisted_elements_exist():
+    snap = DomSnapshot(url="u", title="t", viewport_height=800, elements=[_el("x", y=10), _el("y", y=3000)])
+    assert "POSITION: the whole page is listed" in format_observation(snap)
+    assert "POSITION: top of page" in format_observation(snap, limit=1)
     assert "POSITION" not in format_observation(DomSnapshot(url="u", title="t", elements=[_el("x", y=10)]))
 
 
