@@ -342,3 +342,45 @@ def test_executor_interrupt_respects_max_fires():
     assert record.success
     skips = [e for e in record.edges if e.transition_id == "t_skip"]
     assert len(skips) == 1  # fired once, capped, word completed
+
+
+def test_executor_refires_interrupt_when_popup_chains():
+    """Chained pop-ups (YouTube 'ad 1 of 2'): dismissing the first re-shows the same
+    selector, so the resolve edge's selector_hidden target never settles. Resolution is
+    the anchor going away (or max_fires), so the sweep re-fires instead of aborting."""
+    import asyncio
+
+    from netgent.core.errors import TriggerTimeoutError
+
+    wf = _interrupt_workflow(max_fires=3)
+    skips_dispatched: list[str] = []
+
+    class FakeSession:
+        def __init__(self):
+            self.ads_remaining = 2  # a chain of two ads, same #skip selector
+
+        async def dispatch(self, action):
+            sel = getattr(action, "locator", None)
+            if sel and sel[0].args[0] == "#skip":
+                skips_dispatched.append("#skip")
+                self.ads_remaining -= 1
+
+        async def wait_for_state(self, state):
+            if state.id == "s_ad_gone" and self.ads_remaining > 0:
+                # ad 2's skip button is already visible again: selector_hidden unmet
+                raise TriggerTimeoutError("s_ad_gone", ["selector_hidden"], 10000)
+            return 0.0
+
+        async def condition_report(self, state):
+            if state.id == "s_ad":
+                return [("selector_visible", self.ads_remaining > 0)]
+            return [(c.type, True) for c in state.conditions]
+
+        class page:
+            url = "https://example.com"
+
+    record = asyncio.run(Executor(FakeSession(), wf).run())
+    assert record.success
+    assert skips_dispatched == ["#skip", "#skip"]  # both ads skipped, then the word ran
+    skip_edges = [e for e in record.edges if e.transition_id == "t_skip"]
+    assert [e.outcome for e in skip_edges] == ["trigger_timeout", "ok"]

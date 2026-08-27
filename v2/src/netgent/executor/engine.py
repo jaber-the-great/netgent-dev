@@ -109,25 +109,41 @@ class Executor:
                 return
             if self._current not in interrupt.scope:
                 continue
-            if self._interrupt_fires[interrupt.id] >= interrupt.max_fires:
-                continue
             anchor = self._workflow.state(interrupt.state)
-            report = await self._session.condition_report(anchor)
-            if not report or not all(met for _, met in report):
+            fired = False
+            # "Resolved" means the anchor no longer holds or the fire budget is spent —
+            # NOT that the resolve chain's target state was recognized. Chained pop-ups
+            # (YouTube "ad 1 of 2") re-satisfy the anchor with the same selector the
+            # instant it is dismissed, so the target's selector_hidden never comes true;
+            # the bounded re-fire below is what max_fires exists for.
+            while self._interrupt_fires[interrupt.id] < interrupt.max_fires:
+                report = await self._session.condition_report(anchor)
+                if not report or not all(met for _, met in report):
+                    break
+                self._interrupt_fires[interrupt.id] += 1
+                fired = True
+                logger.info(
+                    "interrupt %s: anchor %s holds at %s (fire %d/%d) — resolving",
+                    interrupt.id, interrupt.state, self._current,
+                    self._interrupt_fires[interrupt.id], interrupt.max_fires,
+                )
+                for edge_id in interrupt.resolve:
+                    edge = await self._fire(self._workflow.transition(edge_id))
+                    self._record.edges.append(edge)
+                    if edge.outcome == "trigger_timeout":
+                        # The action ran but the pop-up didn't settle (e.g. a chained ad
+                        # re-showed the same skip button): re-check the anchor and re-fire.
+                        logger.info(
+                            "interrupt %s: resolve edge %s did not settle (%s) — re-checking anchor",
+                            interrupt.id, edge_id, edge.error,
+                        )
+                        break
+                    if edge.outcome != "ok":
+                        logger.error("interrupt %s: resolve edge %s failed: %s", interrupt.id, edge_id, edge.error)
+                        self._aborted = True
+                        return
+            if not fired:
                 continue
-            self._interrupt_fires[interrupt.id] += 1
-            logger.info(
-                "interrupt %s: anchor %s holds at %s (fire %d/%d) — resolving",
-                interrupt.id, interrupt.state, self._current,
-                self._interrupt_fires[interrupt.id], interrupt.max_fires,
-            )
-            for edge_id in interrupt.resolve:
-                edge = await self._fire(self._workflow.transition(edge_id))
-                self._record.edges.append(edge)
-                if edge.outcome != "ok":
-                    logger.error("interrupt %s: resolve edge %s failed: %s", interrupt.id, edge_id, edge.error)
-                    self._aborted = True
-                    return
             # Back to the program: the page must still look like the state we were in.
             try:
                 await self._session.wait_for_state(self._workflow.state(self._current))
