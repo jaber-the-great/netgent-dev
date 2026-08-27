@@ -6,12 +6,12 @@ dropdown/scroll sections, and the ${param} conveyance contract. It is static per
 LLM seam can send it as a cacheable system message (`agent/llm.py`).
 """
 
-from netgent.agent.explorer.decision import ALL_KINDS, DEFAULT_KINDS
+from netgent.agent.explorer.decision import ALL_KINDS, DEFAULT_KINDS, MAX_BATCH
 
 _KIND_ORDER = ("click", "fill", "select", "upload", "hover", "press", "goto", "scroll", "go_back", "wait")
 
 _TEMPLATE = """You are a web automation agent. Each step you get the TASK, RECENT STEPS (what actually
-ran so far), and an OBSERVATION of the current page. Choose exactly ONE next atomic action.
+ran so far), and an OBSERVATION of the current page. {choose}
 
 DECISION FIELDS
 - kind: one of {kinds}{unavailable}
@@ -21,7 +21,7 @@ DECISION FIELDS
 - param: the PARAMETER name when text/value/url is a parameter's sample value (see PARAMETERS)
 - reasoning: one short sentence
 - done: true to END the run instead of acting (no kind, no index); then success says whether
-  the task was achieved (false = you are giving up; say why)
+  the task was achieved (false = you are giving up; say why){batch_fields}
 Example, for the observation line `[12] input[email] "Email" [required]`:
   reasoning="fill the required email field"  kind="fill"  index=12  text="a@example.com"
 
@@ -99,7 +99,7 @@ needs AND the observation shows "(↓ N more elements below)". Use down=false on
 "(↑ N elements further above)" is shown and you need one of those. To scroll inside a box or
 iframe, give the index of an element inside it.
 
-PARAMETERS
+{batch_section}PARAMETERS
 The TASK may list PARAMETERS as ${{name}} = 'sample value'. When a step uses one:
 - put the SAMPLE VALUE in text / value / url — type it exactly as given, so the page behaves
   the way it will on a real run; and
@@ -116,11 +116,26 @@ HARD RULES
 """
 
 
-def build_system_prompt(allowed_kinds: frozenset[str] | set[str] | None = None) -> str:
+_BATCH_SECTION = """BATCHING
+`then` may carry up to {extra} more actions to run after the main one, in order, on the SAME
+page — use it only when you already know every value (e.g. several fills, then the submit
+click LAST). Prefer a single action otherwise.
+- Safe to batch: fill, select, upload, hover, press, scroll — they do not leave the page.
+- Put click last: if it navigates, the remaining actions are skipped automatically.
+- goto, go_back and wait always end the batch. Never batch two different plans.
+- If the page changes mid-batch, the rest are dropped and you get a fresh observation.
+  RECENT STEPS tells you which actions were skipped — reissue them from the new indices.
+
+"""
+
+
+def build_system_prompt(allowed_kinds: frozenset[str] | set[str] | None = None, max_actions: int = 1) -> str:
     """The prompt for one task: the kind list and field legend reflect exactly the kinds the
     agent may emit (the schema is narrowed the same way in agent/llm.py), so the model is
-    never offered an action it cannot use."""
+    never offered an action it cannot use; the batching section appears only when the
+    schema carries `then`."""
     allowed = frozenset(allowed_kinds) if allowed_kinds is not None else DEFAULT_KINDS
+    batch = 1 < max_actions <= MAX_BATCH
     kinds = [k for k in _KIND_ORDER if k in allowed]
     off = [k for k in _KIND_ORDER if k in ALL_KINDS - allowed]
     values = ["text (fill)", "value (select)"]
@@ -135,10 +150,16 @@ def build_system_prompt(allowed_kinds: frozenset[str] | set[str] | None = None) 
     if "press" in allowed:
         index_extra += "; for press, the field that should receive the key"
     return _TEMPLATE.format(
+        choose=(
+            f"Choose the next atomic action (or up to {max_actions} on the same page, see BATCHING)."
+            if batch else "Choose exactly ONE next atomic action."
+        ),
         kinds=", ".join(kinds),
         unavailable=f" (not available in this task: {', '.join(off)})" if off else "",
         index_extra=index_extra,
         value_fields=", ".join(values),
+        batch_fields="\n- then: further actions to run after this one (see BATCHING)" if batch else "",
+        batch_section=_BATCH_SECTION.format(extra=max_actions - 1) if batch else "",
     )
 
 

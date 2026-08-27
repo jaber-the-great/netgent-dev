@@ -45,6 +45,7 @@ class GenerateRequest(BaseModel):
     # Extra action kinds to offer the explorer beyond decision.DEFAULT_KINDS (hover/press/goto
     # are opt-in: rarely needed, and measured to cost steps when always available).
     allow_kinds: list[str] = Field(default_factory=list)
+    max_actions_per_step: int = 1  # >1 lets one decision carry a bounded batch (each item = one transition)
     headless: bool = True
     out: Path | None = None  # write the artifact here (yaml/json by suffix)
     trajectory_dir: Path | None = None
@@ -86,7 +87,11 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
         from netgent.agent.explorer.decision import DEFAULT_KINDS
 
         agent = BrowserAgent(
-            llm, max_steps=req.max_steps, run_dir=req.trajectory_dir, allowed_kinds=DEFAULT_KINDS | set(req.allow_kinds)
+            llm,
+            max_steps=req.max_steps,
+            run_dir=req.trajectory_dir,
+            allowed_kinds=DEFAULT_KINDS | set(req.allow_kinds),
+            max_actions_per_step=req.max_actions_per_step,
         )
         # The params are declared to the explorer as ${name} = 'sample' placeholders (Stagehand's
         # %var% contract): it types the sample AND reports `param` on the step that used it, so

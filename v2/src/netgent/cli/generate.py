@@ -31,6 +31,9 @@ def generate(
         list[str] | None,
         typer.Option("--allow", help="Extra action kinds to offer the explorer: hover, press, goto (repeatable)."),
     ] = None,
+    max_actions: Annotated[
+        int, typer.Option(help="Atomic actions one decision may batch (1-4; each is still one transition).")
+    ] = 1,
     validate: Annotated[
         bool, typer.Option("--validate/--no-validate", help="Replay the compiled workflow with zero LLM calls.")
     ] = True,
@@ -61,6 +64,7 @@ def generate(
         params=dict(p.split("=", 1) for p in (param or [])),
         max_steps=max_steps,
         allow_kinds=[k.strip() for item in (allow or []) for k in item.split(",") if k.strip()],
+        max_actions_per_step=max_actions,
         headless=headless,
         out=out,
         trajectory_dir=trajectory_dir,

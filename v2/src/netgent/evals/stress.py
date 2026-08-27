@@ -11,6 +11,7 @@ share this runner and result layout.
 """
 
 import json
+import os
 import time
 from pathlib import Path
 
@@ -35,6 +36,11 @@ CHALLENGE_TASK = (
     "every card in view is done or skipped. Finish with done (success=true if you attempted "
     "all 15 cards) when the last card (the contenteditable one) is done."
 )
+
+
+def _max_actions() -> int:
+    """NETGENT_MAX_ACTIONS=N is the batching A/B arm (1 = single action, the default)."""
+    return int(os.getenv("NETGENT_MAX_ACTIONS", "1"))
 
 
 def _challenge_kinds() -> frozenset[str]:
@@ -63,7 +69,10 @@ async def run_challenge(backend: str, max_steps: int, out_dir: Path, model: str 
     async with _session(backend) as s:
         # The challenge's cards demand hover and key presses; goto stays off (a re-navigation
         # resets the page's score — measured in the Stage 1 A/B).
-        agent = BrowserAgent(llm, max_steps=max_steps, run_dir=out_dir, allowed_kinds=CHALLENGE_KINDS)
+        agent = BrowserAgent(
+            llm, max_steps=max_steps, run_dir=out_dir, allowed_kinds=CHALLENGE_KINDS,
+            max_actions_per_step=_max_actions(),
+        )
         traj = await agent.run(s, CHALLENGE_TASK, CHALLENGE_URL)
         score = await s.page.locator(".score").inner_text()
         done_ids = await s.page.eval_on_selector_all(".task.completed", "els => els.map(e => e.id)")
@@ -74,6 +83,7 @@ async def run_challenge(backend: str, max_steps: int, out_dir: Path, model: str 
         "backend": backend,
         "model": model,
         "max_steps": max_steps,
+        "max_actions_per_step": _max_actions(),
         "score": int(score),
         "completed": done_ids,
         "missed": [i for i in all_ids if i not in done_ids],
@@ -96,13 +106,14 @@ async def run_sweep(backend: str, max_steps: int, out_dir: Path, model: str = DE
     t0 = time.perf_counter()
     async with _session(backend) as s:
         await s.page.goto(FORMS_URL, wait_until="networkidle")
-        result = await sweep_forms(s, llm, max_steps_per_form=max_steps, retries=1)
+        result = await sweep_forms(s, llm, max_steps_per_form=max_steps, retries=1, max_actions_per_step=_max_actions())
     usage = getattr(llm, "usage", None)
     return {
         "kind": "sweep",
         "backend": backend,
         "model": model,
         "max_steps_per_form": max_steps,
+        "max_actions_per_step": _max_actions(),
         "total": result.total,
         "submitted": result.submitted,
         "forms": [f.model_dump() for f in result.forms],

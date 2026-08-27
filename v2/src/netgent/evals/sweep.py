@@ -95,6 +95,7 @@ async def sweep_forms(
     max_steps_per_form: int = 30,
     retries: int = 2,
     markers: tuple[str, ...] = DEFAULT_MARKERS,
+    max_actions_per_step: int = 1,
 ) -> SweepResult:
     """Complete and verify every form on the current page — with ONE agent.
 
@@ -106,7 +107,7 @@ async def sweep_forms(
     result = SweepResult(total=len(frame_paths))
     logger.info("sweep: %d forms found", len(frame_paths))
 
-    agent = BrowserAgent(llm, max_steps=max_steps_per_form)
+    agent = BrowserAgent(llm, max_steps=max_steps_per_form, max_actions_per_step=max_actions_per_step)
     for i, frame_path in enumerate(frame_paths):
         verified = False
         traj = None

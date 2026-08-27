@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
-from netgent.agent.explorer.decision import ALL_KINDS, DEFAULT_KINDS
+from netgent.agent.explorer.decision import ALL_KINDS, DEFAULT_KINDS, MAX_BATCH
 from netgent.browser.session import BrowserSession
 from netgent.core.logger import get_logger
 from netgent.schema.actions import Action, GotoAction
@@ -76,7 +76,8 @@ class StepRecord(BaseModel):
 
 
 class AgentStep(BaseModel):
-    n: int
+    n: int  # the LLM step that produced it
+    item: int = 0  # position within that step's batch (0 = the decision's own action)
     kind: str
     reasoning: str
     url: str
@@ -122,9 +123,15 @@ class BrowserAgent:
         run_dir: Path | None = None,
         upload_file: Path | None = None,
         allowed_kinds: frozenset[str] | set[str] | None = None,
+        max_actions_per_step: int = 1,
     ):
         self.llm = llm
         self._max_steps = max_steps
+        # How many atomic actions one decision may carry (1 = today's semantics; up to
+        # MAX_BATCH). Each executed item is still one AgentStep → one transition.
+        if not 1 <= max_actions_per_step <= MAX_BATCH:
+            raise ValueError(f"max_actions_per_step must be 1..{MAX_BATCH}")
+        self.max_actions_per_step = max_actions_per_step
         # The action kinds this agent may emit. hover/press/goto are opt-in (decision.py
         # DEFAULT_KINDS); the prompt and the structured-output schema both reflect the set.
         kinds = frozenset(allowed_kinds) if allowed_kinds is not None else DEFAULT_KINDS
@@ -177,7 +184,7 @@ class BrowserAgent:
         """Best-effort per-step screenshot into the run dir (never fails the run)."""
         if self._run_dir is None:
             return
-        rel = f"screenshots/step-{step.n:02d}.png"
+        rel = f"screenshots/step-{step.n:02d}{f'-{step.item}' if step.item else ''}.png"
         try:
             await session.screenshot(self._run_dir / rel)
             step.screenshot = rel

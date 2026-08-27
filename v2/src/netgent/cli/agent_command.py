@@ -20,6 +20,9 @@ def agent(
         list[str] | None,
         typer.Option("--allow", help="Extra action kinds to offer the explorer: hover, press, goto (repeatable)."),
     ] = None,
+    max_actions: Annotated[
+        int, typer.Option(help="Atomic actions one decision may batch (1-4; each is still one transition).")
+    ] = 1,
     show_graph: Annotated[
         bool, typer.Option("--graph", help="Print the agent loop's LangGraph (Mermaid) and exit.")
     ] = False,
@@ -48,7 +51,9 @@ def agent(
     async def _run():
         llm = make_llm(resolved_model)
         async with BrowserSession(headless=headless) as session:
-            agent = BrowserAgent(llm, max_steps=max_steps, run_dir=trajectory_dir, allowed_kinds=kinds)
+            agent = BrowserAgent(
+                llm, max_steps=max_steps, run_dir=trajectory_dir, allowed_kinds=kinds, max_actions_per_step=max_actions
+            )
             return await agent.run(session, task, url)
 
     traj = asyncio.run(_run())

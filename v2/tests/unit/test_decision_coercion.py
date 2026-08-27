@@ -104,13 +104,13 @@ def test_llm_seam_retries_an_invalid_response_in_place_before_giving_up():
     good = AgentDecision(reasoning="ok", kind="click", index=0)
     fake = Structured([{"parsed": None, "parsing_error": "kind: field required", "raw": None},
                        {"parsed": good, "raw": None}])
-    llm._structured = {ALL_KINDS: fake}
+    llm._structured = {(ALL_KINDS, 1): fake}
     got = asyncio.run(llm.decide("S", "T", "O", []))
     assert got is good and llm.usage["calls"] == 2 and llm.usage["parse_retries"] == 1
     # the retry carries the validator's complaint after the original two messages
     assert len(fake.inputs[1]) == 3 and "field required" in fake.inputs[1][-1].content
 
     fake = Structured([{"parsed": None, "parsing_error": "bad", "raw": None}] * (PARSE_RETRIES + 1))
-    llm._structured = {ALL_KINDS: fake}
+    llm._structured = {(ALL_KINDS, 1): fake}
     with pytest.raises(ValueError, match="after 3 attempts"):
         asyncio.run(llm.decide("S", "T", "O", []))

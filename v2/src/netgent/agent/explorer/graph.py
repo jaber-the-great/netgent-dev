@@ -19,6 +19,7 @@ from typing import Annotated, Any, Literal, TypedDict
 
 from netgent.agent.explorer.actions import to_action
 from netgent.agent.explorer.browser_agent import MAX_REPEAT, AgentStep, BrowserAgent, StepRecord
+from netgent.agent.explorer.decision import TERMINATES_BATCH
 from netgent.agent.explorer.prompt import build_system_prompt
 from netgent.browser.dom import element_lines, format_observation
 from netgent.browser.locators import capture_locator, durable_locator
@@ -61,7 +62,8 @@ def build_agent_graph(
     history = agent.history  # shared across runs (sweeps), mutated in place
     llm = agent.llm
     allowed = agent.allowed_kinds
-    system_prompt = build_system_prompt(allowed)
+    max_actions = agent.max_actions_per_step
+    system_prompt = build_system_prompt(allowed, max_actions)
 
     async def observe(state: AgentState) -> Command[Literal["decide", "__end__"]]:
         n = state.get("n", 0) + 1
@@ -119,7 +121,9 @@ def build_agent_graph(
     async def decide(state: AgentState) -> Command[Literal["act", "observe", "__end__"]]:
         n = state["n"]
         try:
-            decision = await llm.decide(system_prompt, task, state["observation"], history, allowed_kinds=allowed)
+            decision = await llm.decide(
+                system_prompt, task, state["observation"], history, allowed_kinds=allowed, max_actions=max_actions
+            )
         except Exception as exc:  # noqa: BLE001 — a bad LLM response shouldn't crash the run
             logger.warning("step %d: LLM decision failed: %s", n, exc)
             history.append(StepRecord(n=n, kind="invalid", outcome="invalid", error=str(exc)[:200],
@@ -140,48 +144,79 @@ def build_agent_graph(
         return Command(update={"decision": decision}, goto="act")
 
     async def act(state: AgentState) -> Command[Literal["observe"]]:
+        """Execute the decision's action(s) — one AgentStep per EXECUTED item, so a batch of
+        three fills compiles to three transitions exactly as three single steps would.
+        Two guards end a batch early (browser-use multi_act, Skyvern agent.py:3209): a static
+        one (TERMINATES_BATCH kinds) and a runtime one (the URL changed → the pre-batch
+        snapshot's indices mean nothing). A failed item aborts the remainder; the model is told
+        which items did not run."""
         n, decision, snapshot = state["n"], state["decision"], state["snapshot"]
-        error = None
-        action = None
-        try:
-            if decision.kind not in allowed:
-                raise ValueError(
-                    f"{decision.kind} is not available in this task; use one of {', '.join(sorted(allowed))}"
-                )
-            upload = agent.upload_path() if decision.kind == "upload" else None
-            locator_for, note = await _verified_locator(session, snapshot, decision.index)
-            action = to_action(decision, snapshot, upload_path=upload, locator_for=locator_for)
-            # Carry the closed-shadow capability flag from the chosen element onto the action,
-            # so a plain-Playwright replayer refuses instead of timing out (R8).
-            elems = snapshot.interactive()
-            if decision.index is not None and 0 <= decision.index < len(elems):
-                if elems[decision.index].requires_closed_shadow and hasattr(action, "requires_closed_shadow"):
-                    action = action.model_copy(update={"requires_closed_shadow": True})
-            await session.dispatch(action)
-        except (ExecutionError, ValueError) as exc:
-            error = str(exc)
-            logger.warning("step %d failed: %s", n, error)
+        items = decision.actions()[:max_actions]
+        steps: list[AgentStep] = []
+        for i, item in enumerate(items):
+            if i > 0:
+                if session.page.url != steps[-1].url or session.page.url != snapshot.url:
+                    history.append(StepRecord(
+                        n=n, kind="note", note=f"{n}. page changed after action {i}: {len(items) - i} queued "
+                        "action(s) were skipped — decide again from the new observation",
+                    ))
+                    break
+            error = None
+            action = None
+            note = None
+            try:
+                if item.kind not in allowed:
+                    raise ValueError(
+                        f"{item.kind} is not available in this task; use one of {', '.join(sorted(allowed))}"
+                    )
+                upload = agent.upload_path() if item.kind == "upload" else None
+                # Verified per item, against the live page: items 2..k run after the page may
+                # have re-rendered, so the R1/R4 check must not reuse item 1's probe.
+                locator_for, note = await _verified_locator(session, snapshot, item.index)
+                action = to_action(item, snapshot, upload_path=upload, locator_for=locator_for)
+                # Carry the closed-shadow capability flag from the chosen element onto the action,
+                # so a plain-Playwright replayer refuses instead of timing out (R8).
+                elems = snapshot.interactive()
+                if item.index is not None and 0 <= item.index < len(elems):
+                    if elems[item.index].requires_closed_shadow and hasattr(action, "requires_closed_shadow"):
+                        action = action.model_copy(update={"requires_closed_shadow": True})
+                await session.dispatch(action)
+            except (ExecutionError, ValueError) as exc:
+                error = str(exc)
+                logger.warning("step %d.%d failed: %s", n, i, error)
 
-        step = AgentStep(
-            n=n, kind=decision.kind, reasoning=decision.reasoning, url=session.page.url, error=error,
-            param=decision.param or None,
-            evaluation=decision.evaluation, memory=decision.memory, next_goal=decision.next_goal,
-        )
-        if error is None:
-            step.action = action  # the compilable record of what actually ran
-            step.locator_check = note
-            step.dialogs = session.dialogs_since_last_action()  # this action's own dialogs
-        await agent.capture_screenshot(session, step)
-        # Feed outcomes back so the agent recovers instead of repeating itself.
-        record = StepRecord(
-            n=n, kind=decision.kind, index=decision.index, target=_target_label(snapshot, decision.index),
-            reasoning=decision.reasoning, error=error, outcome="failed" if error else "ok",
-            evaluation=decision.evaluation, memory=decision.memory, next_goal=decision.next_goal,
-        )
-        if error is None and isinstance(action, WaitAction):
-            record.outcome, record.error = "waited", f"you already watched/waited {action.seconds:g}s"
-        history.append(record)
-        return Command(update={"steps": [step]}, goto="observe")
+            step = AgentStep(
+                n=n, item=i, kind=item.kind or "", reasoning=decision.reasoning, url=session.page.url, error=error,
+                param=item.param or None,
+                evaluation=decision.evaluation, memory=decision.memory, next_goal=decision.next_goal,
+            )
+            if error is None:
+                step.action = action  # the compilable record of what actually ran
+                step.locator_check = note
+                step.dialogs = session.dialogs_since_last_action()  # THIS item's own dialogs (per item)
+            await agent.capture_screenshot(session, step)
+            steps.append(step)
+            # Feed outcomes back so the agent recovers instead of repeating itself.
+            record = StepRecord(
+                n=n, kind=item.kind or "", index=item.index, target=_target_label(snapshot, item.index),
+                reasoning=decision.reasoning if i == 0 else f"(batched action {i + 1} of {len(items)})",
+                error=error, outcome="failed" if error else "ok",
+                evaluation=decision.evaluation if i == 0 else "", memory=decision.memory if i == 0 else "",
+                next_goal=decision.next_goal if i == 0 else "",
+            )
+            if error is None and isinstance(action, WaitAction):
+                record.outcome, record.error = "waited", f"you already watched/waited {action.seconds:g}s"
+            history.append(record)
+            if error is not None:
+                if i + 1 < len(items):
+                    history.append(StepRecord(
+                        n=n, kind="note", note=f"{n}. action {i + 1} failed, so {len(items) - i - 1} queued "
+                        "action(s) were skipped",
+                    ))
+                break  # a failed item aborts the remainder (universal across the survey)
+            if item.kind in TERMINATES_BATCH:
+                break
+        return Command(update={"steps": steps}, goto="observe")
 
     return (
         StateGraph(AgentState)

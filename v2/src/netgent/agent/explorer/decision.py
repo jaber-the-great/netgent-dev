@@ -59,10 +59,95 @@ def normalize_keys(keys: str) -> str:
     return "+".join(out) if out else keys
 
 
-class AgentDecision(BaseModel):
-    """One step: exactly one atomic action, or `done`. `done` is the only exit: success=True
-    when the task is complete, success=False when it cannot proceed (e.g. a CAPTCHA appeared)
-    — say why in `reasoning`."""
+class _ActionCoercion(BaseModel):
+    """Skyvern's coercion ladder, shared by the decision and by batched actions (a fieldless
+    mixin so each model can declare its fields in its own order — the decision must keep
+    `reasoning` before `kind`)."""
+
+    @field_validator("kind", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_kind(cls, v: object) -> object:
+        if not isinstance(v, str):
+            return v
+        k = v.strip().lower().replace(" ", "_").replace("-", "_")
+        return _KIND_ALIASES.get(k, k) or None
+
+    @field_validator("index", mode="before", check_fields=False)
+    @classmethod
+    def _coerce_index(cls, value: object) -> object:
+        # The model sometimes echoes the observation's "[3]" bracket form as the index, or a
+        # float ("3.0" from Gemini).
+        if isinstance(value, float) and value.is_integer():
+            return int(value)
+        if isinstance(value, str):
+            digits = re.sub(r"[^0-9]", "", value)
+            return int(digits) if digits else None
+        return value
+
+    @field_validator("keys", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_keys(cls, v: object) -> object:
+        return normalize_keys(v) if isinstance(v, str) and v.strip() else v
+
+    @model_validator(mode="after")
+    def _pageless_kinds_drop_index(self):
+        # "LLM sometimes hallucinates and returns element id for non-web actions" (Skyvern);
+        # scroll keeps its index (it anchors the frame), press keeps it (the field to type into).
+        if getattr(self, "kind", None) in ("goto", "go_back", "wait"):
+            self.index = None
+        return self
+
+
+_ACTION_FIELDS = dict(
+    kind=Field(default=None, description="The action to take."),
+    index=Field(default=None, description="Element index from the observation (interaction actions)."),
+    text=Field(default=None, description="Text to type (fill)."),
+    value=Field(default=None, description="Option value/label (select)."),
+    url=Field(default=None, description="URL (goto)."),
+    keys=Field(default=None, description="Key or combo (press), e.g. 'Enter'."),
+    down=Field(default=None, description="Scroll direction: true=down, false=up (scroll)."),
+    seconds=Field(default=None, description="How long to dwell/watch, in seconds (wait)."),
+    pages=Field(default=None, description="Scroll amount in viewport pages, e.g. 1.0 (scroll)."),
+    # Parameter conveyance (docs/research/browser-agent-prompting.md §7.3): the model DECLARES
+    # which ${name} a value came from, so the compiler binds structurally instead of
+    # string-matching the sample value back out of the artifact.
+    param=Field(
+        default=None,
+        description="If text/value/url (or a clicked element's name) is a PARAMETER's sample value, that "
+        "parameter's name (without ${}). Null for a literal that is not a parameter.",
+    ),
+)
+
+
+class AgentAction(_ActionCoercion):
+    """One atomic action — exactly what becomes one NFA transition. The decision carries the
+    same fields for its own action; a batched follow-up in `then` is one of these."""
+
+    kind: AgentActionKind | None = _ACTION_FIELDS["kind"]
+    index: int | None = _ACTION_FIELDS["index"]
+    text: str | None = _ACTION_FIELDS["text"]
+    value: str | None = _ACTION_FIELDS["value"]
+    url: str | None = _ACTION_FIELDS["url"]
+    keys: str | None = _ACTION_FIELDS["keys"]
+    down: bool | None = _ACTION_FIELDS["down"]
+    seconds: float | None = _ACTION_FIELDS["seconds"]
+    pages: float | None = _ACTION_FIELDS["pages"]
+    param: str | None = _ACTION_FIELDS["param"]
+
+
+# Kinds that end a batch: after them the pre-batch snapshot's indices mean nothing (a
+# navigation) or the dwell IS the point (wait — nothing may queue behind it). click is
+# deliberately not here: it is monitored at run time by the URL check (browser-use's
+# terminates_sequence vs. runtime detection, tool-calling doc §5.1).
+TERMINATES_BATCH: frozenset[str] = frozenset({"goto", "go_back", "wait"})
+MAX_BATCH = 4  # the schema bound on a batch: 1 primary action + up to 3 in `then`
+
+
+class AgentDecision(_ActionCoercion):
+    """One step: exactly one atomic action (optionally followed by up to three more on the
+    same page, `then`), or `done`. `done` is the only exit: success=True when the task is
+    complete, success=False when it cannot proceed (e.g. a CAPTCHA appeared) — say why in
+    `reasoning`."""
 
     # `reasoning` (and the working-memory fields below) stay FIRST: format-restricted output
     # degrades reasoning, and free-form tokens generated before the constrained fields are the
@@ -83,22 +168,21 @@ class AgentDecision(BaseModel):
     success: bool = Field(
         default=False, description="With done: whether the task was achieved (false = giving up; explain why)."
     )
-    kind: AgentActionKind | None = Field(default=None, description="The action to take (omit when done).")
-    index: int | None = Field(default=None, description="Element index from the observation (interaction actions).")
-    text: str | None = Field(default=None, description="Text to type (fill).")
-    value: str | None = Field(default=None, description="Option value/label (select).")
-    url: str | None = Field(default=None, description="URL (goto).")
-    keys: str | None = Field(default=None, description="Key or combo (press), e.g. 'Enter'.")
-    down: bool | None = Field(default=None, description="Scroll direction: true=down, false=up (scroll).")
-    seconds: float | None = Field(default=None, description="How long to dwell/watch, in seconds (wait).")
-    pages: float | None = Field(default=None, description="Scroll amount in viewport pages, e.g. 1.0 (scroll).")
-    # Parameter conveyance (docs/research/browser-agent-prompting.md §7.3): the model DECLARES
-    # which ${name} a value came from, so the compiler binds structurally instead of
-    # string-matching the sample value back out of the artifact.
-    param: str | None = Field(
-        default=None,
-        description="If text/value/url (or a clicked element's name) is a PARAMETER's sample value, that "
-        "parameter's name (without ${}). Null for a literal that is not a parameter.",
+    kind: AgentActionKind | None = _ACTION_FIELDS["kind"]
+    index: int | None = _ACTION_FIELDS["index"]
+    text: str | None = _ACTION_FIELDS["text"]
+    value: str | None = _ACTION_FIELDS["value"]
+    url: str | None = _ACTION_FIELDS["url"]
+    keys: str | None = _ACTION_FIELDS["keys"]
+    down: bool | None = _ACTION_FIELDS["down"]
+    seconds: float | None = _ACTION_FIELDS["seconds"]
+    pages: float | None = _ACTION_FIELDS["pages"]
+    param: str | None = _ACTION_FIELDS["param"]
+    then: list[AgentAction] = Field(
+        default_factory=list,
+        max_length=MAX_BATCH - 1,
+        description="Up to 3 further actions to run after this one, in order, on the SAME page (e.g. more "
+        "fills, then the submit click last). Leave empty unless you already know every value.",
     )
 
     @model_validator(mode="before")
@@ -111,39 +195,20 @@ class AgentDecision(BaseModel):
                 data = {**data, "kind": None, "done": True}
         return data
 
-    @field_validator("kind", mode="before")
-    @classmethod
-    def _normalize_kind(cls, v: object) -> object:
-        if not isinstance(v, str):
-            return v
-        k = v.strip().lower().replace(" ", "_").replace("-", "_")
-        return _KIND_ALIASES.get(k, k) or None
-
-    @field_validator("index", mode="before")
-    @classmethod
-    def _coerce_index(cls, value: object) -> object:
-        # The model sometimes echoes the observation's "[3]" bracket form as the index, or a
-        # float ("3.0" from Gemini).
-        if isinstance(value, float) and value.is_integer():
-            return int(value)
-        if isinstance(value, str):
-            digits = re.sub(r"[^0-9]", "", value)
-            return int(digits) if digits else None
-        return value
-
-    @field_validator("keys", mode="before")
-    @classmethod
-    def _normalize_keys(cls, v: object) -> object:
-        return normalize_keys(v) if isinstance(v, str) and v.strip() else v
-
     @model_validator(mode="after")
     def _exactly_one_mode(self) -> "AgentDecision":
         if self.done:
-            self.kind = None  # done is returned alone — never with an action
+            self.kind, self.then = None, []  # done is returned alone — never with an action
         elif self.kind is None:
             raise ValueError("return an action `kind`, or done=true")
-        # "LLM sometimes hallucinates and returns element id for non-web actions" (Skyvern);
-        # scroll keeps its index (it anchors the frame), press keeps it (the field to type into).
-        if self.kind in ("goto", "go_back", "wait"):
-            self.index = None
+        for a in self.then:
+            if a.kind is None:
+                raise ValueError("every action in `then` needs a kind")
         return self
+
+    def actions(self) -> "list[AgentAction]":
+        """The batch to execute, in order: this decision's own action first, then `then`."""
+        if self.done:
+            return []
+        head = AgentAction(**{k: getattr(self, k) for k in AgentAction.model_fields})
+        return [head, *self.then]

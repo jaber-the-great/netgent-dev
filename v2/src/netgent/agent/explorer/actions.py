@@ -9,7 +9,7 @@ pure most-durable candidate.
 
 from collections.abc import Callable
 
-from netgent.agent.explorer.decision import AgentDecision
+from netgent.agent.explorer.decision import AgentAction
 from netgent.browser.dom import DomElement, DomSnapshot
 from netgent.browser.locators import durable_locator
 from netgent.schema.actions import (
@@ -31,7 +31,7 @@ LocatorBuilder = Callable[[DomElement], list[LocatorStep]]
 
 
 def to_action(
-    decision: AgentDecision,
+    decision: AgentAction,
     snapshot: DomSnapshot,
     upload_path: str | None = None,
     locator_for: LocatorBuilder = durable_locator,
