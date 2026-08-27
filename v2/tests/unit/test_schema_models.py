@@ -383,4 +383,4 @@ def test_executor_refires_interrupt_when_popup_chains():
     assert record.success
     assert skips_dispatched == ["#skip", "#skip"]  # both ads skipped, then the word ran
     skip_edges = [e for e in record.edges if e.transition_id == "t_skip"]
-    assert [e.outcome for e in skip_edges] == ["trigger_timeout", "ok"]
+    assert [e.outcome for e in skip_edges] == ["recovered", "ok"]

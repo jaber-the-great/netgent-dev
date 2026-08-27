@@ -42,11 +42,12 @@ async def validate_workflow(
         wf = resolve_params(workflow, params)
         async with BrowserSession(headless=headless) as session:
             record = await Executor(session, wf, params=params).run()
-        failed = next((e for e in record.edges if e.outcome != "ok"), None)
+        # "recovered" resolve edges are the interrupt sweep working as designed, not failures.
+        failed = next((e for e in record.edges if e.outcome not in ("ok", "recovered")), None)
         result = ReplayResult(
             params=params,
             success=record.success,
-            edges_ok=sum(1 for e in record.edges if e.outcome == "ok"),
+            edges_ok=sum(1 for e in record.edges if e.outcome in ("ok", "recovered")),
             failed_edge=failed.transition_id if failed else None,
             error=failed.error if failed else None,
         )

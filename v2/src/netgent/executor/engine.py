@@ -129,15 +129,18 @@ class Executor:
                 )
                 for edge_id in interrupt.resolve:
                     edge = await self._fire(self._workflow.transition(edge_id))
-                    self._record.edges.append(edge)
                     if edge.outcome == "trigger_timeout":
                         # The action ran but the pop-up didn't settle (e.g. a chained ad
                         # re-showed the same skip button): re-check the anchor and re-fire.
+                        # Recorded as "recovered", not a failure — the sweep handled it.
+                        edge = edge.model_copy(update={"outcome": "recovered"})
+                        self._record.edges.append(edge)
                         logger.info(
                             "interrupt %s: resolve edge %s did not settle (%s) — re-checking anchor",
                             interrupt.id, edge_id, edge.error,
                         )
                         break
+                    self._record.edges.append(edge)
                     if edge.outcome != "ok":
                         logger.error("interrupt %s: resolve edge %s failed: %s", interrupt.id, edge_id, edge.error)
                         self._aborted = True
