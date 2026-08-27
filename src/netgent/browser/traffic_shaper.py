@@ -1,15 +1,17 @@
 """
-Traffic shaping via tc/netem for controlled network experiments.
+Traffic shaping via tc/netem + IFB for controlled network experiments.
 
-Applies bandwidth limits and latency/loss to the container's egress
-interface using tc-htb (rate limiting) and tc-netem (delay, loss).
-Only the outbound path is shaped — this is sufficient for testing
-application-layer adaptive behaviour (ABR resolution drops, rebuffering)
-because the application's TCP receive window and request pacing react to
-the shaped egress ACKs and requests.
+Shapes both ingress (download) and egress (upload) traffic:
+  - Download rate limiting uses an IFB (Intermediate Functional Block)
+    device: incoming packets on the real interface are redirected to ifb0,
+    where tc-htb enforces the bandwidth cap and the chosen qdisc (pfifo
+    or fq_codel) controls queuing behaviour.
+  - Latency and packet loss are applied on the real interface's egress
+    via tc-netem, which delays outgoing ACKs and requests (adding to RTT).
 
 Requires:
-  - iproute2 installed in the container (provides `tc`)
+  - iproute2 installed in the container (provides `tc` and `ip`)
+  - kmod installed (provides `modprobe` for the ifb kernel module)
   - NET_ADMIN capability (Docker --cap-add=NET_ADMIN or --privileged)
 """
 
@@ -18,6 +20,8 @@ import shutil
 import subprocess
 
 logger = logging.getLogger(__name__)
+
+_IFB_DEV = "ifb0"
 
 
 def _run(cmd: list[str], check: bool = True) -> str:
@@ -49,8 +53,44 @@ def _detect_interface() -> str:
     return "eth0"
 
 
+def _setup_ifb(iface: str):
+    """Create and link IFB device to redirect ingress traffic."""
+    modprobe = shutil.which("modprobe")
+    ip = shutil.which("ip")
+    tc = shutil.which("tc")
+
+    if modprobe:
+        subprocess.run([modprobe, "ifb"],
+                       capture_output=True, check=False)
+
+    subprocess.run([ip, "link", "add", _IFB_DEV, "type", "ifb"],
+                   capture_output=True, check=False)
+    subprocess.run([ip, "link", "set", _IFB_DEV, "up"],
+                   capture_output=True, check=False)
+
+    _run([tc, "qdisc", "add", "dev", iface,
+          "handle", "ffff:", "ingress"], check=False)
+
+    _run([tc, "filter", "add", "dev", iface,
+          "parent", "ffff:", "protocol", "all",
+          "u32", "match", "u32", "0", "0",
+          "action", "mirred", "egress", "redirect", "dev", _IFB_DEV])
+
+
+def _teardown_ifb(iface: str):
+    """Remove IFB redirection and clean up."""
+    tc = shutil.which("tc")
+    ip = shutil.which("ip")
+    if tc:
+        _run([tc, "qdisc", "del", "dev", _IFB_DEV, "root"], check=False)
+        _run([tc, "qdisc", "del", "dev", iface, "ingress"], check=False)
+    if ip:
+        subprocess.run([ip, "link", "set", _IFB_DEV, "down"],
+                       capture_output=True, check=False)
+
+
 class TrafficShaper:
-    """Apply and remove tc/netem traffic shaping rules."""
+    """Apply and remove tc/netem traffic shaping on both directions."""
 
     def __init__(self):
         self._active = False
@@ -66,14 +106,23 @@ class TrafficShaper:
         delay_ms: float = 0,
         loss_pct: float = 0,
         interface: str | None = None,
+        qdisc: str = "default",
+        qdisc_limit: int = 50,
     ):
-        """Apply bandwidth cap + optional latency/loss.
+        """Apply download bandwidth cap + optional latency/loss + optional AQM.
+
+        Download (ingress) rate limiting is applied via IFB device.
+        Latency/loss is applied on the egress path of the real interface.
 
         Args:
-            rate_mbps: Bandwidth cap in Mbps (e.g. 5.0 = 5 Mbps)
-            delay_ms: One-way added latency in ms (RTT impact is 2x)
-            loss_pct: Random packet loss percentage (0-100)
+            rate_mbps: Download bandwidth cap in Mbps (e.g. 6.0 = 6 Mbps)
+            delay_ms: Added latency in ms applied to egress (affects RTT)
+            loss_pct: Random packet loss percentage on egress (0-100)
             interface: Network interface (auto-detected if omitted)
+            qdisc: Leaf queueing discipline on the download path —
+                   "default" (no explicit leaf), "pfifo" (tail-drop FIFO),
+                   or "fq_codel" (fair-queue CoDel).
+            qdisc_limit: Buffer size in packets for pfifo.
         """
         tc = shutil.which("tc")
         if tc is None:
@@ -88,18 +137,28 @@ class TrafficShaper:
         self._interface = iface
 
         rate_kbit = int(rate_mbps * 1000)
-        burst = max(rate_kbit // 8, 15)  # in kbytes, minimum 15k
+        burst = max(rate_kbit // 8, 15)
 
-        _run([tc, "qdisc", "add", "dev", iface, "root", "handle", "1:",
+        _setup_ifb(iface)
+
+        _run([tc, "qdisc", "add", "dev", _IFB_DEV, "root", "handle", "1:",
               "htb", "default", "10"])
-        _run([tc, "class", "add", "dev", iface, "parent", "1:",
+        _run([tc, "class", "add", "dev", _IFB_DEV, "parent", "1:",
               "classid", "1:10", "htb",
               "rate", f"{rate_kbit}kbit",
               "burst", f"{burst}k"])
 
+        if qdisc == "pfifo":
+            _run([tc, "qdisc", "add", "dev", _IFB_DEV,
+                  "parent", "1:10", "handle", "10:",
+                  "pfifo", "limit", str(qdisc_limit)])
+        elif qdisc == "fq_codel":
+            _run([tc, "qdisc", "add", "dev", _IFB_DEV,
+                  "parent", "1:10", "handle", "10:", "fq_codel"])
+
         if delay_ms > 0 or loss_pct > 0:
             netem_args = [tc, "qdisc", "add", "dev", iface,
-                          "parent", "1:10", "handle", "10:", "netem"]
+                          "root", "handle", "1:", "netem"]
             if delay_ms > 0:
                 netem_args += ["delay", f"{delay_ms}ms"]
             if loss_pct > 0:
@@ -108,12 +167,13 @@ class TrafficShaper:
 
         self._active = True
         logger.info(
-            "Traffic shaping applied: %s Mbps, %s ms delay, %s%% loss on %s",
-            rate_mbps, delay_ms, loss_pct, iface,
+            "Traffic shaping applied: %s Mbps (ingress via %s), "
+            "%s ms delay, %s%% loss, qdisc=%s on %s",
+            rate_mbps, _IFB_DEV, delay_ms, loss_pct, qdisc, iface,
         )
 
     def remove(self):
-        """Remove all tc rules from the interface."""
+        """Remove all tc rules from both the real interface and IFB."""
         if not self._active or not self._interface:
             logger.info("No traffic shaping active; nothing to remove")
             return
@@ -124,5 +184,8 @@ class TrafficShaper:
 
         _run([tc, "qdisc", "del", "dev", self._interface, "root"],
              check=False)
+        _teardown_ifb(self._interface)
+
         self._active = False
-        logger.info("Traffic shaping removed from %s", self._interface)
+        logger.info("Traffic shaping removed from %s + %s",
+                     self._interface, _IFB_DEV)
