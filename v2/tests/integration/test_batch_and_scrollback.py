@@ -107,7 +107,8 @@ def test_skip_button_stays_observed_after_scrolling_one_page(tmp_path):
             await s.page.goto(page.as_uri())
             await s.page.set_viewport_size({"width": 1000, "height": 700})
             await s.page.mouse.wheel(0, 700)
-            await s.page.wait_for_timeout(300)
+            # wait on the scroll itself, not a fixed delay — 300ms flaked on loaded CI runners
+            await s.page.wait_for_function("window.scrollY >= 700")
             snap = await s.snapshot()
             return snap
 
