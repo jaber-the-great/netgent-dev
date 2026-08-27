@@ -17,6 +17,13 @@ structure), [`browser-agent-tool-calling.md`](browser-agent-tool-calling.md) (ac
 
 ---
 
+> **Status (2026-08-27): (a) + (c) implemented on `eugene/v2-scaffold`.** Walker emits `format=`
+> / `picker=` from the closed signal list (incl. the `.input-group.date` ancestor) and folds
+> `ng-invalid` / `is-invalid` / `aria-invalid` into `[invalid]`; `_fill` gained the gated
+> per-key rung (Escape, explicit blur, verify after the commit); prompt rule (b) rewritten.
+> Measured: sweep **19/21** (was 17/21 — the ceiling, Ember and Shadow DOM being broken fixtures),
+> challenge 5/15 unchanged, 202 tests. Regression tests: `tests/integration/test_date_inputs.py`.
+
 ## Summary (10 lines)
 
 1. **The two forms fail for two *different* reasons, and only one of them is a format problem.** `angularjs.html` is pure format: `05/15/1990` passes, `1990-05-15` fails under every dispatch strategy. `jquery-bootstrap.html` is pure *dispatch*: `locator.fill()` fails with **both** formats — the value is silently wiped on the next blur — while per-keystroke typing passes with both (measured, §2).

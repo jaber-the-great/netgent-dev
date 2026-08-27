@@ -201,8 +201,11 @@ def _render(el: DomElement) -> str:
     if el.options:
         val += f" options=[{', '.join(el.options)}]"
     name = f' "{el.name}"' if el.name else ""
-    if el.type in _FORMAT_HINT:
-        name += f" format={_FORMAT_HINT[el.type]}"
+    fmt = el.format or _FORMAT_HINT.get(el.type or "")
+    if fmt:
+        name += f" format={fmt}"
+        if el.picker and el.picker != "attr":
+            name += f" picker={el.picker}"
     state = ""
     if el.checked is not None:
         state += " [checked]" if el.checked else " [unchecked]"

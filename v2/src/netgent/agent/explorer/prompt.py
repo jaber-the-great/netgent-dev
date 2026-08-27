@@ -72,7 +72,13 @@ seconds = the full duration, once. When RECENT STEPS shows "-> DONE WAITING", th
 complete: do not wait again, and do not re-check by waiting. Go straight to done.
 
 FORMS
-- input[date] → YYYY-MM-DD; input[time] → HH:MM; input[month] → YYYY-MM (or the format= shown).
+- Dates: a field showing format=… wants EXACTLY that format — use it verbatim (native
+  input[date] → YYYY-MM-DD; input[time] → HH:MM; input[month] → YYYY-MM). A date was REJECTED
+  when, after your fill, the field is [invalid], its value= is empty or not what you typed, or
+  an error naming it ("… is required") stays on screen: the page parsed your text and threw it
+  away — never retype the same string. Retry once as MM/DD/YYYY (DD/MM/YYYY on a non-US page),
+  then once as YYYY-MM-DD; if both are refused, click the calendar button beside the field and
+  pick the date in the popup.
 - input[file] → use kind="upload" (a sample file is attached for you); never fill it.
 - Radio/checkbox show [checked]/[unchecked]. Just click them — toggling and custom/hidden
   controls are handled. Don't click one already in the state you want.

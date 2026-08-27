@@ -100,6 +100,52 @@
   const roleOf = (el) => el.getAttribute('role') ||
     (el.tagName === 'INPUT' ? (INPUT_ROLE[(el.getAttribute('type') || 'text').toLowerCase()] || 'textbox')
                             : TAG_ROLE[el.tagName]);
+  // Date-format hint for INPUTs, from signals readable without page JS
+  // (docs/research/browser-agent-date-inputs.md §5, §7a). Native date/time types take ISO;
+  // a text input gets a format only when a signal actually carries one: an attribute that
+  // states it (uib-datepicker-popup, data-date-format), a placeholder that looks like one,
+  // or a known picker library whose documented default we can cite. Never guessed from the
+  // label — a wrong format= is worse than none. bootstrap-datepicker's component mode leaves
+  // nothing on the input itself: the wrapper `.input-group.date` is the only signal (measured
+  // on browser-use's jquery-bootstrap stress form), hence the ancestor check.
+  const ISO_FORMAT = { date: 'YYYY-MM-DD', time: 'HH:MM', 'datetime-local': 'YYYY-MM-DDTHH:MM',
+                       month: 'YYYY-MM', week: 'YYYY-Www' };
+  const PICKERS = [
+    ['flatpickr', (el) => el.classList.contains('flatpickr-input'), 'YYYY-MM-DD'],
+    ['jquery-ui-datepicker', (el) => el.classList.contains('hasDatepicker'), 'MM/DD/YYYY'],
+    ['react-datepicker', (el) => !!el.closest('.react-datepicker__input-container'), 'MM/DD/YYYY'],
+    ['ant-picker', (el) => !!el.closest('.ant-picker'), 'YYYY-MM-DD'],
+    ['bootstrap-datepicker', (el) => el.getAttribute('data-provide') === 'datepicker'
+        || /(^|\s)(datepicker|datetimepicker|daterangepicker)(\s|$)/i.test(el.className)
+        || !!el.closest('.input-group.date'), 'MM/DD/YYYY'],
+  ];
+  const dateHint = (el) => {
+    if (el.tagName !== 'INPUT') return { format: null, picker: null };
+    const t = (el.getAttribute('type') || 'text').toLowerCase();
+    if (ISO_FORMAT[t]) return { format: ISO_FORMAT[t], picker: null };
+    if (t !== 'text' && t !== '') return { format: null, picker: null };
+    const explicit = el.getAttribute('uib-datepicker-popup')
+      || el.getAttribute('data-date-format') || el.getAttribute('data-format');
+    if (explicit) return { format: explicit.toUpperCase(), picker: 'attr' };
+    for (const a of ['placeholder', 'title', 'aria-placeholder', 'data-placeholder']) {
+      const v = (el.getAttribute(a) || '').trim();
+      if (/^[dmy][dmy\W]{5,}$/i.test(v)) return { format: v.toUpperCase(), picker: null };
+    }
+    for (const [name, test, fmt] of PICKERS) {
+      if (!test(el)) continue;
+      const lang = (document.documentElement.lang || navigator.language || 'en-US').toLowerCase();
+      const localeFmt = fmt === 'MM/DD/YYYY' && !lang.startsWith('en-us') && lang !== 'en' ? 'DD/MM/YYYY' : fmt;
+      return { format: localeFmt, picker: name };
+    }
+    return { format: null, picker: null };
+  };
+  // Framework-side invalidity (Angular ng-invalid, Bootstrap is-invalid, aria-invalid): the
+  // only machine-readable evidence that a page PARSED and rejected a value while native
+  // validity stays true (measured: angularjs stress form, ISO date silently dropped).
+  const frameworkInvalid = (el) =>
+    el.classList.contains('ng-invalid') || el.classList.contains('is-invalid')
+    || el.getAttribute('aria-invalid') === 'true';
+
   const candidates = (el) => {
     const out = [];
     const role = roleOf(el);
@@ -187,7 +233,8 @@
             required: !!el.required,
             // A required field the browser considers invalid blocks native form submit
             // silently (the validation tooltip is not in the DOM) — surface it.
-            invalid: el.willValidate ? !el.validity.valid : false,
+            invalid: (el.willValidate ? !el.validity.valid : false) || frameworkInvalid(el),
+            ...dateHint(el),
             options: el.tagName === 'SELECT'
               ? [...el.options].map(o => o.value).filter(v => v).slice(0, 25) : null,
             // Native value, or — for popup widgets (MUI/ARIA selects: div[role=button]

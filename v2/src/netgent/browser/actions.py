@@ -80,6 +80,21 @@ class ActionDispatcher:
             # context — this fires framework listeners a synthetic input click misses.
             await first.evaluate("el => (el.labels && el.labels[0] ? el.labels[0] : el).click()")
 
+    # A TEXT input driven by a keystroke-listening datepicker. Gated hard on type=text: typing
+    # ISO per key into a native input[type=date] yields garbage that still validates
+    # (measured "1990-05-15" → "0515-12-09").
+    _PICKER_PROBE_JS = """el => {
+      if (el.tagName !== 'INPUT') return false;
+      const t = (el.getAttribute('type') || 'text').toLowerCase();
+      if (t !== 'text' && t !== '') return false;
+      return !!(el.getAttribute('uib-datepicker-popup')
+             || el.getAttribute('data-date-format') || el.getAttribute('data-format')
+             || el.getAttribute('data-provide') === 'datepicker'
+             || /(^|\\s)(datepicker|datetimepicker|daterangepicker|hasDatepicker|flatpickr-input)(\\s|$)/i
+                  .test(el.className)
+             || el.closest('.input-group.date, .react-datepicker__input-container, .ant-picker'));
+    }"""
+
     # The value a fill can be verified against, or None when the element has no readable
     # value (then we trust the fill). Contenteditable reads textContent.
     _READBACK_JS = (
@@ -122,6 +137,28 @@ class ActionDispatcher:
                 return True, current
             return bool(current) and current != before, current
 
+        # Rung 0 — a picker-backed TEXT input. bootstrap-datepicker binds only keyup/keydown/
+        # paste; Playwright's fill delivers characters with no key events, so the widget's
+        # date list stays empty and its forceParse-on-blur rewrites the field to "" AFTER our
+        # read-back (measured: fill leaves the right value, the next action's mousedown blanks
+        # it). browser-use routes such inputs to a plugin-aware direct write
+        # (default_action_watchdog.py `_requires_direct_value_assignment`); we cannot call
+        # jQuery from the isolated world, so: type per key, Escape (not Enter — Enter commits
+        # TODAY's date), blur explicitly so forceParse runs inside this action, then verify.
+        try:
+            is_picker = await first.evaluate(self._PICKER_PROBE_JS, timeout=2000)
+        except Exception:  # noqa: BLE001 — the probe is advisory
+            is_picker = False
+        if is_picker:
+            await first.click(timeout=timeout_ms)
+            await first.press("ControlOrMeta+a", timeout=timeout_ms)
+            await first.press_sequentially(text, timeout=timeout_ms)
+            await first.press("Escape", timeout=timeout_ms)
+            await first.evaluate("el => el.blur()", timeout=2000)
+            ok, current = await verify()
+            if ok:
+                return
+            raise ActionDispatchError(f"fill did not stick: the date widget rejected {text!r} and left {current!r}")
         try:
             await first.fill(text, timeout=timeout_ms)
             ok, _ = await verify()

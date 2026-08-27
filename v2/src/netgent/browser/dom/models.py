@@ -39,6 +39,8 @@ class DomElement(BaseModel):
     invalid: bool = False  # required-but-invalid: silently blocks native form submit
     options: list[str] | None = None  # <select> option values
     value: str | None = None
+    format: str | None = None  # expected input format, e.g. YYYY-MM-DD (native) or MM/DD/YYYY (picker/attr)
+    picker: str | None = None  # datepicker library / signal behind `format` (attr, bootstrap-datepicker, …)
     frame_path: list[str] = Field(default_factory=list, alias="framePath")
     # Captured from inside a CLOSED shadow root: only Patchright (CDP describeNode pierce) can
     # resolve it, so a plain-Playwright replay must refuse. Set by the walker when it descends
