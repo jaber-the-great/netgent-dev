@@ -100,9 +100,11 @@ REVEAL = """<!doctype html><html><head><title>Reveal</title></head><body>
 </body></html>"""
 
 
-def test_agent_sees_new_elements_starred_and_new_text_after_its_own_action(tmp_path):
-    """The observation diff: the option that appeared because of the click is marked `*`
-    and the transient status text is listed under NEW TEXT — and neither on the first step."""
+def test_agent_sees_new_elements_starred_and_new_text_after_its_own_action(tmp_path, monkeypatch):
+    """The observation diff (opt-in, NETGENT_OBS_DIFF=1): the option that appeared because of
+    the click is marked `*` and the transient status text is listed under NEW TEXT — and
+    neither on the first step."""
+    monkeypatch.setenv("NETGENT_OBS_DIFF", "1")
     page = tmp_path / "reveal.html"
     page.write_text(REVEAL)
     seen: list[str] = []

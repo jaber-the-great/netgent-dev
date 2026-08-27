@@ -82,5 +82,8 @@ def test_memory_less_schema_variant_drops_exactly_the_three_fields():
     core = decision_schema(memory_fields=False)
     assert set(AgentDecision.model_fields) - set(core.model_fields) == {"evaluation", "memory", "next_goal"}
     assert decision_schema(True) is AgentDecision
+    from netgent.agent.llm import memory_fields_enabled
+
+    assert memory_fields_enabled() is False  # opt-in (NETGENT_MEMORY_FIELDS=1), by measurement
     lite = core(reasoning="r", kind="fill", index=2, text="x")
     assert AgentDecision.model_validate(lite.model_dump()).text == "x"

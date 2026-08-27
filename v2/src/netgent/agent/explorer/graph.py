@@ -72,12 +72,13 @@ def build_agent_graph(
         snapshot = await session.snapshot()
         if frame_filter is not None:  # focus on one form (iframe) for a sweep
             snapshot = snapshot.scoped_to(frame_filter)
-        # The diff-free rendering is what stuck detection compares (a "nothing changed" line
-        # must not itself count as a change); the model gets the diffed one. The diff is
-        # suppressed across a navigation so a new page is not starred wholesale
-        # (browser-use only says this in prose; NETGENT_OBS_DIFF=0 is the A/B arm).
+        # The diff-free rendering is what stuck detection compares; the model gets the diffed
+        # one only with NETGENT_OBS_DIFF=1 — OFF by default, by measurement: the `*` markers and
+        # new-text section (with the memory fields) cost +45% calls on the 21-form sweep for a
+        # lower score and changed nothing on the challenge (explorer-optimisation.md §2). The
+        # diff is suppressed across a navigation so a new page is not starred wholesale.
         plain = format_observation(snapshot)
-        same_page = state.get("prev_url") == snapshot.url and os.getenv("NETGENT_OBS_DIFF", "1") != "0"
+        same_page = state.get("prev_url") == snapshot.url and diff_enabled()
         observation = format_observation(
             snapshot,
             previous=state.get("prev_keys") if same_page else None,
@@ -226,6 +227,10 @@ def build_agent_graph(
         .add_edge(START, "observe")
         .compile()
     )
+
+
+def diff_enabled() -> bool:
+    return os.getenv("NETGENT_OBS_DIFF", "0") == "1"
 
 
 def _target_label(snapshot, index: int | None) -> str:

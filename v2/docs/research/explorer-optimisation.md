@@ -8,8 +8,11 @@ point of this file — **what each change measured**. Every arm is a real run of
 `netgent eval stress` with `anthropic/claude-haiku-4-5-20251001`, 3 repetitions, from an
 isolated `git worktree` of the arm's commit so later edits could not leak into a running arm.
 
-Two negative results are recorded here on purpose. Both were recommendations of the research
-docs that the first A/B refuted; both were reverted before the next stage.
+Five negative results are recorded here on purpose — each a recommendation of the research docs
+(or of the convergent design they describe) that the A/B refuted: off-screen magnitude markers,
+an explicit "nothing changed" line, `go_back` in the default kind set, the observation diff and
+working-memory fields as defaults, and action batching as a default. Each was reverted or made
+opt-in before the next stage, and the winning configuration is what the branch ships.
 
 ## 1. Method
 
@@ -33,6 +36,8 @@ Arms (commits on `v2/explorer`):
 | stage3-first | `6867be7` | `done: bool`, coercion + retry ladders, opt-in hover/press/goto, value-aware diff (still with a "no change" claim) |
 | stage3b | `e58fadc` | inline child text merged into the parent block; **no** explicit "nothing changed" claims anywhere |
 | stage3c | `c31036f` | bounded action batch, run with `NETGENT_MAX_ACTIONS=4` (default stays 1) |
+| final | `ea498c9` | stage3c + `go_back` opt-in (the challenge arms above never used `go_back`, so their numbers hold for this commit) |
+| shipped defaults | (next commit) | the final code with `NETGENT_OBS_DIFF` and `NETGENT_MEMORY_FIELDS` **off** by default and batch 1 — i.e. exactly the *final, flags-off* arm below |
 
 ## 2. Results
 
@@ -92,12 +97,43 @@ Where each arm stopped (from the trajectories):
 |---|---|---|---|---|---|---|---|---|---|
 | baseline | 16/17/17 | **16.67**/21 | 160 | 203 | 605,723 | 2,984 | 102 | 0 | 428 |
 | stage1 | 17/16/17 | **16.67**/21 | 146 | 190 | 724,916 | 3,809 | 103 | 0 | 358 |
-| stage3b | _pending_ | | | | | | | | |
-| stage3c (batch 4) | _pending_ | | | | | | | | |
+| stage3b (killed after r1) | 17/9 | 13.0/21 | — | 240 | 1,098,000 | 4,570 | 195 | 0 | 622 |
+| final, diff + memory fields on, batch 1 | 17/16/16 | **16.33**/21 | 260 | 307 | 1,417,784 | 4,613 | 214 | 0 | 858 |
+| final, diff + memory fields on, batch 4 | 15/16/17 | **16.00**/21 | 318 | 340 | 1,847,757 | 5,435 | 219 | 0 | 925 |
+| **final, diff + memory fields off, batch 1 (shipped defaults)** | 17/17/17 | **17.00**/21 | 163 | 212 | 817,318 | 3,861 | 107 | 0 | 383 |
 
 Forms not verified: baseline r0 `[1, 2, 5, 7, 11]`, r1 `[5, 7, 11, 13]`, r2 `[5, 7, 11, 13]`;
-stage1 r0 `[1, 5, 7, 11]`, r1 `[1, 2, 7, 11, 13]`, r2 `[5, 7, 11, 13]`. Forms 5, 7 and 11 fail in
-every arm — they are the ceiling for this model, not for the prompt.
+stage1 r0 `[1, 5, 7, 11]`, r1 `[1, 2, 7, 11, 13]`, r2 `[5, 7, 11, 13]`; stage3b r0 `[1, 2, 7, 11]`,
+r1 `[1, 2, 7, 11, 13–20]`. Forms 7 and 11 fail in every arm — the ceiling for this model, not the
+prompt. Final arms: diff+memory r0 `[1, 2, 7, 11]`, r1 `[1, 2, 7, 11, 13]`, r2 `[1, 2, 5, 7, 11]`; batch 4
+r0 `[1, 2, 5, 7, 11, 13]`, r1 `[1, 2, 7, 11, 13]`, r2 `[1, 2, 7, 11]`; flags-off r0–r2 `[1, 2, 7, 11]`
+(the three final arms ran concurrently, so their wall times are comparable with each other but
+not with the baseline).
+
+**stage3b's sweep was the third negative result.** With `go_back` in the default kind set (the
+convergent core, kept by AgentOccam) Haiku used it **41 times** across the sweep — *"I'll use
+go_back to reveal form 14"*, *"try a different approach"* — against **0** uses in the baseline and
+stage-1 arms, whose prompt listed the same kind. In run 1 a `go_back` navigated the sweep page to
+`about:blank` and every later form failed (9/21). The sweep was stopped after run 1 (run 2 was at
+form 11, on track) and `go_back` joined hover/press/goto behind `--allow` (commit `ea498c9`).
+The input-token doubling (2,984 → 4,570 per step) is the longer prompt, the three full history
+blocks and the diff/new-text lines, with no cache on Haiku — the final arms below measure how much
+of it the diff and memory fields are responsible for.
+
+**The final sweep answers that: most of it, and they lower the score.** With the diff and the
+memory fields on, the sweep needs 307 calls / 1.42 M input tokens for 16.33; with both off it
+needs 212 calls / 0.82 M for **17.00** — the best result of any arm, on the same commit. The extra
+steps are the model acting on `*`-marked / NEW-TEXT lines and re-planning around its own
+`memory` text; the 9 forms (`1, 2, 7, 11`) that fail are the same in every run of the flags-off arm.
+**Batch 4 also loses on the sweep** (16.00, 340 calls): batched fills against a form that
+re-renders after the first fill abort mid-batch, and the model re-issues them one by one — the
+per-item guards work, but they cost the calls batching was meant to save. It wins on the
+challenge (7.00 vs 5.00), where a `hover`+`press`/`click` batch on one card is what gets the
+page to register.
+
+**Shipped defaults follow the measurement:** observation diff off (`NETGENT_OBS_DIFF=1` to
+enable), memory fields off (`NETGENT_MEMORY_FIELDS=1`), `max_actions_per_step=1`
+(`--max-actions 4` for challenge-like tasks). The features stay in the code, tested, as opt-ins.
 
 ### 2.3 Observation size (zero-LLM, `netgent eval observation`, first page load)
 
@@ -127,9 +163,9 @@ on a Sonnet/Opus explorer, or if the prefix grows past 4k. `usage["cache_read_to
 
 | axis | shipped | measured effect | rejected (measured) |
 |---|---|---|---|
-| **observation** | one viewport of scrollback kept (the YouTube Skip band, `-vh ≤ y < -60`, verified by a fixture test and on the live watch page: 14 vs 30 elements dropped after one scroll); alerts first, element-name text deduped; `format=` hints on date/time inputs; password values never printed; inline child text merged; single-char state texts kept; `*[index]` new-element markers + `NEW TEXT SINCE LAST STEP` (diff suppressed across navigations) | challenge 4.33 → 5.00 (with stage 3); in/step +48% (3,638 → 5,381) because the scrollback slice and the diff lines add lines and Haiku cannot cache the prefix | per-element `(↓ N pages below)` markers and page-magnitude POSITION (scroll thrash, −1.0 on the challenge); any explicit "nothing changed" line (retry loops, −3.3) |
-| **memory** | `StepRecord` (kind, target name, outcome, error, the model's eval/memory/goal); fold-at-`note()` compaction so a sweep's cross-form memory survives the window; `evaluation` / `memory` / `next_goal` on the decision (Haiku fills `memory`, leaves `evaluation` empty most steps) | out/step 99 → 225 (+126 tokens/step); sweep effect _pending_ | writing the loop's no-progress verdict into the record (see above) |
-| **action space / tool calling** | `done: bool` enforced alone; kind aliases, `[3]`/float index repair, Playwright key-name normalisation, index dropped on page-level kinds, `press` with an index; in-place parse retry with the validator's errors; `hover`/`press`/`goto` opt-in per task (prompt and schema narrowed together); bounded batch behind `max_actions_per_step` (default 1) | the search card that killed every baseline run passes; `goto` no longer available to reset a page; batch A/B _pending_ | — |
+| **observation** | one viewport of scrollback kept (the YouTube Skip band, `-vh ≤ y < -60`, verified by a fixture test and on the live watch page: 14 vs 30 elements dropped after one scroll); alerts first, element-name text deduped; `format=` hints on date/time inputs; password values never printed; inline child text merged; single-char state texts kept | challenge 4.33 → 5.00 (with stage 3); sweep 16.67 → 17.00; in/step +29% on the sweep (2,984 → 3,861) and +40% on the challenge, mostly the longer prompt with no cache on Haiku | per-element `(↓ N pages below)` markers and page-magnitude POSITION (scroll thrash, −1.0 on the challenge); any explicit "nothing changed" line (retry loops, −3.3); `*[index]` markers + `NEW TEXT SINCE LAST STEP` as a default (sweep −0.67 at +45% calls; kept as `NETGENT_OBS_DIFF=1`) |
+| **memory** | `StepRecord` (kind, target name, outcome, error); fold-at-`note()` compaction so a sweep's cross-form memory survives the window; folds/notes always rendered, last 10 acted records, last 3 as blocks | sweep 17/17/17 with the same three forms failing every run (the baseline lost different forms per run) | `evaluation` / `memory` / `next_goal` as a default: +107 output tokens/step, no gain on the challenge, and with the diff −0.67 on the sweep (kept as `NETGENT_MEMORY_FIELDS=1`); writing the loop's no-progress verdict into the record |
+| **action space / tool calling** | `done: bool` enforced alone; kind aliases, `[3]`/float index repair, Playwright key-name normalisation, index dropped on page-level kinds, `press` with an index; in-place parse retry with the validator's errors; `hover`/`press`/`goto`/`go_back` opt-in per task (prompt and schema narrowed together); bounded batch behind `max_actions_per_step` (default 1) | the search card that killed every baseline run passes; `goto` can no longer reset a page, `go_back` can no longer blank it; batch 4: challenge 5.00 → 7.00 | batch 4 as a default (sweep 16.00, +60% calls); `go_back` as a default (41 uses, one `about:blank`) |
 | **prompt** | kind list fixed (`upload` present, `done` not a kind), observation legend, grounding, overlays/ads, dwell, dropdowns, positive scroll rule, PARAMETERS; ≈1,014 → ≈1,350 tokens | see observation row (confounded with it) | the "listed and actionable off-screen" markers the legend described |
 | **parameters** | `AgentDecision.param` → `AgentStep.param` → compiler binds `${name}` structurally; literal sweep only on value fields / state conditions; warnings for unbound or mismatched params | YouTube run: `param=query` declared on the fill, `text: ${query}` in the artifact, no warnings, zero-LLM replay validated (8 edges) | substring abstraction inside locator names |
 
@@ -164,8 +200,8 @@ dropped under `NETGENT_OBS_SCROLLBACK=0`.
 | env var | arm |
 |---|---|
 | `NETGENT_OBS_SCROLLBACK=0` | the old 60 px cut |
-| `NETGENT_OBS_DIFF=0` | no `*` markers / change line / new-text section |
-| `NETGENT_MEMORY_FIELDS=0` | schema without `evaluation` / `memory` / `next_goal` |
+| `NETGENT_OBS_DIFF=1` | `*` markers / change line / new-text section (default off) |
+| `NETGENT_MEMORY_FIELDS=1` | `evaluation` / `memory` / `next_goal` in the schema (default off) |
 | `NETGENT_MAX_ACTIONS=N` | batch size for `eval stress` (agent/CLI: `max_actions_per_step`, `--max-actions`) |
 | `NETGENT_IFRAME_HEADERS=0` | (pre-existing) no `|IFRAME n|` headers |
 

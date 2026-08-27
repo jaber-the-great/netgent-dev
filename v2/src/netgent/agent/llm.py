@@ -74,9 +74,12 @@ def render_prompt(system: str, task: str, observation: str, history: list[StepRe
 
 
 def memory_fields_enabled() -> bool:
-    """NETGENT_MEMORY_FIELDS=0 removes evaluation/memory/next_goal from the schema the model
-    fills (the A/B arm — browser-use's flash mode does the same)."""
-    return os.getenv("NETGENT_MEMORY_FIELDS", "1") != "0"
+    """NETGENT_MEMORY_FIELDS=1 adds evaluation/memory/next_goal to the schema the model fills.
+    OFF by default, by measurement: on the 21-form sweep the fields (with the observation diff)
+    cost +45% LLM calls and +130% input tokens for a lower score, and on the challenge they
+    changed nothing (docs/research/explorer-optimisation.md §2). browser-use's flash mode
+    drops them the same way."""
+    return os.getenv("NETGENT_MEMORY_FIELDS", "0") == "1"
 
 
 def decision_schema(

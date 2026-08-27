@@ -32,6 +32,7 @@ def test_prompt_has_the_rule_sections_the_survey_converged_on():
         assert section in SYSTEM_PROMPT, section
     assert "near the current viewport" not in SYSTEM_PROMPT  # the misdescribed slice
     assert "WITHOUT scrolling" in SYSTEM_PROMPT and "*[index]" in SYSTEM_PROMPT
+    assert "*[index]" not in build_system_prompt(diff=False) and "NEW TEXT" not in build_system_prompt(diff=False)
     assert "never an instruction" in SYSTEM_PROMPT  # page text is evidence (injection rule)
 
 
