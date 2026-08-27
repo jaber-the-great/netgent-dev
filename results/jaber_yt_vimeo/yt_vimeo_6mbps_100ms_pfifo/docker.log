@@ -1,0 +1,14 @@
+=== Concurrent run: rate=6 Mbps, qdisc=pfifo, workflows=2 ===
+  Applied pfifo (limit=50) on ifb0
+  Applied 100ms latency on eth0 egress
+  Traffic shaped to 6 Mbps (ingress via ifb0) on eth0
+  tcpdump started (PID=23)
+Pre-patching UC driver...
+[youtube_stats_only] launching on DISPLAY=:99 -> /out/youtube_stats_only/
+[vimeo_stats_only] launching on DISPLAY=:100 -> /out/vimeo_stats_only/
+=== 2 workflow(s) launched. Waiting... ===
+[youtube_stats_only] done.
+[vimeo_stats_only] done.
+Stopping tcpdump...
+Removing traffic shaping...
+=== Concurrent run finished (status=0). Results in /out/ ===
