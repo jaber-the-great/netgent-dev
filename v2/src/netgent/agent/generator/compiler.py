@@ -261,7 +261,10 @@ def _bind_params(wf: Workflow, steps: list, params: dict[str, str], warnings: li
         return text, n_total
 
     # 1. Structural: the explorer declared which step carried which parameter.
-    for step, tr in zip(steps, data["transitions"], strict=True):
+    # Steps pair with the word's primary edges t1..tN only — dwell twins (t{i}_dwell)
+    # and interrupt resolutions (ti{k}) are compiler-synthesized and carry no step.
+    word_edges = [tr for tr in data["transitions"] if re.fullmatch(r"t\d+", tr["id"])]
+    for step, tr in zip(steps, word_edges, strict=True):
         pname = getattr(step, "param", None)
         if not pname:
             continue

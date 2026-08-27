@@ -258,3 +258,21 @@ def test_reasoning_mention_alone_does_not_make_an_interrupt():
     wf = compile_trajectory(traj, name="x")
     assert wf.interrupts == []  # target is not a dismissal control → main word
     assert len(wf.transitions) == 2
+
+
+def test_params_bind_on_trajectories_with_interrupts_and_dwells():
+    """Regression: _bind_params zipped steps against ALL transitions (strict), but dwell
+    twins (t{i}_dwell) and interrupt resolutions (ti{k}) have no originating step — the
+    zip must pair steps with the word's primary edges t1..tN only."""
+    steps = list(_ad_traj().steps)
+    steps.insert(1, AgentStep(n=10, kind="fill", reasoning="search", url="https://yt.com/watch?v=x",
+                              param="query",
+                              action={"type": "fill", "locator": [{"fn": "locator", "args": ["input#q"]}],
+                                      "text": "cat videos"}))
+    traj = AgentTrajectory(task="t", success=True, steps=steps)
+    warnings: list[str] = []
+    wf = compile_trajectory(traj, name="yt", params={"query": "cat videos"}, warnings=warnings)
+    assert wf.interrupts and any(t.id.endswith("_dwell") for t in wf.transitions)  # the crash shape
+    (fill_edge,) = [t for t in wf.transitions if t.action.type == "fill"]
+    assert fill_edge.action.text == "${query}"
+    assert not warnings
