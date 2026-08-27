@@ -53,5 +53,7 @@ def test_validator_reports_a_failing_edge(tmp_path):
     wf = compile_trajectory(traj, name="broken")
     report = asyncio.run(validate_workflow(wf))
     assert not report.validated
-    assert report.replays[0].failed_edge == "t2"
-    assert report.replays[0].error
+    # The anchored compiler guards s1 on t2's target (#missing), so the drift surfaces
+    # at t1's recognition — before the doomed click — as a trigger timeout naming it.
+    assert report.replays[0].failed_edge == "t1"
+    assert "selector_visible" in (report.replays[0].error or "")
