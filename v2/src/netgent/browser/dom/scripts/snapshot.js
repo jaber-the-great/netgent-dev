@@ -115,9 +115,20 @@
   const results = [];
   const texts = [];
   const seenText = new Set();
+  // Inline children are part of their parent's sentence: "Score: <span>1</span> / 17" must
+  // read as one text block, not "Score: / 17" plus a stray "1" (measured on the challenge
+  // page: the agent could not see the score change). Merged children are skipped later.
+  const INLINE = new Set(['SPAN','B','I','EM','STRONG','SMALL','CODE','SUP','SUB','MARK','U','S','ABBR','TIME']);
+  const merged = new Set();
   const directText = (el) => {
     let t = '';
-    for (const n of el.childNodes) if (n.nodeType === 3) t += n.textContent;
+    for (const n of el.childNodes) {
+      if (n.nodeType === 3) t += n.textContent;
+      else if (n.nodeType === 1 && INLINE.has(n.tagName) && !n.shadowRoot && !isInteractive(n)) {
+        t += ' ' + n.textContent + ' ';
+        merged.add(n);
+      }
+    }
     return clean(t);
   };
   const closedByHost = new Map();
@@ -194,7 +205,7 @@
             bbox: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
             candidates: candidates(el),
           });
-        } else if (visible(el)) {
+        } else if (visible(el) && !merged.has(el)) {
           // Salient visible text (headings, messages, labels) so the agent can read
           // confirmations and status — not just interactive elements.
           const t = directText(el);

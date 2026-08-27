@@ -108,8 +108,10 @@ def test_element_diff_marks_new_elements_and_new_text():
     assert '  [0] div (combobox) "Country"' in obs
     assert "NEW TEXT SINCE LAST STEP:\n  !ALERT Saved!" in obs
     # nothing changed → say so (the soft stuck signal); no diff section without a previous
+    # nothing listed changed → NO change line at all (an explicit "nothing changed" claim was
+    # measured to cause retry loops whenever the walker is blind to the effect)
     same = format_observation(now, previous=element_lines(now), previous_texts={t.text for t in now.texts})
-    assert "CHANGED SINCE LAST STEP: no listed element or text changed." in same
+    assert "CHANGED SINCE LAST STEP" not in same and "*[" not in same
     # a text-only change (a score, a status) is a change — never "nothing changed"
     text_only = format_observation(now, previous=element_lines(now), previous_texts={"Pick a country"})
     assert "CHANGED SINCE LAST STEP: 1 new text line (see NEW TEXT)." in text_only

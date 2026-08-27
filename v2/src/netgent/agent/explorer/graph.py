@@ -88,8 +88,9 @@ def build_agent_graph(
         no_progress = state.get("no_progress", 0)
         if prev is not None:
             no_progress = no_progress + 1 if plain == prev else 0
-            if plain == prev and history and history[-1].outcome == "ok":
-                history[-1].outcome = "no_change"  # tell the model, not just the loop
+        # Deliberately NOT written back into the step record: telling the model "no visible
+        # change" made it re-run the action whenever the change was invisible to the walker
+        # (measured, explorer-optimisation.md); the hard stop below stays.
         if no_progress >= MAX_REPEAT:
             reason = f"stuck: {MAX_REPEAT} steps with no change on screen"
             stop = AgentStep(n=n, kind="done", reasoning=reason, url=snapshot.url, error=reason)

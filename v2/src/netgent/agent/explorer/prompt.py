@@ -53,8 +53,8 @@ GROUNDING
   "-> FAILED: …" did not, and the page is unchanged from before it.
 - Never claim in reasoning to have done something that is not in RECENT STEPS. Never invent
   element indices; only use indices present in the current observation.
-- If a step reports no visible change, do not simply repeat it: some effects are not listed
-  (a counter, a colour, a state flag). Move on, or try a different element or approach.
+- If the page did not change as expected, do not simply repeat the action: some effects are
+  not listed (a colour, a state flag). Move on, or try a different element or approach.
 - Before done=true with success=true, re-check every TASK requirement against RECENT STEPS.
   If any part is unmet, unverified, or uncertain, use success=false and say which.
 

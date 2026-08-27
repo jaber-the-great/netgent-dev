@@ -18,7 +18,6 @@ def test_record_lines_carry_outcome_and_target_not_only_index():
     assert _rec(3, index=7).to_line() == "3. click(el3) r3"
     assert _rec(4, target="", index=7).to_line() == "4. click(7) r4"
     assert _rec(5, outcome="failed", error="boom").to_line().endswith("-> FAILED: boom")
-    assert "no visible change" in _rec(6, outcome="no_change").to_line()
     assert "DONE WAITING" in _rec(7, kind="wait", outcome="waited", error="waited 10s").to_line()
     assert StepRecord(n=0, kind="note", note="--- form 2 ---").to_line() == "--- form 2 ---"
 

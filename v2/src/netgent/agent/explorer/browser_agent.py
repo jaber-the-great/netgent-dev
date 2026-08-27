@@ -42,7 +42,7 @@ class StepRecord(BaseModel):
     index: int | None = None
     target: str = ""  # element name or tag[type] — survives index renumbering (Notte hide_interactions)
     reasoning: str = ""
-    outcome: Literal["ok", "failed", "no_change", "waited", "invalid"] = "ok"
+    outcome: Literal["ok", "failed", "waited", "invalid"] = "ok"
     error: str | None = None
     # The model's own working memory (AgentDecision fields); empty when it gave none.
     evaluation: str = ""
@@ -58,7 +58,6 @@ class StepRecord(BaseModel):
         tail = {
             "ok": "",
             "failed": f" -> FAILED: {self.error}",
-            "no_change": " -> ran; no visible change in the listed elements/text (it may still have taken effect)",
             "waited": f" -> DONE WAITING: {self.error or 'the dwell is complete'}. Do NOT wait again.",
             "invalid": f" -> INVALID: {self.error}",
         }[self.outcome]

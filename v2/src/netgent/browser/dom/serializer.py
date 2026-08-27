@@ -136,12 +136,13 @@ def format_observation(
             parts.append(f"{len(fresh_texts)} new text line{'s' if len(fresh_texts) != 1 else ''} (see NEW TEXT)")
         if snapshot.dialogs:
             parts.append(f"{len(snapshot.dialogs)} dialog{'s' if len(snapshot.dialogs) != 1 else ''}")
-        # Only claimed over what is LISTED: a click that flips a score digit or a status line
-        # must not read as a no-op (measured: it made the agent re-click a completed card
-        # until the stuck stop). The loop's own no-change verdict is written into the step
-        # record instead (graph.py).
-        summary = ", ".join(parts) + "." if parts else "no listed element or text changed."
-        lines.append(f"CHANGED SINCE LAST STEP: {summary}")
+        # Emitted only when something DID change. An explicit "nothing changed" claim was
+        # measured to be harmful: whenever the observation is blind to an effect (a CSS-only
+        # completion state, a deduplicated digit) it turns into "the click did not register"
+        # and the agent repeats the action until the stuck stop (Stage 2/3 challenge A/B,
+        # docs/research/explorer-optimisation.md).
+        if parts:
+            lines.append("CHANGED SINCE LAST STEP: " + ", ".join(parts) + ".")
     if above:
         lines.append(f"(↑ {above} elements further above — scroll up to reach them)")
     lines.append("INTERACTIVE ELEMENTS:")
