@@ -12,17 +12,67 @@ instructs the model to return done(success=false), and nothing here attempts a c
 
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
-from netgent.agent.llm import LLM
 from netgent.browser.session import BrowserSession
 from netgent.core.logger import get_logger
 from netgent.schema.actions import Action, GotoAction
 
+if TYPE_CHECKING:  # llm.py imports StepRecord from here; keep the cycle type-only
+    from netgent.agent.llm import LLM
+
 logger = get_logger(__name__)
 
 MAX_REPEAT = 3  # consecutive steps with an unchanged observation → declare stuck
+FOLD_MIN_STEPS = 4  # note() folds the preceding task's records once it has at least this many
+MAX_FOLDS = 5  # folded task summaries kept (oldest dropped)
+
+
+class StepRecord(BaseModel):
+    """One acted step, as the agent REMEMBERS it — typed, like browser-use's HistoryItem and
+    Skyvern's action_history dicts (docs/research/browser-agent-memory.md §6.2a). Compile-time
+    only: the generator reads AgentStep, never this. Rendered into the prompt by `to_line()` /
+    `to_block()` (agent/llm.py owns the window)."""
+
+    n: int
+    kind: str  # an action kind, or "note" (a caller marker) / "fold" (a compacted task)
+    index: int | None = None
+    target: str = ""  # element name or tag[type] — survives index renumbering (Notte hide_interactions)
+    reasoning: str = ""
+    outcome: Literal["ok", "failed", "no_change", "waited", "invalid"] = "ok"
+    error: str | None = None
+    # The model's own working memory (AgentDecision fields); empty when it gave none.
+    evaluation: str = ""
+    memory: str = ""
+    next_goal: str = ""
+    note: str | None = None  # text of a note/fold record
+
+    def to_line(self) -> str:
+        """Compact form (older steps)."""
+        if self.kind in ("note", "fold"):
+            return self.note or ""
+        what = self.target or (str(self.index) if self.index is not None else "")
+        tail = {
+            "ok": "",
+            "failed": f" -> FAILED: {self.error}",
+            "no_change": " -> ran, but nothing on screen changed",
+            "waited": f" -> DONE WAITING: {self.error or 'the dwell is complete'}. Do NOT wait again.",
+            "invalid": f" -> INVALID: {self.error}",
+        }[self.outcome]
+        return f"{self.n}. {self.kind}({what}) {self.reasoning}{tail}"
+
+    def to_block(self) -> str:
+        """Full form (the last few steps): the line, then the model's evaluation/memory/goal."""
+        parts = []
+        if self.evaluation:
+            parts.append(f"   eval: {self.evaluation}")
+        if self.memory:
+            parts.append(f"   memory: {self.memory}")
+        if self.next_goal:
+            parts.append(f"   goal: {self.next_goal}")
+        return "\n".join([self.to_line(), *parts])
 
 
 class AgentStep(BaseModel):
@@ -45,6 +95,11 @@ class AgentStep(BaseModel):
     # The ${param} the explorer declared this step's value came from (decision.param), so the
     # compiler binds the placeholder structurally. Compile-time provenance, not replayed.
     param: str | None = None
+    # The model's working memory at this step (AgentDecision fields), kept as provenance so
+    # a bad compile can be read back; the compiler ignores them.
+    evaluation: str = ""
+    memory: str = ""
+    next_goal: str = ""
 
 
 class AgentTrajectory(BaseModel):
@@ -60,7 +115,7 @@ class AgentTrajectory(BaseModel):
 
 
 class BrowserAgent:
-    def __init__(self, llm: LLM, max_steps: int = 25, run_dir: Path | None = None, upload_file: Path | None = None):
+    def __init__(self, llm: "LLM", max_steps: int = 25, run_dir: Path | None = None, upload_file: Path | None = None):
         self.llm = llm
         self._max_steps = max_steps
         self._run_dir = run_dir
@@ -69,11 +124,32 @@ class BrowserAgent:
         self._upload_file = upload_file
         # Persists across run() calls, so ONE agent can work several tasks (e.g. every form
         # in a sweep) with continuous memory — what worked on an earlier task informs the next.
-        self.history: list[str] = []
+        self.history: list[StepRecord] = []
 
     def note(self, text: str) -> None:
-        """Append a marker to the agent's memory (e.g. 'moving on to form 3 of 21')."""
-        self.history.append(text)
+        """Append a marker to the agent's memory (e.g. 'moving on to form 3 of 21') AND fold
+        the preceding task's step records into one summary line, so a sweep keeps what it
+        learned two forms ago instead of losing it to the history window. Zero-LLM: the task
+        boundary is known here, so no summariser is needed (memory doc §6.2d)."""
+        acted = [r for r in self.history if r.kind not in ("note", "fold")]
+        folds = [r for r in self.history if r.kind == "fold"]
+        if len(acted) >= FOLD_MIN_STEPS:
+            ok = sum(1 for r in acted if r.outcome in ("ok", "waited"))
+            failures: list[str] = []
+            for r in acted:
+                if r.outcome == "failed" and r.error and r.error[:80] not in failures:
+                    failures.append(r.error[:80])
+            last_memory = next((r.memory for r in reversed(acted) if r.memory), "")
+            summary = f"(earlier task: {len(acted)} steps, {ok} ok, {len(acted) - ok} failed"
+            if failures:
+                summary += "; failures: " + " | ".join(failures[:3])
+            if last_memory:
+                summary += f"; last memory: {last_memory}"
+            summary += ")"
+            self.history[:] = [*folds[-(MAX_FOLDS - 1):], StepRecord(n=0, kind="fold", note=summary)]
+        elif acted:  # too few to summarise: keep them verbatim, drop the old note
+            self.history[:] = [*folds[-MAX_FOLDS:], *acted]
+        self.history.append(StepRecord(n=0, kind="note", note=text))
 
     def upload_path(self) -> str:
         if self._upload_file is None:

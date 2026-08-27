@@ -19,6 +19,20 @@ class AgentDecision(BaseModel):
     """One step. `done` is the only exit: success=True when the task is complete,
     success=False when it cannot proceed (e.g. a CAPTCHA appeared) — say why in `reasoning`."""
 
+    # `reasoning` (and the working-memory fields below) stay FIRST: format-restricted output
+    # degrades reasoning, and free-form tokens generated before the constrained fields are the
+    # standard mitigation (Tam et al. 2024, arXiv:2408.02442). Do not "tidy" the field order.
+    evaluation: str = Field(
+        default="",
+        description="One sentence on whether your PREVIOUS action achieved its goal, ending in "
+        "'Verdict: Success', 'Verdict: Failure' or 'Verdict: Unclear'. Judge from the observation — an "
+        "action that dispatched without error may still have done nothing. Empty on the first step.",
+    )
+    memory: str = Field(
+        default="",
+        description="1-2 sentences of progress you must not lose: counts, values entered, what is left.",
+    )
+    next_goal: str = Field(default="", description="The immediate goal this action serves.")
     reasoning: str = Field(description="Brief why for this step.")
     kind: AgentActionKind
     index: int | None = Field(default=None, description="Element index from the observation (interaction actions).")

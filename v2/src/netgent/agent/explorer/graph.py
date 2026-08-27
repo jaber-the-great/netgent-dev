@@ -14,12 +14,13 @@ output costs a step but never crashes, failures echoed into history, and the ste
 """
 
 import operator
+import os
 from typing import Annotated, Any, Literal, TypedDict
 
 from netgent.agent.explorer.actions import to_action
-from netgent.agent.explorer.browser_agent import MAX_REPEAT, AgentStep, BrowserAgent
+from netgent.agent.explorer.browser_agent import MAX_REPEAT, AgentStep, BrowserAgent, StepRecord
 from netgent.agent.explorer.prompt import SYSTEM_PROMPT
-from netgent.browser.dom import format_observation
+from netgent.browser.dom import element_key, format_observation
 from netgent.browser.locators import capture_locator, durable_locator
 from netgent.browser.session import BrowserSession
 from netgent.core.errors import ExecutionError
@@ -33,7 +34,10 @@ class AgentState(TypedDict, total=False):
     n: int  # step number of the step being worked on
     snapshot: Any  # DomSnapshot for the current step
     observation: str
-    prev_observation: str | None
+    prev_observation: str | None  # the diff-free rendering of the previous step (equality check)
+    prev_keys: set[str] | None  # element keys of the previous snapshot (the * markers)
+    prev_texts: set[str] | None  # text blocks of the previous snapshot (NEW TEXT section)
+    prev_url: str | None
     no_progress: int
     texts_seen: list[str]
     decision: Any  # AgentDecision for the current step
@@ -64,14 +68,26 @@ def build_agent_graph(
         snapshot = await session.snapshot()
         if frame_filter is not None:  # focus on one form (iframe) for a sweep
             snapshot = snapshot.scoped_to(frame_filter)
-        observation = format_observation(snapshot)
+        # The diff-free rendering is what stuck detection compares (a "nothing changed" line
+        # must not itself count as a change); the model gets the diffed one. The diff is
+        # suppressed across a navigation so a new page is not starred wholesale
+        # (browser-use only says this in prose; NETGENT_OBS_DIFF=0 is the A/B arm).
+        plain = format_observation(snapshot)
+        same_page = state.get("prev_url") == snapshot.url and os.getenv("NETGENT_OBS_DIFF", "1") != "0"
+        observation = format_observation(
+            snapshot,
+            previous=state.get("prev_keys") if same_page else None,
+            previous_texts=state.get("prev_texts") if same_page else None,
+        )
 
         # Stuck detection is observation-based: an action that changes nothing on screen
         # makes no progress; a scroll that reveals a new batch does change it.
         prev = state.get("prev_observation")
         no_progress = state.get("no_progress", 0)
         if prev is not None:
-            no_progress = no_progress + 1 if observation == prev else 0
+            no_progress = no_progress + 1 if plain == prev else 0
+            if plain == prev and history and history[-1].outcome == "ok":
+                history[-1].outcome = "no_change"  # tell the model, not just the loop
         if no_progress >= MAX_REPEAT:
             reason = f"stuck: {MAX_REPEAT} steps with no change on screen"
             stop = AgentStep(n=n, kind="done", reasoning=reason, url=snapshot.url, error=reason)
@@ -87,7 +103,10 @@ def build_agent_graph(
                 "n": n,
                 "snapshot": snapshot,
                 "observation": observation,
-                "prev_observation": observation,
+                "prev_observation": plain,
+                "prev_keys": {element_key(e) for e in snapshot.interactive()},
+                "prev_texts": {t.text for t in snapshot.texts},
+                "prev_url": snapshot.url,
                 "no_progress": no_progress,
                 "texts_seen": seen[-400:],
             },
@@ -100,7 +119,8 @@ def build_agent_graph(
             decision = await llm.decide(SYSTEM_PROMPT, task, state["observation"], history)
         except Exception as exc:  # noqa: BLE001 — a bad LLM response shouldn't crash the run
             logger.warning("step %d: LLM decision failed: %s", n, exc)
-            history.append(f"{n}. (your last response was invalid: {exc}) — return a valid decision")
+            history.append(StepRecord(n=n, kind="invalid", outcome="invalid", error=str(exc)[:200],
+                                      reasoning="(your last response was invalid) — return a valid decision"))
             return Command(update={"prev_observation": None}, goto="observe")  # not a no-change step
         logger.info("step %d: %s — %s", n, decision.kind, decision.reasoning)
 
@@ -138,6 +158,7 @@ def build_agent_graph(
         step = AgentStep(
             n=n, kind=decision.kind, reasoning=decision.reasoning, url=session.page.url, error=error,
             param=decision.param or None,
+            evaluation=decision.evaluation, memory=decision.memory, next_goal=decision.next_goal,
         )
         if error is None:
             step.action = action  # the compilable record of what actually ran
@@ -145,10 +166,14 @@ def build_agent_graph(
             step.dialogs = session.dialogs_since_last_action()  # this action's own dialogs
         await agent.capture_screenshot(session, step)
         # Feed outcomes back so the agent recovers instead of repeating itself.
-        outcome = f" -> FAILED: {error}" if error else ""
+        record = StepRecord(
+            n=n, kind=decision.kind, index=decision.index, target=_target_label(snapshot, decision.index),
+            reasoning=decision.reasoning, error=error, outcome="failed" if error else "ok",
+            evaluation=decision.evaluation, memory=decision.memory, next_goal=decision.next_goal,
+        )
         if error is None and isinstance(action, WaitAction):
-            outcome = f" -> DONE WAITING: you already watched/waited {action.seconds:g}s. Do NOT wait again."
-        history.append(f"{n}. {decision.kind}({decision.index}) {decision.reasoning}{outcome}")
+            record.outcome, record.error = "waited", f"you already watched/waited {action.seconds:g}s"
+        history.append(record)
         return Command(update={"steps": [step]}, goto="observe")
 
     return (
@@ -159,6 +184,16 @@ def build_agent_graph(
         .add_edge(START, "observe")
         .compile()
     )
+
+
+def _target_label(snapshot, index: int | None) -> str:
+    """A name for the acted element that survives index renumbering: its accessible name,
+    else tag[type]. Empty for page-level actions."""
+    elems = snapshot.interactive()
+    if index is None or not (0 <= index < len(elems)):
+        return ""
+    el = elems[index]
+    return el.name or (f"{el.tag}[{el.type}]" if el.type else el.tag)
 
 
 async def _verified_locator(session: BrowserSession, snapshot, index: int | None):

@@ -11,10 +11,17 @@ history + observation — goes last in a HumanMessage. browser-use (`prompts.py:
 Skyvern (`stable_prefix_ordering`) lay their prompts out the same way. Whether the prefix is
 actually cached is provider- and length-dependent (Anthropic: ≥4096 tokens on Haiku 4.5, 1024
 on Sonnet 4.x); `usage["cache_read_tokens"]` reports what happened.
+
+History rendering (browser-agent-memory.md §6.2a): fold/note records are always shown (they
+are a sweep's cross-task memory, bounded by MAX_FOLDS), then the last HISTORY_WINDOW acted
+records — the last FULL_BLOCKS of them with the model's own eval/memory/goal, older ones as
+one line each.
 """
 
+import os
 from typing import Protocol
 
+from netgent.agent.explorer.browser_agent import StepRecord
 from netgent.agent.explorer.decision import AgentDecision
 
 # litellm-style "provider/model" → langchain model_provider id.
@@ -25,23 +32,57 @@ _PROVIDER_ALIAS = {
     "anthropic": "anthropic",
 }
 
-HISTORY_WINDOW = 10  # history lines shown per step
+HISTORY_WINDOW = 10  # acted records shown per step
+FULL_BLOCKS = 3  # of which the most recent are rendered with eval/memory/goal
+MEMORY_FIELDS = ("evaluation", "memory", "next_goal")
 
 
 class LLM(Protocol):
-    async def decide(self, system: str, task: str, observation: str, history: list[str]) -> AgentDecision: ...
+    async def decide(self, system: str, task: str, observation: str, history: list[StepRecord]) -> AgentDecision: ...
 
 
-def render_prompt(system: str, task: str, observation: str, history: list[str]) -> tuple[str, str]:
+def render_history(history: list[StepRecord]) -> str:
+    if not history:
+        return "(none yet)"
+    context = [r for r in history if r.kind in ("note", "fold")]
+    acted = [r for r in history if r.kind not in ("note", "fold")][-HISTORY_WINDOW:]
+    lines = [r.to_line() for r in context]
+    older, recent = acted[:-FULL_BLOCKS], acted[-FULL_BLOCKS:]
+    lines += [r.to_line() for r in older]
+    lines += [r.to_block() for r in recent]
+    return "\n".join(lines)
+
+
+def render_prompt(system: str, task: str, observation: str, history: list[StepRecord]) -> tuple[str, str]:
     """(static prefix, step-varying suffix) — the two message bodies `decide()` sends.
 
     Pure, so tests can pin the layout without a model: the prefix is byte-identical across
     the steps of one run (a cache-prefix requirement), the suffix carries what changes.
     """
-    hist = "\n".join(history[-HISTORY_WINDOW:]) if history else "(none yet)"
     static = f"{system}\n\nTASK: {task}"
-    dynamic = f"RECENT STEPS:\n{hist}\n\nOBSERVATION:\n{observation}\n\nNext action:"
+    dynamic = f"RECENT STEPS:\n{render_history(history)}\n\nOBSERVATION:\n{observation}\n\nNext action:"
     return static, dynamic
+
+
+def memory_fields_enabled() -> bool:
+    """NETGENT_MEMORY_FIELDS=0 removes evaluation/memory/next_goal from the schema the model
+    fills (the A/B arm — browser-use's flash mode does the same)."""
+    return os.getenv("NETGENT_MEMORY_FIELDS", "1") != "0"
+
+
+def decision_schema(memory_fields: bool = True) -> type:
+    """The structured-output schema: AgentDecision, or a variant without the working-memory
+    fields. Built with pydantic so the two never drift."""
+    if memory_fields:
+        return AgentDecision
+    from pydantic import create_model
+
+    fields = {
+        name: (f.annotation, f)
+        for name, f in AgentDecision.model_fields.items()
+        if name not in MEMORY_FIELDS
+    }
+    return create_model("AgentDecisionCore", __doc__=AgentDecision.__doc__, **fields)
 
 
 class LangChainLLM:
@@ -55,7 +96,7 @@ class LangChainLLM:
             provider, name = "gemini", provider
         self._provider = _PROVIDER_ALIAS.get(provider, provider)
         chat = init_chat_model(name, model_provider=self._provider, temperature=0)
-        self._model = chat.with_structured_output(AgentDecision, include_raw=True)
+        self._model = chat.with_structured_output(decision_schema(memory_fields_enabled()), include_raw=True)
         # Running totals across decide() calls — what an exploration cost (the evals under
         # `netgent eval stress` report these per run). `input_tokens` is the provider's total
         # (cache reads and writes included), so it stays comparable across layouts.
@@ -71,7 +112,7 @@ class LangChainLLM:
         # Per-call usage, in order — the per-step numbers the optimisation doc tables.
         self.calls: list[dict[str, int]] = []
 
-    def _messages(self, system: str, task: str, observation: str, history: list[str]) -> list:
+    def _messages(self, system: str, task: str, observation: str, history: list[StepRecord]) -> list:
         from langchain_core.messages import HumanMessage, SystemMessage
 
         static, dynamic = render_prompt(system, task, observation, history)
@@ -83,7 +124,7 @@ class LangChainLLM:
             content = static  # OpenAI/Gemini cache stable prefixes implicitly
         return [SystemMessage(content=content), HumanMessage(content=dynamic)]
 
-    async def decide(self, system: str, task: str, observation: str, history: list[str]) -> AgentDecision:
+    async def decide(self, system: str, task: str, observation: str, history: list[StepRecord]) -> AgentDecision:
         result = await self._model.ainvoke(self._messages(system, task, observation, history))
         meta = getattr(result.get("raw"), "usage_metadata", None) or {}
         details = meta.get("input_token_details") or {}
@@ -93,7 +134,7 @@ class LangChainLLM:
             "cache_read_tokens": int(details.get("cache_read", 0) or 0),
             "cache_creation_tokens": int(details.get("cache_creation", 0) or 0),
             "observation_chars": len(observation),
-            "history_chars": sum(len(h) + 1 for h in history[-HISTORY_WINDOW:]),
+            "history_chars": len(render_history(history)),
         }
         self.calls.append(call)
         self.usage["calls"] += 1
@@ -102,6 +143,8 @@ class LangChainLLM:
         parsed = result.get("parsed")
         if parsed is None:
             raise ValueError(f"structured output failed: {result.get('parsing_error')}")
+        if not isinstance(parsed, AgentDecision):  # the memory-less variant → the real model
+            parsed = AgentDecision.model_validate(parsed.model_dump())
         return parsed
 
 
@@ -112,7 +155,7 @@ class FakeLLM:
         self._script = list(script)
         self._i = 0
 
-    async def decide(self, system: str, task: str, observation: str, history: list[str]) -> AgentDecision:
+    async def decide(self, system: str, task: str, observation: str, history: list[StepRecord]) -> AgentDecision:
         if self._i >= len(self._script):
             raise AssertionError("FakeLLM script exhausted")
         decision = self._script[self._i]

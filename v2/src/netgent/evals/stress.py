@@ -72,6 +72,7 @@ async def run_challenge(backend: str, max_steps: int, out_dir: Path, model: str 
         "errors": [f"{st.n}. {st.kind}: {st.error}" for st in traj.steps if st.error],
         "wall_s": round(time.perf_counter() - t0, 1),
         "usage": usage if isinstance(usage, dict) else None,
+        "per_step": list(getattr(llm, "calls", []) or []),  # per-call input/output/cache tokens
     }
 
 
@@ -96,6 +97,7 @@ async def run_sweep(backend: str, max_steps: int, out_dir: Path, model: str = DE
         "forms": [f.model_dump() for f in result.forms],
         "wall_s": round(time.perf_counter() - t0, 1),
         "usage": usage if isinstance(usage, dict) else None,
+        "per_step": list(getattr(llm, "calls", []) or []),  # per-call input/output/cache tokens
     }
 
 
@@ -137,14 +139,17 @@ def summary_table(results: list[dict]) -> str:
     kind, backend = results[0]["kind"], results[0]["backend"]
     denom = "15" if kind == "challenge" else str(results[0].get("total", 21))
     lines = [
-        "| run | result | LLM calls | input tokens | output tokens | images | wall |",
-        "|---|---|---|---|---|---|---|",
+        "| run | result | LLM calls | input tokens | output tokens | cache read | in/step | out/step | wall |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for i, r in enumerate(results):
         u = r.get("usage") or {}
+        calls = u.get("calls") or 0
         lines.append(
-            f"| {i} | {metric(r)}/{denom} | {u.get('calls', '')} | {u.get('input_tokens', 0):,} | "
-            f"{u.get('output_tokens', 0):,} | {u.get('images', 0)} | {r['wall_s']}s |"
+            f"| {i} | {metric(r)}/{denom} | {calls} | {u.get('input_tokens', 0):,} | "
+            f"{u.get('output_tokens', 0):,} | {u.get('cache_read_tokens', 0):,} | "
+            f"{u.get('input_tokens', 0) / calls if calls else 0:,.0f} | "
+            f"{u.get('output_tokens', 0) / calls if calls else 0:,.0f} | {r['wall_s']}s |"
         )
     mean = sum(metric(r) for r in results) / len(results)
     lines.append(f"\n**{kind} / {backend}: mean {mean:.2f}/{denom} over {len(results)} run(s)**")

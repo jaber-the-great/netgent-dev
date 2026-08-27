@@ -90,3 +90,47 @@ def test_agent_detects_stuck_loop(form_url):
     assert not traj.success
     assert "stuck" in traj.stopped_reason
     assert len(traj.steps) < 10  # broke early
+
+
+REVEAL = """<!doctype html><html><head><title>Reveal</title></head><body>
+<button id="open" onclick="document.getElementById('menu').style.display='block';
+  document.getElementById('msg').style.display='block'">Country</button>
+<div id="menu" style="display:none"><div role="option" id="ca">Canada</div></div>
+<div id="msg" role="status" style="display:none">Menu opened</div>
+</body></html>"""
+
+
+def test_agent_sees_new_elements_starred_and_new_text_after_its_own_action(tmp_path):
+    """The observation diff: the option that appeared because of the click is marked `*`
+    and the transient status text is listed under NEW TEXT — and neither on the first step."""
+    page = tmp_path / "reveal.html"
+    page.write_text(REVEAL)
+    seen: list[str] = []
+
+    class Capturing(FakeLLM):
+        async def decide(self, system, task, observation, history):
+            seen.append(observation)
+            return await super().decide(system, task, observation, history)
+
+    script = [
+        AgentDecision(reasoning="open the menu", kind="click", index=0, memory="opening", next_goal="pick Canada"),
+        AgentDecision(reasoning="pick", kind="click", index=1, evaluation="menu opened. Verdict: Success"),
+        AgentDecision(reasoning="done", kind="done", success=True),
+    ]
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            agent = BrowserAgent(Capturing(script))
+            traj = await agent.run(s, "pick Canada", page.as_uri())
+            return traj, agent.history
+
+    traj, history = asyncio.run(_run())
+    assert traj.success
+    assert "CHANGED SINCE LAST STEP" not in seen[0] and "*[" not in seen[0]
+    assert "CHANGED SINCE LAST STEP: 1 new, 0 gone" in seen[1]
+    assert ' *[1] div (option) "Canada"' in seen[1] and '  [0] button "Country"' in seen[1]
+    assert "NEW TEXT SINCE LAST STEP:\n  !ALERT Menu opened" in seen[1]
+    # the typed memory carries the model's own fields and the element name, not just an index
+    assert history[0].target == "Country" and history[0].memory == "opening"
+    assert history[1].evaluation.endswith("Verdict: Success")
+    assert traj.steps[1].memory == "opening" and traj.steps[1].action is not None
