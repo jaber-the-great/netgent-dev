@@ -1,0 +1,13 @@
+{
+  "apps": [
+    "youtube",
+    "vimeo"
+  ],
+  "concurrent": true,
+  "rate_mbps": 10,
+  "delay_ms": 100,
+  "qdisc": "pfifo",
+  "qdisc_limit": 50,
+  "duration_sec": 60,
+  "repeats": 1
+}
