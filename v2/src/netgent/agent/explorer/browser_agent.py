@@ -10,6 +10,7 @@ Workflow Generator compiles into an NFA. CAPTCHA solving is out of scope: the pr
 instructs the model to return done(success=false), and nothing here attempts a challenge.
 """
 
+import asyncio
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -146,6 +147,23 @@ class BrowserAgent:
         # Persists across run() calls, so ONE agent can work several tasks (e.g. every form
         # in a sweep) with continuous memory — what worked on an earlier task informs the next.
         self.history: list[StepRecord] = []
+        # Text that appeared after an action while the model was deciding (graph._watch_texts):
+        # drained into history + texts_seen at the next step, and into the trajectory at the end.
+        self.noticed: list[str] = []
+        self._watch: asyncio.Task | None = None
+
+    def start_watch(self, coro) -> None:
+        self.stop_watch()
+        self._watch = asyncio.create_task(coro)
+
+    def stop_watch(self) -> None:
+        if self._watch is not None and not self._watch.done():
+            self._watch.cancel()
+        self._watch = None
+
+    def drain_noticed(self) -> list[str]:
+        out, self.noticed[:] = list(self.noticed), []
+        return out
 
     def note(self, text: str) -> None:
         """Append a marker to the agent's memory (e.g. 'moving on to form 3 of 21') AND fold
@@ -219,7 +237,9 @@ class BrowserAgent:
         traj.steps.extend(final.get("steps", []))
         traj.success = bool(final.get("success", False))
         traj.stopped_reason = final.get("stopped_reason", "")
-        traj.texts_seen = final.get("texts_seen") or []
+        self.stop_watch()
+        traj.texts_seen = list(final.get("texts_seen") or [])
+        traj.texts_seen += [t for t in self.drain_noticed() if t not in traj.texts_seen]
 
         if self._run_dir is not None:
             self._run_dir.mkdir(parents=True, exist_ok=True)

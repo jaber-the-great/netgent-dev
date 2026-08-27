@@ -13,6 +13,7 @@ hand-written loop: one snapshot per step, observation-based stuck detection, inv
 output costs a step but never crashes, failures echoed into history, and the step budget.
 """
 
+import asyncio
 import operator
 import os
 from typing import Annotated, Any, Literal, TypedDict
@@ -29,6 +30,31 @@ from netgent.core.logger import get_logger
 from netgent.schema.actions import WaitAction
 
 logger = get_logger(__name__)
+
+SETTLE_WATCH_S = 6.0  # how long after an action the page is sampled for text that appears (then vanishes)
+
+
+async def _watch_texts(session: BrowserSession, known: set[str], seconds: float, found: list[str]) -> None:
+    """Sample the page for NEW text for `seconds`, appending finds to `found` (alerts first).
+
+    Success banners are often transient: Formik's shows 1 s after Submit and hides 3 s later,
+    inside the window the LLM spends deciding the next step — so a single snapshot per step
+    misses it and the agent re-submits (measured, headed sweep). Sampling while the model
+    thinks (and during a `wait`) costs no latency; whatever appeared is fed back as a note and
+    into `texts_seen`, which post-run verification reads. Read-only DOM walks; never blocks a
+    dispatch (a snapshot that fails mid-navigation is simply skipped)."""
+    deadline = asyncio.get_running_loop().time() + seconds
+    while asyncio.get_running_loop().time() < deadline:
+        try:
+            snap = await session.snapshot()
+        except Exception:  # noqa: BLE001 — mid-navigation: try again on the next tick
+            await asyncio.sleep(0.5)
+            continue
+        for t in sorted(snap.texts, key=lambda t: not t.alert):
+            if t.text not in known:
+                known.add(t.text)
+                found.append(t.text)
+        await asyncio.sleep(0.6)
 
 
 class AgentState(TypedDict, total=False):
@@ -121,6 +147,17 @@ def build_agent_graph(
 
     async def decide(state: AgentState) -> Command[Literal["act", "observe", "__end__"]]:
         n = state["n"]
+        # Text the settle watcher caught after the last action that has since VANISHED (still
+        # visible text is already in the observation): tell the model before it decides.
+        seen = list(state.get("texts_seen") or [])
+        gone = [t for t in agent.drain_noticed() if t not in (state.get("prev_texts") or set())]
+        if gone:
+            seen += [t for t in gone if t not in seen]
+            history.append(StepRecord(
+                n=n, kind="note",
+                note=f"{n}. appeared after your previous action and has since vanished: "
+                + " | ".join(t[:120] for t in gone[:6]),
+            ))
         try:
             decision = await llm.decide(
                 system_prompt, task, state["observation"], history, allowed_kinds=allowed, max_actions=max_actions
@@ -129,7 +166,8 @@ def build_agent_graph(
             logger.warning("step %d: LLM decision failed: %s", n, exc)
             history.append(StepRecord(n=n, kind="invalid", outcome="invalid", error=str(exc)[:200],
                                       reasoning="(your last response was invalid) — return a valid decision"))
-            return Command(update={"prev_observation": None}, goto="observe")  # not a no-change step
+            # not a no-change step
+            return Command(update={"prev_observation": None, "texts_seen": seen[-400:]}, goto="observe")
         logger.info("step %d: %s — %s", n, "done" if decision.done else decision.kind, decision.reasoning)
 
         if decision.done:
@@ -139,10 +177,11 @@ def build_agent_graph(
                     "steps": [step],
                     "success": decision.success,
                     "stopped_reason": decision.reasoning,
+                    "texts_seen": seen[-400:],
                 },
                 goto=END,
             )
-        return Command(update={"decision": decision}, goto="act")
+        return Command(update={"decision": decision, "texts_seen": seen[-400:]}, goto="act")
 
     async def act(state: AgentState) -> Command[Literal["observe"]]:
         """Execute the decision's action(s) — one AgentStep per EXECUTED item, so a batch of
@@ -154,6 +193,8 @@ def build_agent_graph(
         n, decision, snapshot = state["n"], state["decision"], state["snapshot"]
         items = decision.actions()[:max_actions]
         steps: list[AgentStep] = []
+        seen = list(state.get("texts_seen") or [])
+        known = set(seen) | {t.text for t in snapshot.texts}
         for i, item in enumerate(items):
             if i > 0:
                 if session.page.url != steps[-1].url or session.page.url != snapshot.url:
@@ -181,7 +222,24 @@ def build_agent_graph(
                 if item.index is not None and 0 <= item.index < len(elems):
                     if elems[item.index].requires_closed_shadow and hasattr(action, "requires_closed_shadow"):
                         action = action.model_copy(update={"requires_closed_shadow": True})
-                await session.dispatch(action)
+                if isinstance(action, WaitAction):
+                    # Watch WHILE waiting: the dwell is exactly when a banner comes and goes.
+                    watch = asyncio.create_task(_watch_texts(session, known, action.seconds, agent.noticed))
+                    try:
+                        await session.dispatch(action)
+                    finally:
+                        watch.cancel()
+                        await asyncio.gather(watch, return_exceptions=True)
+                    during = agent.drain_noticed()
+                    if during:
+                        seen += [t for t in during if t not in seen]
+                        history.append(StepRecord(
+                            n=n, kind="note",
+                            note=f"{n}. appeared on the page during the wait: "
+                            + " | ".join(t[:120] for t in during[:6]),
+                        ))
+                else:
+                    await session.dispatch(action)
             except (ExecutionError, ValueError) as exc:
                 error = str(exc)
                 logger.warning("step %d.%d failed: %s", n, i, error)
@@ -217,7 +275,12 @@ def build_agent_graph(
                 break  # a failed item aborts the remainder (universal across the survey)
             if item.kind in TERMINATES_BATCH:
                 break
-        return Command(update={"steps": steps}, goto="observe")
+        # Keep sampling while the next observation is rendered and the model decides.
+        if steps and steps[-1].error is None and not isinstance(steps[-1].action, WaitAction):
+            agent.start_watch(_watch_texts(session, known, SETTLE_WATCH_S, agent.noticed))
+        drained = agent.drain_noticed()
+        seen += [t for t in drained if t not in seen]
+        return Command(update={"steps": steps, "texts_seen": seen[-400:]}, goto="observe")
 
     return (
         StateGraph(AgentState)

@@ -136,3 +136,38 @@ def test_agent_sees_new_elements_starred_and_new_text_after_its_own_action(tmp_p
     assert history[0].target == "Country" and history[0].memory == "opening"
     assert history[1].evaluation.endswith("Verdict: Success")
     assert traj.steps[1].memory == "opening" and traj.steps[1].action is not None
+
+
+TRANSIENT_BANNER = """<!doctype html><html><body>
+<button id="go">Submit</button>
+<script>
+  document.getElementById('go').addEventListener('click', () => {
+    setTimeout(() => {
+      const d = document.createElement('div'); d.id = 'ok'; d.setAttribute('role', 'alert');
+      d.textContent = 'Success! The secret is: dumbledore'; document.body.appendChild(d);
+      setTimeout(() => d.remove(), 1200);
+    }, 300);
+  });
+</script></body></html>"""
+
+
+def test_agent_notices_a_transient_banner_that_appears_after_its_action(serve):
+    """Formik-style: the success banner appears 0.3 s after Submit and is gone 1.2 s later —
+    between two observations. The watcher samples the page during the wait (and while the
+    model decides), so the text reaches texts_seen and the model's history."""
+    srv = serve({"/": TRANSIENT_BANNER})
+    script = [
+        AgentDecision(reasoning="submit", kind="click", index=0),
+        AgentDecision(reasoning="let it settle", kind="wait", seconds=2),
+        AgentDecision(reasoning="saw success", done=True, success=True),
+    ]
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            agent = BrowserAgent(FakeLLM(script))
+            traj = await agent.run(s, "submit and confirm", srv.url("/"))
+            return traj, agent.history
+
+    traj, history = asyncio.run(_run())
+    assert any("dumbledore" in t for t in traj.texts_seen)
+    assert any(r.kind == "note" and "dumbledore" in (r.note or "") for r in history)
