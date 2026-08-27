@@ -38,6 +38,7 @@ class Executor:
         self._record = RunRecord(workflow_name=workflow.name, workflow_version=workflow.version)
         self._current = workflow.start_state
         self._aborted = False
+        self._interrupt_fires: dict[str, int] = {i.id: 0 for i in workflow.interrupts}
 
     async def run(self) -> RunRecord:
         if self._workflow.params:  # build the param context (may raise ParamError for a missing static)
@@ -63,6 +64,9 @@ class Executor:
 
     async def _run_nodes(self, nodes: list[ControlNode]) -> None:
         for node in nodes:
+            if self._aborted:
+                return
+            await self._sweep_interrupts()  # ε-sweep between atomic steps, never inside one
             if self._aborted:
                 return
             match node:
@@ -92,6 +96,45 @@ class Executor:
             edge.transition_id, edge.source, edge.target, edge.duration_ms, edge.trigger_latency_ms or 0,
         )
         self._current = transition.target
+
+    async def _sweep_interrupts(self) -> None:
+        """Check in-scope interrupt anchors; on a hit, run the resolution chain and re-anchor.
+
+        Runs between control-program nodes (and between Repeat iterations, since those go
+        through _run_nodes), so an interrupt never splits an atomic action. Each interrupt
+        fires at most max_fires times — the bounded-traversal red line.
+        """
+        for interrupt in self._workflow.interrupts:
+            if self._aborted:
+                return
+            if self._current not in interrupt.scope:
+                continue
+            if self._interrupt_fires[interrupt.id] >= interrupt.max_fires:
+                continue
+            anchor = self._workflow.state(interrupt.state)
+            report = await self._session.condition_report(anchor)
+            if not report or not all(met for _, met in report):
+                continue
+            self._interrupt_fires[interrupt.id] += 1
+            logger.info(
+                "interrupt %s: anchor %s holds at %s (fire %d/%d) — resolving",
+                interrupt.id, interrupt.state, self._current,
+                self._interrupt_fires[interrupt.id], interrupt.max_fires,
+            )
+            for edge_id in interrupt.resolve:
+                edge = await self._fire(self._workflow.transition(edge_id))
+                self._record.edges.append(edge)
+                if edge.outcome != "ok":
+                    logger.error("interrupt %s: resolve edge %s failed: %s", interrupt.id, edge_id, edge.error)
+                    self._aborted = True
+                    return
+            # Back to the program: the page must still look like the state we were in.
+            try:
+                await self._session.wait_for_state(self._workflow.state(self._current))
+            except TriggerTimeoutError as exc:
+                logger.error("interrupt %s: state %s lost after resolution: %s", interrupt.id, self._current, exc)
+                self._aborted = True
+                return
 
     async def _run_repeat(self, node: Repeat) -> None:
         count = self._resolve_count(node.count)

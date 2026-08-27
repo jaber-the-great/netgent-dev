@@ -109,6 +109,28 @@ class Param(BaseModel):
     guard: str | None = None  # regex the resolved value must match
 
 
+class Interrupt(BaseModel):
+    """A scoped, bounded ε-interrupt: a pop-up/ad state and how to resolve it.
+
+    The formalism's "pop-ups are states reached by ε-transitions": `state` is the pop-up
+    state (its conditions are the anchor — "is the pop-up here?"), `resolve` is the chain
+    of ordinary one-action transitions that dismisses it. The executor sweeps in-scope
+    interrupts between control-program nodes: when the anchor holds, it runs the chain,
+    re-verifies the state it was in, and continues the program where it left off.
+
+    `scope` lists the main-path states the interrupt is armed from (in-scope ε-edges —
+    never global). `max_fires` is the mandatory red-line backstop, like Repeat.max_iterations:
+    it keeps the executed run statically bounded (|program| + Σ max_fires × |resolve|).
+    """
+
+    id: str
+    description: str = ""
+    state: str  # the pop-up state; its conditions are the anchor
+    resolve: list[str] = Field(min_length=1)  # transition ids, chained from `state`
+    scope: list[str] = Field(min_length=1)  # main-path state ids this interrupt is armed from
+    max_fires: int = Field(default=3, gt=0)
+
+
 class Milestone(BaseModel):
     """A named segment anchor (reporting/heal-scope/dataset-labeling; no runtime logic)."""
 
