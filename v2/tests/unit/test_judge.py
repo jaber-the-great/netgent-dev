@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from netgent.agent.explorer.browser_agent import AgentStep, AgentTrajectory
+from netgent.agent.explorer.agent import AgentStep, AgentTrajectory
 from netgent.agent.verifier import Evidence, Verdict, build_judge_content
 from netgent.schema.actions import ClickAction, FillAction, LocatorStep
 

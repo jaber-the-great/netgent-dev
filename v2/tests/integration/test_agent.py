@@ -9,7 +9,7 @@ import asyncio
 
 import pytest
 
-from netgent.agent import AgentDecision, BrowserAgent, FakeLLM
+from netgent.agent import Agent, AgentDecision, FakeLLM
 from netgent.browser.dom import format_observation
 from netgent.browser.session import BrowserSession
 
@@ -55,7 +55,7 @@ def test_agent_completes_a_form_with_scripted_llm(form_url, tmp_path):
 
     async def _run():
         async with BrowserSession(headless=True) as s:
-            return await BrowserAgent(FakeLLM(script), run_dir=tmp_path / "traj").run(s, "fill the form", form_url)
+            return await Agent(FakeLLM(script), run_dir=tmp_path / "traj").run(s, "fill the form", form_url)
 
     traj = asyncio.run(_run())
     assert traj.success, [(s.kind, s.error) for s in traj.steps]
@@ -71,7 +71,7 @@ def test_agent_stops_on_captcha_signal(form_url, tmp_path):
 
     async def _run():
         async with BrowserSession(headless=True) as s:
-            return await BrowserAgent(FakeLLM(script)).run(s, "do the thing", form_url)
+            return await Agent(FakeLLM(script)).run(s, "do the thing", form_url)
 
     traj = asyncio.run(_run())
     assert not traj.success
@@ -84,7 +84,7 @@ def test_agent_detects_stuck_loop(form_url):
 
     async def _run():
         async with BrowserSession(headless=True) as s:
-            return await BrowserAgent(FakeLLM(script), max_steps=25).run(s, "scroll forever", form_url)
+            return await Agent(FakeLLM(script), max_steps=25).run(s, "scroll forever", form_url)
 
     traj = asyncio.run(_run())
     assert not traj.success
@@ -122,7 +122,7 @@ def test_agent_sees_new_elements_starred_and_new_text_after_its_own_action(tmp_p
 
     async def _run():
         async with BrowserSession(headless=True) as s:
-            agent = BrowserAgent(Capturing(script))
+            agent = Agent(Capturing(script))
             traj = await agent.run(s, "pick Canada", page.as_uri())
             return traj, agent.history
 
@@ -164,7 +164,7 @@ def test_agent_notices_a_transient_banner_that_appears_after_its_action(serve):
 
     async def _run():
         async with BrowserSession(headless=True) as s:
-            agent = BrowserAgent(FakeLLM(script))
+            agent = Agent(FakeLLM(script))
             traj = await agent.run(s, "submit and confirm", srv.url("/"))
             return traj, agent.history
 
@@ -186,7 +186,7 @@ def test_agent_stops_after_repeating_the_same_futile_action(serve):
 
     async def _run():
         async with BrowserSession(headless=True) as s:
-            agent = BrowserAgent(FakeLLM(script), max_steps=12)
+            agent = Agent(FakeLLM(script), max_steps=12)
             return await agent.run(s, "watch the video", srv.url("/")), agent.history
 
     traj, history = asyncio.run(_run())

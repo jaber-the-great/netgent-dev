@@ -26,7 +26,7 @@ def agent(
 ) -> None:
     """Drive a browser to complete a task, one atomic action per step."""
     try:
-        from netgent.agent import BrowserAgent, make_llm
+        from netgent.agent import Agent, make_llm
         from netgent.browser.session import BrowserSession
     except ImportError as exc:
         typer.secho(f"the agent needs the 'generate' extra: pip install 'netgent[generate]'  ({exc})", fg="red")
@@ -43,7 +43,7 @@ def agent(
     async def _run():
         llm = make_llm(resolved_model)
         async with BrowserSession(headless=headless) as session:
-            agent = BrowserAgent(
+            agent = Agent(
                 llm, max_steps=max_steps, run_dir=trajectory_dir, allowed_kinds=kinds, max_actions_per_step=max_actions
             )
             return await agent.run(session, task, url)

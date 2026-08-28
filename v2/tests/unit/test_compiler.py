@@ -3,7 +3,7 @@ state conditions, and sample values become ${name} parameters."""
 
 import pytest
 
-from netgent.agent.explorer.browser_agent import AgentStep, AgentTrajectory
+from netgent.agent.explorer.agent import AgentStep, AgentTrajectory
 from netgent.agent.generator.compiler import compile_trajectory
 
 
@@ -106,7 +106,7 @@ def test_empty_trajectory_rejected():
 def test_compiler_anchors_states_on_the_next_steps_element_with_frame_path():
     """R2: a state is guarded by the visibility of the element the next transition acts on,
     evaluated in that element's iframe (frame_locator steps → frame_path)."""
-    from netgent.agent.explorer.browser_agent import AgentStep, AgentTrajectory
+    from netgent.agent.explorer.agent import AgentStep, AgentTrajectory
     from netgent.schema.actions import ClickAction, FillAction, GotoAction, LocatorStep, UploadFileAction
 
     frame = LocatorStep(fn="frame_locator", args=['iframe[name="payframe"]'])
@@ -153,7 +153,7 @@ def test_compiler_anchors_states_on_the_next_steps_element_with_frame_path():
 
 
 def test_compiler_folds_a_frame_nth_step_into_the_frame_path():
-    from netgent.agent.explorer.browser_agent import AgentStep, AgentTrajectory
+    from netgent.agent.explorer.agent import AgentStep, AgentTrajectory
     from netgent.agent.generator.compiler import _element_condition
     from netgent.schema.actions import ClickAction, GotoAction, LocatorStep
 
@@ -171,7 +171,7 @@ def test_compiler_folds_a_frame_nth_step_into_the_frame_path():
 def test_step_dialog_becomes_a_dialog_matches_condition():
     """An alert-only form leaves URL and DOM unchanged: the dialog the submit raised is the
     only recognizable feedback, so the compiled post-submit state anchors on it."""
-    from netgent.agent.explorer.browser_agent import AgentStep, AgentTrajectory
+    from netgent.agent.explorer.agent import AgentStep, AgentTrajectory
     from netgent.agent.generator.compiler import compile_trajectory
     from netgent.schema.actions import ClickAction, LocatorStep
 

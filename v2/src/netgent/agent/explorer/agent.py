@@ -120,7 +120,7 @@ class AgentTrajectory(BaseModel):
     steps: list[AgentStep] = Field(default_factory=list)
 
 
-class BrowserAgent:
+class Agent:
     def __init__(
         self,
         llm: "LLM",

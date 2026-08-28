@@ -6,7 +6,7 @@
                  └─ stuck ───────────► END        (budget exhausted: observe ─► END)
 
 Three async nodes route with `Command`, so each node both updates state and picks the next
-node. The graph is rebuilt per `BrowserAgent.run()` because the nodes close over the live
+node. The graph is rebuilt per `Agent.run()` because the nodes close over the live
 session, task, and the agent's cross-run history — nothing un-serializable lives in state
 that a checkpointer would need (none is attached). Semantics are exactly the former
 hand-written loop: one snapshot per step, observation-based stuck detection, invalid LLM
@@ -19,7 +19,7 @@ import os
 from typing import Annotated, Any, Literal, TypedDict
 
 from netgent.agent.explorer.actions import to_action
-from netgent.agent.explorer.browser_agent import MAX_REPEAT, AgentStep, BrowserAgent, StepRecord
+from netgent.agent.explorer.agent import MAX_REPEAT, Agent, AgentStep, StepRecord
 from netgent.agent.explorer.decision import TERMINATES_BATCH
 from netgent.agent.explorer.prompt import build_system_prompt
 from netgent.browser.dom import element_lines, format_observation
@@ -86,7 +86,7 @@ class AgentState(TypedDict, total=False):
 
 
 def build_agent_graph(
-    agent: BrowserAgent,
+    agent: Agent,
     session: BrowserSession,
     task: str,
     *,

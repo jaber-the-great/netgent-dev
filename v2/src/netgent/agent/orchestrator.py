@@ -20,7 +20,7 @@ from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
-from netgent.agent.explorer.browser_agent import AgentTrajectory, BrowserAgent
+from netgent.agent.explorer.agent import Agent, AgentTrajectory
 from netgent.agent.generator.compiler import compile_trajectory
 from netgent.agent.llm import LLM
 from netgent.agent.validator.validate import ValidationReport, validate_workflow
@@ -103,7 +103,7 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
         emit("explore", f"exploring: {req.task}" + (f" (attempt {attempt})" if attempt > 1 else ""))
         from netgent.agent.explorer.decision import DEFAULT_KINDS
 
-        agent = BrowserAgent(
+        agent = Agent(
             llm,
             max_steps=req.max_steps,
             run_dir=run_dir,

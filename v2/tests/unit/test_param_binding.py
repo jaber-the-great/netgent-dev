@@ -3,7 +3,7 @@ the compiler binds ${name} structurally, falls back to the literal sweep for val
 state conditions only, and WARNS about what it could not bind
 (docs/research/browser-agent-prompting.md §7.3)."""
 
-from netgent.agent.explorer.browser_agent import AgentStep, AgentTrajectory
+from netgent.agent.explorer.agent import AgentStep, AgentTrajectory
 from netgent.agent.explorer.decision import AgentDecision
 from netgent.agent.generator.compiler import compile_trajectory
 from netgent.schema.actions import ClickAction, FillAction, GotoAction, LocatorStep

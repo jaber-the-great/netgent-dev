@@ -4,7 +4,7 @@ Each successful action step becomes one transition; the state after each step is
 recognized by the (query-stripped) URL it landed on. Sample values the caller names
 become ${name} parameters, so the compiled workflow replays for other values:
 
-    traj = await BrowserAgent(...).run(session, task)
+    traj = await Agent(...).run(session, task)
     wf = compile_trajectory(traj, name="twitch-live", params={"channel": "monstercat"})
     # netgent run wf.yaml --param channel=bobross
 """
@@ -12,7 +12,7 @@ become ${name} parameters, so the compiled workflow replays for other values:
 import re
 from urllib.parse import quote_plus
 
-from netgent.agent.explorer.browser_agent import AgentTrajectory
+from netgent.agent.explorer.agent import AgentTrajectory
 from netgent.schema.actions import (
     Action,
     ClickAction,

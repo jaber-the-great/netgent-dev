@@ -1,6 +1,6 @@
 """End-to-end stress tests with the cheap model: the 21-form sweep and the challenge game (LLM).
 
-`challenge`: one BrowserAgent run on browser-use's challenge game; the score the page itself
+`challenge`: one Agent run on browser-use's challenge game; the score the page itself
 shows, the completed/missed card ids, steps, errors, LLM usage.
 `sweep`: `sweep_forms` on the 21-form stress page; per-form verified pass/fail with step logs.
 Each run writes `<out>/<kind>-<backend><tag>-r<i>/result.json` (+ trajectory for challenge).
@@ -70,14 +70,14 @@ def _session(backend: str, headless: bool = True):
 async def run_challenge(
     backend: str, max_steps: int, out_dir: Path, model: str = DEFAULT_MODEL, headless: bool = True
 ) -> dict:
-    from netgent.agent import BrowserAgent, make_llm
+    from netgent.agent import Agent, make_llm
 
     llm = make_llm(model)
     t0 = time.perf_counter()
     async with _session(backend, headless) as s:
         # The challenge's cards demand hover and key presses; goto stays off (a re-navigation
         # resets the page's score — measured in the Stage 1 A/B).
-        agent = BrowserAgent(
+        agent = Agent(
             llm, max_steps=max_steps, run_dir=out_dir, allowed_kinds=CHALLENGE_KINDS,
             max_actions_per_step=_max_actions(),
         )

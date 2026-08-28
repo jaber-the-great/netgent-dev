@@ -1,6 +1,6 @@
 """The system prompt's contract and the LLM seam's message layout (no model, no network)."""
 
-from netgent.agent.explorer.browser_agent import StepRecord
+from netgent.agent.explorer.agent import StepRecord
 from netgent.agent.explorer.decision import ALL_KINDS, DEFAULT_KINDS, AgentDecision
 from netgent.agent.explorer.prompt import SYSTEM_PROMPT, build_system_prompt
 from netgent.agent.llm import HISTORY_WINDOW, render_prompt

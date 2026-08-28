@@ -1,6 +1,6 @@
 """The bounded action batch (`then`) on a decision — schema, validation, prompt reflection —
 (docs/research/browser-agent-tool-calling.md §5.1). Execution semantics are covered by the
-integration test in tests/integration/test_browser_agent.py."""
+integration test in tests/integration/test_agent.py."""
 
 import pytest
 from pydantic import ValidationError
