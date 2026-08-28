@@ -49,6 +49,8 @@ class LLM(Protocol):
         max_actions: int = 1,
     ) -> AgentDecision: ...
 
+    async def judge(self, system: str, content: list[dict], schema: type) -> object: ...
+
 
 def render_history(history: list[StepRecord]) -> str:
     if not history:
@@ -221,13 +223,44 @@ class LangChainLLM:
             ]
         raise ValueError(f"structured output failed after {PARSE_RETRIES + 1} attempts: {last_error}")
 
+    async def judge(self, system: str, content: list[dict], schema: type):
+        """One structured call for the verifier: a system prompt and a multimodal human
+        message (text + screenshots). Same retry ladder as decide()."""
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        model = self._chat.with_structured_output(schema, include_raw=True)
+        messages = [SystemMessage(content=system), HumanMessage(content=content)]
+        last_error = "no response"
+        text_len = sum(len(c.get("text", "")) for c in content if c.get("type") == "text")
+        for _attempt in range(PARSE_RETRIES + 1):
+            result = await model.ainvoke(messages)
+            self._record(result, " " * text_len, [])
+            parsed = result.get("parsed")
+            if parsed is not None:
+                return parsed
+            last_error = str(result.get("parsing_error"))
+            messages = [
+                *messages,
+                HumanMessage(content=f"Your response was invalid: {last_error[:600]}\nReturn a valid verdict."),
+            ]
+        raise ValueError(f"judge structured output failed after {PARSE_RETRIES + 1} attempts: {last_error}")
+
 
 class FakeLLM:
-    """Returns scripted decisions in order (tests). Raises if the script runs out."""
+    """Returns scripted decisions in order (tests). Raises if the script runs out.
+    `verdicts` scripts the judge the same way (default: every judgment is "achieved")."""
 
-    def __init__(self, script: list[AgentDecision]):
+    def __init__(self, script: list[AgentDecision], verdicts: list | None = None):
         self._script = list(script)
         self._i = 0
+        self._verdicts = list(verdicts or [])
+        self.judged: list[list[dict]] = []  # the content each judge() call received (tests inspect it)
+
+    async def judge(self, system, content, schema):
+        self.judged.append(content)
+        if self._verdicts:
+            return self._verdicts.pop(0)
+        return schema(achieved=True, confidence="high")
 
     async def decide(self, system, task, observation, history, allowed_kinds=None, max_actions=1) -> AgentDecision:
         if self._i >= len(self._script):

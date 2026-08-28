@@ -31,7 +31,13 @@ from netgent.schema.actions import WaitAction
 
 logger = get_logger(__name__)
 
-SETTLE_WATCH_S = 6.0  # how long after an action the page is sampled for text that appears (then vanishes)
+SETTLE_WATCH_S = 6.0
+# The same action on the same target, over and over, while the page keeps changing in
+# irrelevant ways (a video timer, live chat) defeats observation-equality stuck detection —
+# measured: 12 consecutive clicks on one ad overlay on YouTube. Nudge at REPEAT_NUDGE, stop at
+# REPEAT_STOP (browser-use's "repeated failure" guard, tool-calling doc §5.2).
+REPEAT_NUDGE = 3
+REPEAT_STOP = 6  # how long after an action the page is sampled for text that appears (then vanishes)
 
 
 async def _watch_texts(
@@ -73,6 +79,8 @@ class AgentState(TypedDict, total=False):
     texts_seen: list[str]
     decision: Any  # AgentDecision for the current step
     steps: Annotated[list[AgentStep], operator.add]  # the trajectory, appended per step
+    last_action_key: str  # "kind|index|text" of the previous step's first action
+    repeat_count: int  # consecutive steps with the same first action
     success: bool
     stopped_reason: str
 
@@ -187,7 +195,7 @@ def build_agent_graph(
             )
         return Command(update={"decision": decision, "texts_seen": seen[-400:]}, goto="act")
 
-    async def act(state: AgentState) -> Command[Literal["observe"]]:
+    async def act(state: AgentState) -> Command[Literal["observe", "__end__"]]:
         """Execute the decision's action(s) — one AgentStep per EXECUTED item, so a batch of
         three fills compiles to three transitions exactly as three single steps would.
         Two guards end a batch early (browser-use multi_act, Skyvern agent.py:3209): a static
@@ -199,6 +207,21 @@ def build_agent_graph(
         steps: list[AgentStep] = []
         seen = list(state.get("texts_seen") or [])
         known = set(seen) | {t.text for t in snapshot.texts}
+        # Repeated-action guard (see REPEAT_NUDGE).
+        first = items[0] if items else None
+        key = f"{first.kind}|{first.index}|{first.text or first.value or first.url or ''}" if first else ""
+        repeat = state.get("repeat_count", 0) + 1 if key and key == state.get("last_action_key") else 1
+        if repeat >= REPEAT_STOP:
+            reason = f"stuck: repeated the same action {repeat} times ({first.kind} on element {first.index})"
+            stop = AgentStep(n=n, kind="done", reasoning=reason, url=session.page.url, error=reason)
+            return Command(update={"steps": [stop], "stopped_reason": reason, "texts_seen": seen[-400:]}, goto=END)
+        if repeat >= REPEAT_NUDGE:
+            history.append(StepRecord(
+                n=n, kind="note",
+                note=f"{n}. you have now issued the SAME action {repeat} times ({first.kind} on [{first.index}]) "
+                "and the goal is still not reached — it is not working. Do something different, or if the "
+                "task's outcome is already visible, declare done.",
+            ))
         for i, item in enumerate(items):
             if i > 0:
                 if session.page.url != steps[-1].url or session.page.url != snapshot.url:
@@ -286,7 +309,10 @@ def build_agent_graph(
             agent.start_watch(_watch_texts(session, known, SETTLE_WATCH_S, agent.noticed, frame_filter))
         drained = agent.drain_noticed()
         seen += [t for t in drained if t not in seen]
-        return Command(update={"steps": steps, "texts_seen": seen[-400:]}, goto="observe")
+        return Command(
+            update={"steps": steps, "texts_seen": seen[-400:], "last_action_key": key, "repeat_count": repeat},
+            goto="observe",
+        )
 
     return (
         StateGraph(AgentState)
@@ -340,7 +366,7 @@ def agent_graph_mermaid() -> str:
 
     async def decide(state: AgentState) -> Command[Literal["act", "observe", "__end__"]]: ...
 
-    async def act(state: AgentState) -> Command[Literal["observe"]]: ...
+    async def act(state: AgentState) -> Command[Literal["observe", "__end__"]]: ...
 
     graph = (
         StateGraph(AgentState)

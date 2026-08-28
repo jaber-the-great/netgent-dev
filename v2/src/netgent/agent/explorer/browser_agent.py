@@ -108,6 +108,10 @@ class AgentTrajectory(BaseModel):
     # Every distinct text observed during the run (in observation scope). Success banners
     # are often transient — hidden a few seconds after appearing — so verification reads
     # what was seen, not only the final page.
+    # Evidence for the verifier (agent/verifier): the page as it was when the run ended.
+    final_observation: str = ""
+    final_url: str = ""
+    dialogs: list[str] = Field(default_factory=list)
 
     task: str
     success: bool = False
@@ -220,6 +224,7 @@ class BrowserAgent:
         from netgent.agent.explorer.graph import build_agent_graph  # lazy: langgraph is in the `generate` extra
 
         traj = AgentTrajectory(task=task)
+        dialog_mark = len(session.dialogs_seen())  # only THIS run's dialogs are its evidence
         if url:
             await session.page.goto(url)
             # Record the starting navigation as a real step, so a compiled workflow
@@ -240,6 +245,17 @@ class BrowserAgent:
         self.stop_watch()
         traj.texts_seen = list(final.get("texts_seen") or [])
         traj.texts_seen += [t for t in self.drain_noticed() if t not in traj.texts_seen]
+        try:  # the final page, for the verifier — scoped like the run was
+            from netgent.browser.dom import format_observation
+
+            snap = await session.snapshot()
+            if frame_filter is not None:
+                snap = snap.scoped_to(frame_filter)
+            traj.final_observation = format_observation(snap)
+            traj.final_url = snap.url
+        except Exception:  # noqa: BLE001 — a page mid-navigation: leave the evidence empty
+            pass
+        traj.dialogs = list(session.dialogs_seen())[dialog_mark:]
 
         if self._run_dir is not None:
             self._run_dir.mkdir(parents=True, exist_ok=True)

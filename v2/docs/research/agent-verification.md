@@ -19,6 +19,17 @@ agents and which roles* (§4.1: judges are "a good router and a bad gate"; §5.4
 
 ---
 
+> **Status (2026-08-27): the LLM judge is implemented on `eugene/v2-scaffold`** (`agent/verifier/`,
+> orchestrator node `verify` between explore and generate, `netgent generate --judge/--no-judge`,
+> `NETGENT_JUDGE=1` on `eval stress sweep` to score it against page truth). It sees task + params,
+> the action log, the final observation, texts seen, this run's dialogs, the final URL and the last
+> 3 screenshots — never the explorer's reasoning; a harness-ended run (stuck/budget) is stated as
+> such. Advisory: "not achieved" re-explores once with the unmet points; the replay still gates.
+> Measured on the 21-form sweep (Haiku 4.5): **precision 100%, recall 100%** after two fixes the
+> measurement forced — outcome-not-fields rule in the prompt, and scoping dialogs to the run (the
+> whole-session dialog log had produced 3 false positives on the broken fixtures). The spec →
+> checks stage (§6.5 build order) is still the next step.
+
 ## Summary (10 lines)
 
 1. Every production system that verifies at all runs **deterministic checks first and an LLM second**, and the LLM's verdict is *evidence consumed by a deterministic gate*, never the gate — Skyvern states it in a docstring (`completion_verification.py:1-9`), browser-use in one (`service.py:1622-1628`).

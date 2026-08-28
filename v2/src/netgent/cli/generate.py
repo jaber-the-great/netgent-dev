@@ -37,6 +37,9 @@ def generate(
     validate: Annotated[
         bool, typer.Option("--validate/--no-validate", help="Replay the compiled workflow with zero LLM calls.")
     ] = True,
+    judge: Annotated[
+        bool, typer.Option("--judge/--no-judge", help="LLM judge of the exploration from page evidence (advisory).")
+    ] = True,
     show_graph: Annotated[
         bool, typer.Option("--graph", help="Print the pipeline's LangGraph (Mermaid) and exit.")
     ] = False,
@@ -69,10 +72,11 @@ def generate(
         out=out,
         trajectory_dir=trajectory_dir,
         validate_replay=validate,
+        judge=judge,
     )
     llm = make_llm(model or get_settings().generator_model)
 
-    colors = {"explore": None, "generate": "cyan", "validate": "magenta"}
+    colors = {"explore": None, "verify": "yellow", "generate": "cyan", "validate": "magenta"}
 
     def listen(stage: str, text: str) -> None:
         fg = "red" if "FAILED" in text or "failed" in text else colors[stage]

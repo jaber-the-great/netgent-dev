@@ -30,7 +30,7 @@ from netgent.schema.workflow import Workflow, dump_workflow
 
 logger = get_logger(__name__)
 
-Stage = Literal["explore", "generate", "validate"]
+Stage = Literal["explore", "verify", "generate", "validate"]
 Listener = Callable[[Stage, str], None]  # (stage, human-readable event) → for CLI progress
 
 
@@ -50,6 +50,11 @@ class GenerateRequest(BaseModel):
     out: Path | None = None  # write the artifact here (yaml/json by suffix)
     trajectory_dir: Path | None = None
     validate_replay: bool = True  # run the validation agent after generating
+    # The verifier: an LLM judge of the exploration from page evidence (agent/verifier). Advisory —
+    # a "not achieved" re-explores (up to `verify_retries` more times, with the unmet points
+    # appended to the task); "achieved" proceeds but never replaces the replay validation.
+    judge: bool = True
+    verify_retries: int = 1
 
 
 class GenerateResult(BaseModel):
@@ -58,6 +63,7 @@ class GenerateResult(BaseModel):
     trajectory: AgentTrajectory | None = None
     workflow: Workflow | None = None
     report: ValidationReport | None = None
+    verdict: Any = None  # the verifier's Verdict (None when judging is off)
     error: str | None = None  # set when a stage stopped the pipeline
 
     @property
@@ -67,6 +73,9 @@ class GenerateResult(BaseModel):
 
 class OrchestrationState(TypedDict, total=False):
     trajectory: Any
+    verdict: Any
+    attempt: int  # exploration attempts so far (the verifier may ask for another)
+    task_suffix: str  # what the verifier found unmet, appended to the task on re-exploration
     workflow: Any
     report: Any
     error: str
@@ -82,14 +91,22 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
         if listen:
             listen(stage, text)
 
-    async def explore(state: OrchestrationState) -> Command[Literal["generate", "__end__"]]:
-        emit("explore", f"exploring: {req.task}")
+    # Screenshots are the judge's evidence: keep a run dir even when the caller asked for none.
+    run_dir = req.trajectory_dir
+    if run_dir is None and req.judge:
+        import tempfile
+
+        run_dir = Path(tempfile.mkdtemp(prefix="netgent-explore-"))
+
+    async def explore(state: OrchestrationState) -> Command[Literal["verify", "generate", "__end__"]]:
+        attempt = state.get("attempt", 0) + 1
+        emit("explore", f"exploring: {req.task}" + (f" (attempt {attempt})" if attempt > 1 else ""))
         from netgent.agent.explorer.decision import DEFAULT_KINDS
 
         agent = BrowserAgent(
             llm,
             max_steps=req.max_steps,
-            run_dir=req.trajectory_dir,
+            run_dir=run_dir,
             allowed_kinds=DEFAULT_KINDS | set(req.allow_kinds),
             max_actions_per_step=req.max_actions_per_step,
         )
@@ -104,6 +121,8 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
                 "Where the task refers to one of these, the value above is the sample to type or pick, "
                 "and you must set `param` to its name on that step."
             )
+        if state.get("task_suffix"):
+            task = f"{task}\n\n{state['task_suffix']}"
         async with BrowserSession(headless=req.headless) as session:
             traj = await agent.run(session, task, req.url)
         for s in traj.steps:
@@ -118,8 +137,39 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
         if not traj.success:
             reason = traj.stopped_reason or "not completed"
             emit("explore", f"exploration failed: {reason}")
-            return Command(update={"trajectory": traj, "error": f"exploration failed: {reason}"}, goto=END)
-        return Command(update={"trajectory": traj}, goto="generate")
+            return Command(
+                update={"trajectory": traj, "attempt": attempt, "error": f"exploration failed: {reason}"}, goto=END
+            )
+        return Command(update={"trajectory": traj, "attempt": attempt}, goto="verify" if req.judge else "generate")
+
+    async def verify(state: OrchestrationState) -> Command[Literal["explore", "generate", "__end__"]]:
+        """The LLM judge (advisory). Sees page evidence, never the explorer's reasoning."""
+        from netgent.agent.verifier import Evidence, judge_trajectory
+
+        traj = state["trajectory"]
+        ev = Evidence.from_trajectory(req.task, traj, params=req.params, run_dir=run_dir)
+        verdict = await judge_trajectory(llm, ev)
+        emit("verify", f"judge: {'achieved' if verdict.achieved else 'NOT achieved'} ({verdict.confidence} confidence)"
+             + (f" — unmet: {'; '.join(verdict.unmet)}" if verdict.unmet else ""))
+        for e in verdict.evidence[:4]:
+            emit("verify", f"evidence: {e}")
+        if verdict.achieved:
+            return Command(update={"verdict": verdict}, goto="generate")
+        if state.get("attempt", 1) <= req.verify_retries:
+            unmet = "; ".join(verdict.unmet) or "the task outcome was not visible on the page"
+            suffix = (
+                "A previous attempt was judged NOT achieved from the page evidence. Unmet: "
+                f"{unmet}. Make sure the page visibly shows each requirement before declaring done."
+            )
+            emit("verify", "re-exploring with the unmet points")
+            return Command(update={"verdict": verdict, "task_suffix": suffix}, goto="explore")
+        return Command(
+            update={
+                "verdict": verdict,
+                "error": "verifier: task not achieved — " + ("; ".join(verdict.unmet) or "no evidence"),
+            },
+            goto=END,
+        )
 
     async def generate(state: OrchestrationState) -> Command[Literal["validate", "__end__"]]:
         warnings: list[str] = []
@@ -147,6 +197,7 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
     return (
         StateGraph(OrchestrationState)
         .add_node("explore", explore)
+        .add_node("verify", verify)
         .add_node("generate", generate)
         .add_node("validate", validate)
         .add_edge(START, "explore")
@@ -162,6 +213,7 @@ async def orchestrate(req: GenerateRequest, llm: LLM, listen: Listener | None = 
         trajectory=final.get("trajectory"),
         workflow=final.get("workflow"),
         report=final.get("report"),
+        verdict=final.get("verdict"),
         error=final.get("error"),
     )
 
@@ -171,7 +223,9 @@ def orchestration_graph_mermaid() -> str:
     from langgraph.graph import START, StateGraph
     from langgraph.types import Command
 
-    async def explore(state: OrchestrationState) -> Command[Literal["generate", "__end__"]]: ...
+    async def explore(state: OrchestrationState) -> Command[Literal["verify", "generate", "__end__"]]: ...
+
+    async def verify(state: OrchestrationState) -> Command[Literal["explore", "generate", "__end__"]]: ...
 
     async def generate(state: OrchestrationState) -> Command[Literal["validate", "__end__"]]: ...
 
@@ -180,6 +234,7 @@ def orchestration_graph_mermaid() -> str:
     graph = (
         StateGraph(OrchestrationState)
         .add_node("explore", explore)
+        .add_node("verify", verify)
         .add_node("generate", generate)
         .add_node("validate", validate)
         .add_edge(START, "explore")

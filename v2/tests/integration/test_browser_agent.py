@@ -171,3 +171,24 @@ def test_agent_notices_a_transient_banner_that_appears_after_its_action(serve):
     traj, history = asyncio.run(_run())
     assert any("dumbledore" in t for t in traj.texts_seen)
     assert any(r.kind == "note" and "dumbledore" in (r.note or "") for r in history)
+
+
+def test_agent_stops_after_repeating_the_same_futile_action(serve):
+    """A page whose text keeps changing (a timer) defeats observation-equality stuck detection;
+    the repeated-action guard nudges at 3 and stops at 6 identical actions."""
+    # A live chat: a NEW link appears every 150 ms, so no two observations are equal.
+    page = """<!doctype html><html><body><button id="x">Dismiss</button><div id="chat"></div>
+    <script>let i = 0; setInterval(() => { const a = document.createElement('a'); a.href = '#';
+      a.textContent = 'chat message ' + (++i); document.getElementById('chat').appendChild(a); }, 15);</script>
+    </body></html>"""
+    srv = serve({"/": page})
+    script = [AgentDecision(reasoning="dismiss the overlay", kind="click", index=0) for _ in range(12)]
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            agent = BrowserAgent(FakeLLM(script), max_steps=12)
+            return await agent.run(s, "watch the video", srv.url("/")), agent.history
+
+    traj, history = asyncio.run(_run())
+    assert not traj.success and traj.stopped_reason.startswith("stuck: repeated the same action 6 times")
+    assert any(r.kind == "note" and "SAME action 3 times" in (r.note or "") for r in history)

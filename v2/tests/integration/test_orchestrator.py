@@ -59,3 +59,35 @@ def test_orchestrate_stops_when_exploration_fails(tmp_path):
     assert result.error and "exploration failed" in result.error
     assert result.workflow is None and result.report is None  # generate/validate never ran
     assert not (tmp_path / "never.yaml").exists()
+
+
+def test_verifier_reexplores_once_when_the_judge_says_not_achieved(tmp_path):
+    """The judge (advisory) routes: NOT achieved → one more exploration with the unmet points in
+    the task; achieved → generate. It sees page evidence, never the explorer's reasoning."""
+    from netgent.agent.verifier import Verdict
+
+    page = tmp_path / "p.html"
+    page.write_text(FIXTURE)
+    run = [
+        AgentDecision(reasoning="type the name", kind="fill", index=0, text="Ada"),
+        AgentDecision(reasoning="press go", kind="click", index=1),
+        AgentDecision(reasoning="welcome is shown", done=True, success=True),
+    ]
+    llm = FakeLLM(run + run, verdicts=[
+        Verdict(achieved=False, confidence="high", unmet=["no welcome message visible"]),
+        Verdict(achieved=True, confidence="high", evidence=["Welcome, Ada"]),
+    ])
+    events: list[tuple[str, str]] = []
+    req = GenerateRequest(task="fill the name and press go", url=page.as_uri(), name="hello",
+                          params={"who": "Ada"}, out=tmp_path / "hello.yaml")
+    result = asyncio.run(orchestrate(req, llm, lambda stage, text: events.append((stage, text))))
+
+    assert result.error is None and result.validated
+    assert result.verdict is not None and result.verdict.achieved
+    assert [s for s, _ in events].count("verify") >= 2  # judged twice
+    assert result.trajectory.task.endswith("before declaring done.")  # the retry carried the unmet points
+    assert "no welcome message visible" in result.trajectory.task
+    assert len(llm.judged) == 2
+    text = llm.judged[0][0]["text"]
+    assert "type the name" not in text and "TASK: fill the name and press go" in text  # evidence only
+    assert any(c["type"] == "image_url" for c in llm.judged[0])  # screenshots reached the judge

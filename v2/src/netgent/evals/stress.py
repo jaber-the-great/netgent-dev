@@ -38,6 +38,12 @@ CHALLENGE_TASK = (
 )
 
 
+def _judge() -> bool:
+    """NETGENT_JUDGE=1 runs the LLM verifier after each form and records its verdict beside the
+    page-derived truth (`submitted`), so judge precision/recall can be read off the result."""
+    return os.getenv("NETGENT_JUDGE", "0") == "1"
+
+
 def _max_actions() -> int:
     """NETGENT_MAX_ACTIONS=N is the batching A/B arm (1 = single action, the default)."""
     return int(os.getenv("NETGENT_MAX_ACTIONS", "1"))
@@ -110,7 +116,9 @@ async def run_sweep(
     t0 = time.perf_counter()
     async with _session(backend, headless) as s:
         await s.page.goto(FORMS_URL, wait_until="networkidle")
-        result = await sweep_forms(s, llm, max_steps_per_form=max_steps, retries=1, max_actions_per_step=_max_actions())
+        result = await sweep_forms(
+            s, llm, max_steps_per_form=max_steps, retries=1, max_actions_per_step=_max_actions(), judge=_judge()
+        )
     usage = getattr(llm, "usage", None)
     return {
         "kind": "sweep",
@@ -180,4 +188,17 @@ def summary_table(results: list[dict]) -> str:
         )
     mean = sum(metric(r) for r in results) / len(results)
     lines.append(f"\n**{kind} / {backend}: mean {mean:.2f}/{denom} over {len(results)} run(s)**")
+    judged = [f for r in results for f in r.get("forms", []) if f.get("judge_achieved") is not None]
+    if judged:  # judge vs page truth: precision/recall of "achieved"
+        tp = sum(1 for f in judged if f["judge_achieved"] and f["submitted"])
+        fp = sum(1 for f in judged if f["judge_achieved"] and not f["submitted"])
+        fn = sum(1 for f in judged if not f["judge_achieved"] and f["submitted"])
+        prec = tp / (tp + fp) if tp + fp else 0.0
+        rec = tp / (tp + fn) if tp + fn else 0.0
+        lines.append(
+            f"**judge vs page truth over {len(judged)} forms: precision {prec:.0%} (FP {fp}), "
+            f"recall {rec:.0%} (FN {fn}); false positives: "
+            + (", ".join(str(f["form"]) for f in judged if f["judge_achieved"] and not f["submitted"]) or "none")
+            + "**"
+        )
     return "\n".join(lines)
