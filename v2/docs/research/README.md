@@ -8,6 +8,24 @@ Working notes derived from three design meetings (Eugene Vuong ↔ Manni Moghimi
 - [proposed-ai-agent.md](proposed-ai-agent.md) — the forward-looking proposal: a state-machine-based agent that replays deterministically, self-heals via a T0–T3 ladder with write-back, and self-improves via an offline loop; includes architecture, LLM-usage budget table, evaluation plan, and a 6-phase roadmap.
 - [related-work.md](related-work.md) — literature survey (~180 sources): must-cite papers (AWM/ASI, Ringer, APE, ICSE'20 near-duplicate study, Similo++/VISTA), the field-gap positioning, and 30 prioritized recommendations (R1–R30) spanning state identity, Discovery, repair, and evaluation/benchmarks.
 
+## Later research (Aug 2026) — the explorer, browser layer, and pipeline
+
+- [browser-agent-architectures.md](browser-agent-architectures.md) — how browser agents split roles (planner/executor/judge/triage) and what our explore → generate → validate pipeline should borrow.
+- [langgraph-multi-agent.md](langgraph-multi-agent.md) — LangGraph's current multi-agent patterns (subagents/handoffs/skills/router/custom workflow) vs our orchestrator; `Send` fan-out for `--runs N`.
+- [web-agent-papers.md](web-agent-papers.md) — literature review (~59 papers): observation, memory, action space, skill induction; ranked top-10 actionable findings.
+- [browser-agent-memory.md](browser-agent-memory.md) — history windows, working-memory fields, observation diffs, compaction, cross-run memory.
+- [browser-agent-tool-calling.md](browser-agent-tool-calling.md) — single vs batched actions, element addressing, compound actions, structured output vs tool calling.
+- [browser-agent-prompting.md](browser-agent-prompting.md) — observation formats and token costs, viewport policy, system-prompt structure, parameter conveyance.
+- [explorer-optimisation.md](explorer-optimisation.md) — what was implemented from the four above, with the A/B numbers (kept vs reverted).
+- [browser-agent-date-inputs.md](browser-agent-date-inputs.md) — date inputs and pickers: format signals, dispatch strategies, measured on the two failing sweep forms (implemented).
+- [agent-verification.md](agent-verification.md) — how agents verify task completion: judges vs deterministic oracles, feedback contracts; the NetGent verifier design.
+- [verification-papers.md](verification-papers.md) — the verification/judging literature, old and new (test oracles, LLM-as-judge limits, self-verification, replay determinism).
+- [stealth-after-patchright.md](stealth-after-patchright.md) — what Patchright covers, measured residuals, `BrowserProfile` verdict (implemented).
+- [iframes-shadow-dom.md](iframes-shadow-dom.md) — iframe/shadow-DOM handling R1–R8 (implemented; closed roots read over CDP).
+- [discovery-prior-art.md](discovery-prior-art.md), [reuseit.md](reuseit.md), [design-doc-and-meetings.md](design-doc-and-meetings.md) — discovery/exploration prior art, the ReUseIt paper, and the design doc + meeting transcripts.
+- [runtime-long-horizon.md](runtime-long-horizon.md), [long-horizon-agents.md](long-horizon-agents.md) — long-horizon handling at run time and in agents.
+- [repo-layout-viewers.md](repo-layout-viewers.md) — where evals/trajectory viewers live in other repos (informed `evals/` and `report/`).
+
 ## One-paragraph project summary
 
 NetGent V2 is a web-automation system where an LLM agent explores a site once and compiles the workflow into a deterministic, parameterized, replayable config (YAML), modeled as an NFA — so subsequent runs need no LLM in the loop. The V1→V2 differentiators are a validation/error agent and a healing/repair capability. Agent pipeline: Planner → Discovery fleet → Workflow Generator → Validation Agent → Workflow artifact.
