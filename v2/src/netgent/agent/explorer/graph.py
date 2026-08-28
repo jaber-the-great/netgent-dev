@@ -354,27 +354,3 @@ async def _verified_locator(session: BrowserSession, snapshot, index: int | None
         logger.warning("locator verification failed for element %d: %s", index, exc)
         return durable_locator, f"verification failed: {exc}"
     return (lambda _el: chain), note
-
-
-def agent_graph_mermaid() -> str:
-    """The loop's structure as a Mermaid diagram (for docs / `netgent agent --graph`)."""
-    from langgraph.graph import END, START, StateGraph
-    from langgraph.types import Command
-
-    # Structure only: bind no-op nodes with the real routing annotations.
-    async def observe(state: AgentState) -> Command[Literal["decide", "__end__"]]: ...
-
-    async def decide(state: AgentState) -> Command[Literal["act", "observe", "__end__"]]: ...
-
-    async def act(state: AgentState) -> Command[Literal["observe", "__end__"]]: ...
-
-    graph = (
-        StateGraph(AgentState)
-        .add_node("observe", observe)
-        .add_node("decide", decide)
-        .add_node("act", act)
-        .add_edge(START, "observe")
-        .compile()
-    )
-    del END
-    return graph.get_graph().draw_mermaid()

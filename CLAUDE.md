@@ -83,5 +83,5 @@ Reinstall on a fresh clone: `npx skills add langchain-ai/langchain-skills --skil
 
 NetGent uses LangChain for the model seam (`init_chat_model` + `with_structured_output` in
 `agent/llm.py`) and **LangGraph for the browser agent's loop** (`agent/graph.py`: a `StateGraph`
-observe → decide → act with `Command` routing; `netgent agent --graph` prints it as Mermaid).
+observe → decide → act with `Command` routing; `netgent generate --graph` prints the pipeline as Mermaid).
 Keep LangChain/LangGraph usage inside `agent/`, imported lazily, behind the `LLM` protocol.
