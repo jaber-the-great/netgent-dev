@@ -3,19 +3,13 @@
 import asyncio
 
 from netgent.agent import AgentDecision, FakeLLM
-from netgent.agent.orchestrator import GenerateRequest, orchestrate, orchestration_graph_mermaid
+from netgent.agent.orchestrator import GenerateRequest, orchestrate
 
 FIXTURE = """<!doctype html><html><head><title>Hello</title></head><body>
 <input id="name" placeholder="name">
 <button id="go" onclick="document.getElementById('ok').style.display='block'">Go</button>
 <div id="ok" style="display:none">welcome</div>
 </body></html>"""
-
-
-def test_pipeline_graph_has_one_node_per_agent():
-    mermaid = orchestration_graph_mermaid()
-    for node in ("explore", "generate", "validate"):
-        assert node in mermaid
 
 
 def test_orchestrate_explores_generates_and_validates(tmp_path):

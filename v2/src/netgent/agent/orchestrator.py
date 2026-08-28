@@ -216,28 +216,3 @@ async def orchestrate(req: GenerateRequest, llm: LLM, listen: Listener | None = 
         verdict=final.get("verdict"),
         error=final.get("error"),
     )
-
-
-def orchestration_graph_mermaid() -> str:
-    """The pipeline's structure as a Mermaid diagram (`netgent generate --graph`)."""
-    from langgraph.graph import START, StateGraph
-    from langgraph.types import Command
-
-    async def explore(state: OrchestrationState) -> Command[Literal["verify", "generate", "__end__"]]: ...
-
-    async def verify(state: OrchestrationState) -> Command[Literal["explore", "generate", "__end__"]]: ...
-
-    async def generate(state: OrchestrationState) -> Command[Literal["validate", "__end__"]]: ...
-
-    async def validate(state: OrchestrationState) -> Command[Literal["__end__"]]: ...
-
-    graph = (
-        StateGraph(OrchestrationState)
-        .add_node("explore", explore)
-        .add_node("verify", verify)
-        .add_node("generate", generate)
-        .add_node("validate", validate)
-        .add_edge(START, "explore")
-        .compile()
-    )
-    return graph.get_graph().draw_mermaid()

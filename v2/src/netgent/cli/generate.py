@@ -40,16 +40,8 @@ def generate(
     judge: Annotated[
         bool, typer.Option("--judge/--no-judge", help="LLM judge of the exploration from page evidence (advisory).")
     ] = True,
-    show_graph: Annotated[
-        bool, typer.Option("--graph", help="Print the pipeline's LangGraph (Mermaid) and exit.")
-    ] = False,
 ) -> None:
     """Explore the task with the agent, compile its trajectory into a workflow, validate it."""
-    if show_graph:
-        from netgent.agent.orchestrator import orchestration_graph_mermaid
-
-        typer.echo(orchestration_graph_mermaid())
-        return
 
     try:
         from netgent.agent import make_llm
