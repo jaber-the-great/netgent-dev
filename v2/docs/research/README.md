@@ -11,6 +11,7 @@ Working notes derived from three design meetings (Eugene Vuong ↔ Manni Moghimi
 ## Later research (Aug 2026) — the explorer, browser layer, and pipeline
 
 - [browser-agent-architectures.md](browser-agent-architectures.md) — how browser agents split roles (planner/executor/judge/triage) and what our explore → generate → validate pipeline should borrow.
+- [langgraph-agent-structure.md](langgraph-agent-structure.md) — how LangGraph agents are actually structured (functions + compiled graph vs classes), resource injection, memory, config; refactor sketch for the explorer.
 - [langgraph-multi-agent.md](langgraph-multi-agent.md) — LangGraph's current multi-agent patterns (subagents/handoffs/skills/router/custom workflow) vs our orchestrator; `Send` fan-out for `--runs N`.
 - [web-agent-papers.md](web-agent-papers.md) — literature review (~59 papers): observation, memory, action space, skill induction; ranked top-10 actionable findings.
 - [browser-agent-memory.md](browser-agent-memory.md) — history windows, working-memory fields, observation diffs, compaction, cross-run memory.
