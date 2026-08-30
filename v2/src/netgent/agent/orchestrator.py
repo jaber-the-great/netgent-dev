@@ -86,6 +86,14 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
     from langgraph.graph import END, START, StateGraph  # lazy: the `generate` extra
     from langgraph.types import Command
 
+    # Imported here, not inside the node, and EXPLORER is named in the node's own source: that is
+    # what LangGraph's static walk (get_function_nonlocals → find_subgraph_pregel) needs to list
+    # the explorer as this node's subgraph, so get_subgraphs()/get_graph(xray=True)/Studio show
+    # observe → decide → act nested in the pipeline (langgraph-agent-structure.md §3d, C → A).
+    from netgent.agent.explorer.decision import DEFAULT_KINDS
+    from netgent.agent.explorer.graph import EXPLORER
+    from netgent.agent.explorer.graph import explore as run_explorer
+
     def emit(stage: Stage, text: str) -> None:
         logger.info("%s: %s", stage, text)
         if listen:
@@ -101,9 +109,6 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
     async def explore(state: OrchestrationState) -> Command[Literal["verify", "generate", "__end__"]]:
         attempt = state.get("attempt", 0) + 1
         emit("explore", f"exploring: {req.task}" + (f" (attempt {attempt})" if attempt > 1 else ""))
-        from netgent.agent.explorer.decision import DEFAULT_KINDS
-        from netgent.agent.explorer.graph import explore as run_explorer  # closes over the module-level EXPLORER
-
         # The params are declared to the explorer as ${name} = 'sample' placeholders (Stagehand's
         # %var% contract): it types the sample AND reports `param` on the step that used it, so
         # the compiler binds ${name} structurally (the prompt's PARAMETERS rule).
@@ -121,6 +126,7 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
             traj = await run_explorer(
                 session, task, llm=llm, url=req.url, max_steps=req.max_steps, run_dir=run_dir,
                 allowed_kinds=DEFAULT_KINDS | set(req.allow_kinds), max_actions_per_step=req.max_actions_per_step,
+                graph=EXPLORER,
             )
         for s in traj.steps:
             emit("explore", f"{s.n}. {s.kind} — {s.reasoning}" + (f" [FAILED: {s.error}]" if s.error else ""))

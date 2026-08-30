@@ -353,12 +353,15 @@ async def explore(
     allowed_kinds: frozenset[str] | set[str] = DEFAULT_KINDS,
     max_actions_per_step: int = 1,
     upload_file: Path | None = None,
+    graph: CompiledStateGraph | None = None,
 ) -> AgentTrajectory:
     """The ONE run API: `ExplorerAgent.run`, the sweep, the stress eval and the orchestrator's
-    explore node all end here. Navigates to `url` (recorded as step 0), runs EXPLORER with the
-    per-run dependencies in `context=`, then assembles the trajectory: steps, texts seen
-    (including what the settle watcher caught), the final observation scoped like the run,
-    and this run's dialogs. `memory` is shared across calls for a sweep (default: fresh)."""
+    explore node all end here. Navigates to `url` (recorded as step 0), runs the compiled
+    explorer (`graph`, default EXPLORER — pass one compiled with a checkpointer to persist)
+    with the per-run dependencies in `context=`, then assembles the trajectory: steps, texts
+    seen (including what the settle watcher caught), the final observation scoped like the
+    run, and this run's dialogs. `memory` is shared across calls for a sweep (default: fresh)."""
+    graph = EXPLORER if graph is None else graph
     memory = memory or ExplorerMemory()
     traj = AgentTrajectory(task=task)
     dialog_mark = len(session.dialogs_seen())  # only THIS run's dialogs are its evidence
@@ -377,7 +380,7 @@ async def explore(
     )
     # Each loop iteration is up to three graph steps (observe, decide, act); the
     # recursion limit is a backstop above the agent's own step budget, never the cap.
-    final = await EXPLORER.ainvoke({"steps": []}, config={"recursion_limit": 3 * max_steps + 8}, context=ctx)
+    final = await graph.ainvoke({"steps": []}, config={"recursion_limit": 3 * max_steps + 8}, context=ctx)
 
     traj.steps.extend(final.get("steps", []))
     traj.success = bool(final.get("success", False))

@@ -77,3 +77,18 @@ def test_agent_facade_validates_early_and_shares_one_memory_across_runs():
     assert agent.history is shared.history and shared.history[-1].note == "--- form 1 ---"
     # the façade's run() is explore(); both accept a memory to carry across tasks
     assert explore.__name__ == "explore" and ExplorerAgent.run.__doc__
+
+
+def test_orchestrator_sees_the_explorer_as_a_nested_subgraph():
+    """The orchestrator's explore node closes over the module-level EXPLORER (via explore()),
+    so static introspection — get_subgraphs(), xray mermaid, Studio — shows the loop nested
+    inside the pipeline instead of an opaque node (§3d probe C → A)."""
+    from netgent.agent import GenerateRequest
+    from netgent.agent.orchestrator import build_orchestration_graph
+
+    pipeline = build_orchestration_graph(GenerateRequest(task="t"), FakeLLM([]))
+    assert [name for name, _ in pipeline.get_subgraphs()] == ["explore"]
+    xray = pipeline.get_graph(xray=True).draw_mermaid()
+    assert "subgraph explore" in xray
+    for node in ("observe", "decide", "act"):  # namespaced ids: "explore:observe" is rendered explore\3aobserve
+        assert f"{node}({node})" in xray
