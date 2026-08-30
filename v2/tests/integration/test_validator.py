@@ -2,7 +2,7 @@
 
 import asyncio
 
-from netgent.agent.explorer.agent import AgentStep, AgentTrajectory
+from netgent.agent.explorer.models import AgentStep, AgentTrajectory
 from netgent.agent.generator.compiler import compile_trajectory
 from netgent.agent.validator import validate_workflow
 

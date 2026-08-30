@@ -21,8 +21,8 @@ one line each.
 import os
 from typing import Protocol
 
-from netgent.agent.explorer.agent import StepRecord
 from netgent.agent.explorer.decision import ALL_KINDS, MAX_BATCH, AgentAction, AgentDecision
+from netgent.agent.explorer.models import StepRecord
 
 # litellm-style "provider/model" → langchain model_provider id.
 _PROVIDER_ALIAS = {

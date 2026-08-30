@@ -1,6 +1,6 @@
 """ONE agent completes every form on a page, one at a time, with verification.
 
-A single Agent — one continuous memory — works through all the forms: what worked on
+A single ExplorerAgent — one continuous memory — works through all the forms: what worked on
 an earlier form (date formats, how to satisfy a validator) informs the later ones. The sweep
 stays deterministic around it: it enumerates the forms, scopes the agent to one form at a
 time, and VERIFIES success by looking for a success marker in that form's own text — not the
@@ -9,7 +9,7 @@ agent's self-report. NetGent's philosophy: deterministic orchestration, verified
 
 from pydantic import BaseModel, Field
 
-from netgent.agent.explorer.agent import Agent
+from netgent.agent.explorer.agent import ExplorerAgent
 from netgent.agent.llm import LLM
 from netgent.browser.session import BrowserSession
 from netgent.core.logger import get_logger
@@ -118,7 +118,7 @@ async def sweep_forms(
         from pathlib import Path
 
         run_dir = Path(tempfile.mkdtemp(prefix="netgent-sweep-"))
-    agent = Agent(
+    agent = ExplorerAgent(
         llm, max_steps=max_steps_per_form, max_actions_per_step=max_actions_per_step, run_dir=run_dir
     )
     for i, frame_path in enumerate(frame_paths):

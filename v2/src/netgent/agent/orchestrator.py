@@ -20,7 +20,7 @@ from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
-from netgent.agent.explorer.agent import Agent, AgentTrajectory
+from netgent.agent.explorer.models import AgentTrajectory
 from netgent.agent.generator.compiler import compile_trajectory
 from netgent.agent.llm import LLM
 from netgent.agent.validator.validate import ValidationReport, validate_workflow
@@ -102,14 +102,8 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
         attempt = state.get("attempt", 0) + 1
         emit("explore", f"exploring: {req.task}" + (f" (attempt {attempt})" if attempt > 1 else ""))
         from netgent.agent.explorer.decision import DEFAULT_KINDS
+        from netgent.agent.explorer.graph import explore as run_explorer  # closes over the module-level EXPLORER
 
-        agent = Agent(
-            llm,
-            max_steps=req.max_steps,
-            run_dir=run_dir,
-            allowed_kinds=DEFAULT_KINDS | set(req.allow_kinds),
-            max_actions_per_step=req.max_actions_per_step,
-        )
         # The params are declared to the explorer as ${name} = 'sample' placeholders (Stagehand's
         # %var% contract): it types the sample AND reports `param` on the step that used it, so
         # the compiler binds ${name} structurally (the prompt's PARAMETERS rule).
@@ -124,7 +118,10 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
         if state.get("task_suffix"):
             task = f"{task}\n\n{state['task_suffix']}"
         async with BrowserSession(headless=req.headless) as session:
-            traj = await agent.run(session, task, req.url)
+            traj = await run_explorer(
+                session, task, llm=llm, url=req.url, max_steps=req.max_steps, run_dir=run_dir,
+                allowed_kinds=DEFAULT_KINDS | set(req.allow_kinds), max_actions_per_step=req.max_actions_per_step,
+            )
         for s in traj.steps:
             emit("explore", f"{s.n}. {s.kind} — {s.reasoning}" + (f" [FAILED: {s.error}]" if s.error else ""))
         usage = getattr(llm, "usage", None)  # LangChainLLM tracks it; the LLM protocol doesn't require it

@@ -2,8 +2,9 @@
 compaction, and the working-memory fields on the decision
 (docs/research/browser-agent-memory.md §6)."""
 
-from netgent.agent.explorer.agent import FOLD_MIN_STEPS, MAX_FOLDS, Agent, StepRecord
 from netgent.agent.explorer.decision import AgentDecision
+from netgent.agent.explorer.memory import FOLD_MIN_STEPS, MAX_FOLDS, ExplorerMemory
+from netgent.agent.explorer.models import StepRecord
 from netgent.agent.llm import FULL_BLOCKS, HISTORY_WINDOW, decision_schema, render_history
 
 
@@ -46,11 +47,7 @@ def test_history_window_keeps_folds_and_notes_beyond_the_acted_window():
 
 
 def test_note_folds_the_previous_task_into_one_line_and_keeps_failures_and_memory():
-    class NoLLM:
-        async def decide(self, *a, **k):
-            raise AssertionError
-
-    agent = Agent(NoLLM())
+    agent = ExplorerMemory()
     agent.note("--- form 1 ---")
     agent.history += [_rec(1, memory="date wants YYYY-MM-DD"), _rec(2, outcome="failed", error="not an option"),
                       _rec(3), _rec(4, memory="submitted form 1")]

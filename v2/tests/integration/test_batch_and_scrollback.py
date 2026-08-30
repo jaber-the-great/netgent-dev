@@ -4,7 +4,7 @@ browser with a scripted LLM."""
 
 import asyncio
 
-from netgent.agent import Agent, AgentDecision, FakeLLM
+from netgent.agent import AgentDecision, ExplorerAgent, FakeLLM
 from netgent.agent.explorer.decision import AgentAction
 from netgent.browser.dom import format_observation
 from netgent.browser.session import BrowserSession
@@ -31,7 +31,7 @@ def test_batch_executes_in_order_one_step_per_item_and_stops_at_a_navigation(tmp
 
     async def _run():
         async with BrowserSession(headless=True) as s:
-            agent = Agent(FakeLLM(script), max_actions_per_step=4)
+            agent = ExplorerAgent(FakeLLM(script), max_actions_per_step=4)
             traj = await agent.run(s, "fill and submit", page.as_uri())
             after = await s.page.locator("#after").input_value()
             return traj, agent.history, after
@@ -57,7 +57,7 @@ def test_single_action_default_ignores_a_batch(tmp_path):
 
     async def _run():
         async with BrowserSession(headless=True) as s:
-            return await Agent(FakeLLM(script)).run(s, "t", page.as_uri())
+            return await ExplorerAgent(FakeLLM(script)).run(s, "t", page.as_uri())
 
     traj = asyncio.run(_run())
     assert [s.kind for s in traj.steps] == ["goto", "fill", "done"]  # max_actions_per_step=1: head only
@@ -76,7 +76,7 @@ def test_failed_item_aborts_the_rest_of_the_batch(tmp_path):
 
     async def _run():
         async with BrowserSession(headless=True) as s:
-            agent = Agent(FakeLLM(script), max_actions_per_step=4)
+            agent = ExplorerAgent(FakeLLM(script), max_actions_per_step=4)
             traj = await agent.run(s, "t", page.as_uri())
             return traj, agent.history
 

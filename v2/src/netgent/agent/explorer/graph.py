@@ -21,6 +21,7 @@ in `netgent.agent.__init__` imports it eagerly, so the `generate` extra stays op
 import asyncio
 import operator
 import os
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
@@ -30,17 +31,10 @@ from langgraph.runtime import Runtime
 from langgraph.types import Command
 
 from netgent.agent.explorer.actions import to_action
-from netgent.agent.explorer.agent import (
-    MAX_REPEAT,
-    AgentStep,
-    AgentTrajectory,
-    StepRecord,
-    capture_screenshot,
-    upload_path,
-)
 from netgent.agent.explorer.context import ExplorerContext
 from netgent.agent.explorer.decision import DEFAULT_KINDS, TERMINATES_BATCH
 from netgent.agent.explorer.memory import ExplorerMemory
+from netgent.agent.explorer.models import AgentStep, AgentTrajectory, StepRecord
 from netgent.agent.explorer.prompt import build_system_prompt
 from netgent.browser.dom import element_lines, format_observation
 from netgent.browser.locators import capture_locator, durable_locator
@@ -54,6 +48,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+MAX_REPEAT = 3  # consecutive steps with an unchanged observation → declare stuck
 SETTLE_WATCH_S = 6.0
 # The same action on the same target, over and over, while the page keeps changing in
 # irrelevant ways (a video timer, live chat) defeats observation-equality stuck detection —
@@ -403,6 +398,29 @@ async def explore(
     if run_dir is not None:
         _write_trajectory(run_dir, traj)
     return traj
+
+
+
+def upload_path(ctx: ExplorerContext) -> str:
+    """The file offered to a file input: the caller's, else a sample created on demand."""
+    if ctx.upload_file is not None:
+        return str(ctx.upload_file)
+    sample = Path(tempfile.gettempdir()) / "netgent-upload-sample.txt"
+    if not sample.exists():
+        sample.write_text("netgent sample upload\n")
+    return str(sample)
+
+
+async def capture_screenshot(ctx: ExplorerContext, step: AgentStep) -> None:
+    """Best-effort per-step screenshot into the run dir (never fails the run)."""
+    if ctx.run_dir is None:
+        return
+    rel = f"screenshots/step-{step.n:02d}{f'-{step.item}' if step.item else ''}.png"
+    try:
+        await ctx.session.screenshot(ctx.run_dir / rel)
+        step.screenshot = rel
+    except Exception:  # noqa: BLE001 — a screenshot must never fail the run
+        pass
 
 
 def _write_trajectory(run_dir: Path, traj: AgentTrajectory) -> None:

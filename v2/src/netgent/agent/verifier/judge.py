@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from netgent.agent.explorer.agent import AgentTrajectory
+from netgent.agent.explorer.models import AgentTrajectory
 
 MAX_SCREENSHOTS = 3  # the final state and the two steps before it (browser-use judges from the final one)
 

@@ -9,7 +9,7 @@ import asyncio
 
 import pytest
 
-from netgent.agent import Agent, AgentDecision, FakeLLM
+from netgent.agent import AgentDecision, ExplorerAgent, ExplorerMemory, FakeLLM, explore
 from netgent.browser.dom import format_observation
 from netgent.browser.session import BrowserSession
 
@@ -55,7 +55,7 @@ def test_agent_completes_a_form_with_scripted_llm(form_url, tmp_path):
 
     async def _run():
         async with BrowserSession(headless=True) as s:
-            return await Agent(FakeLLM(script), run_dir=tmp_path / "traj").run(s, "fill the form", form_url)
+            return await ExplorerAgent(FakeLLM(script), run_dir=tmp_path / "traj").run(s, "fill the form", form_url)
 
     traj = asyncio.run(_run())
     assert traj.success, [(s.kind, s.error) for s in traj.steps]
@@ -71,7 +71,7 @@ def test_agent_stops_on_captcha_signal(form_url, tmp_path):
 
     async def _run():
         async with BrowserSession(headless=True) as s:
-            return await Agent(FakeLLM(script)).run(s, "do the thing", form_url)
+            return await ExplorerAgent(FakeLLM(script)).run(s, "do the thing", form_url)
 
     traj = asyncio.run(_run())
     assert not traj.success
@@ -84,7 +84,7 @@ def test_agent_detects_stuck_loop(form_url):
 
     async def _run():
         async with BrowserSession(headless=True) as s:
-            return await Agent(FakeLLM(script), max_steps=25).run(s, "scroll forever", form_url)
+            return await ExplorerAgent(FakeLLM(script), max_steps=25).run(s, "scroll forever", form_url)
 
     traj = asyncio.run(_run())
     assert not traj.success
@@ -122,7 +122,7 @@ def test_agent_sees_new_elements_starred_and_new_text_after_its_own_action(tmp_p
 
     async def _run():
         async with BrowserSession(headless=True) as s:
-            agent = Agent(Capturing(script))
+            agent = ExplorerAgent(Capturing(script))
             traj = await agent.run(s, "pick Canada", page.as_uri())
             return traj, agent.history
 
@@ -162,11 +162,11 @@ def test_agent_notices_a_transient_banner_that_appears_after_its_action(serve):
         AgentDecision(reasoning="saw success", done=True, success=True),
     ]
 
-    async def _run():
+    async def _run():  # the function API: explore() with an explicit memory (what ExplorerAgent.run wraps)
+        memory = ExplorerMemory()
         async with BrowserSession(headless=True) as s:
-            agent = Agent(FakeLLM(script))
-            traj = await agent.run(s, "submit and confirm", srv.url("/"))
-            return traj, agent.history
+            traj = await explore(s, "submit and confirm", llm=FakeLLM(script), memory=memory, url=srv.url("/"))
+            return traj, memory.history
 
     traj, history = asyncio.run(_run())
     assert any("dumbledore" in t for t in traj.texts_seen)
@@ -186,7 +186,7 @@ def test_agent_stops_after_repeating_the_same_futile_action(serve):
 
     async def _run():
         async with BrowserSession(headless=True) as s:
-            agent = Agent(FakeLLM(script), max_steps=12)
+            agent = ExplorerAgent(FakeLLM(script), max_steps=12)
             return await agent.run(s, "watch the video", srv.url("/")), agent.history
 
     traj, history = asyncio.run(_run())

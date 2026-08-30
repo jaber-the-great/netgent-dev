@@ -43,7 +43,7 @@ netgent run workflow.yaml --param name=value        # deterministic, zero LLM
 | `schema/` | pydantic artifact models: workflow, actions, triggers, control (`Branch`/`Repeat`/`Interrupt`/`Param`), records |
 | `browser/` | the Playwright layer, split by role: `pw.py` (the single Playwright/Patchright import, `PATCHED_BROWSER`), `profile.py` (`BrowserProfile`: real Chrome, nothing spoofed), `factory.py` (launch → context → page → CDP, client-hints repair; capture hooks in here), `session.py` (`BrowserSession` facade), `resolution.py` (locator chains), `actions.py` (dispatch), `triggers.py` (state conditions, polling), `dom/` (`models.py`, `observer.py` — snapshot across frames/shadow DOM, `serializer.py` — the observation text the agent reads, `closed_shadow.py` — closed roots over CDP, `scripts/*.js` — the injected walker) |
 | `executor/` | control-program interpreter + parameter resolution (static + page-extracted, with guards) |
-| `agent/` | the compile-time agents, one package each: `explorer/` (one `Agent`: LangGraph observe→decide→act loop, observation, prompt), `generator/` (trajectories → NFA), `validator/` (zero-LLM replay check); `orchestrator.py` chains them (the entry behind `netgent generate`, itself a LangGraph); shared LLM seam in `llm.py` |
+| `agent/` | the compile-time agents, one package each: `explorer/` (functions + one compiled LangGraph: `graph.py` observe→decide→act nodes, `create_explorer_agent()`/`EXPLORER`, `explore()`; `context.py` the per-run `ExplorerContext`, `memory.py` the cross-run `ExplorerMemory`, `agent.py` the thin `ExplorerAgent` façade, `models.py` the values, plus decision/prompt/actions), `generator/` (trajectories → NFA), `validator/` (zero-LLM replay check); `orchestrator.py` chains them (the entry behind `netgent generate`, itself a LangGraph); shared LLM seam in `llm.py` |
 | `cli/` | Typer commands: `run`, `generate`, `agent`, `trajectory`, `schema`, `doctor`, and the `eval` group (`dataset`, `observation`, `stress`, `matrix`) |
 | `evals/` | the runners behind `netgent eval` — importable functions returning rows/markdown, no `sys.exit`; results land in `v2/evals/results/<eval>/` |
 | `core/` | settings (pydantic-settings, `.env`), errors, logger |
@@ -82,6 +82,9 @@ Reinstall on a fresh clone: `npx skills add langchain-ai/langchain-skills --skil
 (or clone the repo and run `./install.sh --yes <this-dir>`).
 
 NetGent uses LangChain for the model seam (`init_chat_model` + `with_structured_output` in
-`agent/llm.py`) and **LangGraph for the browser agent's loop** (`agent/graph.py`: a `StateGraph`
-observe → decide → act with `Command` routing).
-Keep LangChain/LangGraph usage inside `agent/`, imported lazily, behind the `LLM` protocol.
+`agent/llm.py`) and **LangGraph for the browser agent's loop** (`agent/explorer/graph.py`: a
+`StateGraph` observe → decide → act with `Command` routing, compiled once at import as `EXPLORER`;
+the live session/LLM/memory travel as `Runtime[ExplorerContext]`, never in state — see
+`v2/docs/research/langgraph-agent-structure.md`).
+Keep LangChain/LangGraph usage inside `agent/`, behind the `LLM` protocol; only `explorer/graph.py` may
+import langgraph at module level, and nothing in `netgent.agent.__init__` imports it eagerly.
