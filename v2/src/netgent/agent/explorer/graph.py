@@ -19,7 +19,8 @@ import os
 from typing import Annotated, Any, Literal, TypedDict
 
 from netgent.agent.explorer.actions import to_action
-from netgent.agent.explorer.agent import MAX_REPEAT, Agent, AgentStep, StepRecord
+from netgent.agent.explorer.agent import MAX_REPEAT, Agent, AgentStep, StepRecord, capture_screenshot, upload_path
+from netgent.agent.explorer.context import ExplorerContext
 from netgent.agent.explorer.decision import TERMINATES_BATCH
 from netgent.agent.explorer.prompt import build_system_prompt
 from netgent.browser.dom import element_lines, format_observation
@@ -97,19 +98,20 @@ def build_agent_graph(
     from langgraph.graph import END, START, StateGraph  # lazy: the `generate` extra
     from langgraph.types import Command
 
-    history = agent.history  # shared across runs (sweeps), mutated in place
-    llm = agent.llm
-    allowed = agent.allowed_kinds
-    max_actions = agent.max_actions_per_step
-    system_prompt = build_system_prompt(allowed, max_actions)
+    ctx = ExplorerContext(
+        session=session, llm=agent.llm, memory=agent.memory, task=task, max_steps=max_steps,
+        frame_filter=frame_filter, allowed_kinds=agent.allowed_kinds,
+        max_actions_per_step=agent.max_actions_per_step, run_dir=agent._run_dir, upload_file=agent._upload_file,
+    )
+    system_prompt = build_system_prompt(ctx.allowed_kinds, ctx.max_actions_per_step)
 
     async def observe(state: AgentState) -> Command[Literal["decide", "__end__"]]:
         n = state.get("n", 0) + 1
-        if n > max_steps:
-            return Command(update={"stopped_reason": f"reached max_steps={max_steps}"}, goto=END)
-        snapshot = await session.snapshot()
-        if frame_filter is not None:  # focus on one form (iframe) for a sweep
-            snapshot = snapshot.scoped_to(frame_filter)
+        if n > ctx.max_steps:
+            return Command(update={"stopped_reason": f"reached max_steps={ctx.max_steps}"}, goto=END)
+        snapshot = await ctx.session.snapshot()
+        if ctx.frame_filter is not None:  # focus on one form (iframe) for a sweep
+            snapshot = snapshot.scoped_to(ctx.frame_filter)
         # The diff-free rendering is what stuck detection compares; the model gets the diffed
         # one only with NETGENT_OBS_DIFF=1 — OFF by default, by measurement: the `*` markers and
         # new-text section (with the memory fields) cost +45% calls on the 21-form sweep for a
@@ -162,21 +164,22 @@ def build_agent_graph(
         # Text the settle watcher caught after the last action that has since VANISHED (still
         # visible text is already in the observation): tell the model before it decides.
         seen = list(state.get("texts_seen") or [])
-        gone = [t for t in agent.drain_noticed() if t not in (state.get("prev_texts") or set())]
+        gone = [t for t in ctx.memory.drain_noticed() if t not in (state.get("prev_texts") or set())]
         if gone:
             seen += [t for t in gone if t not in seen]
-            history.append(StepRecord(
+            ctx.memory.history.append(StepRecord(
                 n=n, kind="note",
                 note=f"{n}. appeared after your previous action and has since vanished: "
                 + " | ".join(t[:120] for t in gone[:6]),
             ))
         try:
-            decision = await llm.decide(
-                system_prompt, task, state["observation"], history, allowed_kinds=allowed, max_actions=max_actions
+            decision = await ctx.llm.decide(
+                system_prompt, ctx.task, state["observation"], ctx.memory.history,
+                allowed_kinds=ctx.allowed_kinds, max_actions=ctx.max_actions_per_step,
             )
         except Exception as exc:  # noqa: BLE001 — a bad LLM response shouldn't crash the run
             logger.warning("step %d: LLM decision failed: %s", n, exc)
-            history.append(StepRecord(n=n, kind="invalid", outcome="invalid", error=str(exc)[:200],
+            ctx.memory.history.append(StepRecord(n=n, kind="invalid", outcome="invalid", error=str(exc)[:200],
                                       reasoning="(your last response was invalid) — return a valid decision"))
             # not a no-change step
             return Command(update={"prev_observation": None, "texts_seen": seen[-400:]}, goto="observe")
@@ -203,7 +206,7 @@ def build_agent_graph(
         snapshot's indices mean nothing). A failed item aborts the remainder; the model is told
         which items did not run."""
         n, decision, snapshot = state["n"], state["decision"], state["snapshot"]
-        items = decision.actions()[:max_actions]
+        items = decision.actions()[:ctx.max_actions_per_step]
         steps: list[AgentStep] = []
         seen = list(state.get("texts_seen") or [])
         known = set(seen) | {t.text for t in snapshot.texts}
@@ -213,19 +216,19 @@ def build_agent_graph(
         repeat = state.get("repeat_count", 0) + 1 if key and key == state.get("last_action_key") else 1
         if repeat >= REPEAT_STOP:
             reason = f"stuck: repeated the same action {repeat} times ({first.kind} on element {first.index})"
-            stop = AgentStep(n=n, kind="done", reasoning=reason, url=session.page.url, error=reason)
+            stop = AgentStep(n=n, kind="done", reasoning=reason, url=ctx.session.page.url, error=reason)
             return Command(update={"steps": [stop], "stopped_reason": reason, "texts_seen": seen[-400:]}, goto=END)
         if repeat >= REPEAT_NUDGE:
-            history.append(StepRecord(
+            ctx.memory.history.append(StepRecord(
                 n=n, kind="note",
                 note=f"{n}. you have now issued the SAME action {repeat} times ({first.kind} on [{first.index}]) "
                 "and the goal is still not reached — it is not working. Do something different, or if the "
-                "task's outcome is already visible, declare done.",
+                "ctx.task's outcome is already visible, declare done.",
             ))
         for i, item in enumerate(items):
             if i > 0:
-                if session.page.url != steps[-1].url or session.page.url != snapshot.url:
-                    history.append(StepRecord(
+                if ctx.session.page.url != steps[-1].url or ctx.session.page.url != snapshot.url:
+                    ctx.memory.history.append(StepRecord(
                         n=n, kind="note", note=f"{n}. page changed after action {i}: {len(items) - i} queued "
                         "action(s) were skipped — decide again from the new observation",
                     ))
@@ -234,14 +237,15 @@ def build_agent_graph(
             action = None
             note = None
             try:
-                if item.kind not in allowed:
+                if item.kind not in ctx.allowed_kinds:
                     raise ValueError(
-                        f"{item.kind} is not available in this task; use one of {', '.join(sorted(allowed))}"
+                        f"{item.kind} is not available in this task; use one of "
+                        f"{', '.join(sorted(ctx.allowed_kinds))}"
                     )
-                upload = agent.upload_path() if item.kind == "upload" else None
+                upload = upload_path(ctx) if item.kind == "upload" else None
                 # Verified per item, against the live page: items 2..k run after the page may
                 # have re-rendered, so the R1/R4 check must not reuse item 1's probe.
-                locator_for, note = await _verified_locator(session, snapshot, item.index)
+                locator_for, note = await _verified_locator(ctx.session, snapshot, item.index)
                 action = to_action(item, snapshot, upload_path=upload, locator_for=locator_for)
                 # Carry the closed-shadow capability flag from the chosen element onto the action,
                 # so a plain-Playwright replayer refuses instead of timing out (R8).
@@ -252,37 +256,37 @@ def build_agent_graph(
                 if isinstance(action, WaitAction):
                     # Watch WHILE waiting: the dwell is exactly when a banner comes and goes.
                     watch = asyncio.create_task(
-                        _watch_texts(session, known, action.seconds, agent.noticed, frame_filter)
+                        _watch_texts(ctx.session, known, action.seconds, ctx.memory.noticed, ctx.frame_filter)
                     )
                     try:
-                        await session.dispatch(action)
+                        await ctx.session.dispatch(action)
                     finally:
                         watch.cancel()
                         await asyncio.gather(watch, return_exceptions=True)
-                    during = agent.drain_noticed()
+                    during = ctx.memory.drain_noticed()
                     if during:
                         seen += [t for t in during if t not in seen]
-                        history.append(StepRecord(
+                        ctx.memory.history.append(StepRecord(
                             n=n, kind="note",
                             note=f"{n}. appeared on the page during the wait: "
                             + " | ".join(t[:120] for t in during[:6]),
                         ))
                 else:
-                    await session.dispatch(action)
+                    await ctx.session.dispatch(action)
             except (ExecutionError, ValueError) as exc:
                 error = str(exc)
                 logger.warning("step %d.%d failed: %s", n, i, error)
 
             step = AgentStep(
-                n=n, item=i, kind=item.kind or "", reasoning=decision.reasoning, url=session.page.url, error=error,
+                n=n, item=i, kind=item.kind or "", reasoning=decision.reasoning, url=ctx.session.page.url, error=error,
                 param=item.param or None,
                 evaluation=decision.evaluation, memory=decision.memory, next_goal=decision.next_goal,
             )
             if error is None:
                 step.action = action  # the compilable record of what actually ran
                 step.locator_check = note
-                step.dialogs = session.dialogs_since_last_action()  # THIS item's own dialogs (per item)
-            await agent.capture_screenshot(session, step)
+                step.dialogs = ctx.session.dialogs_since_last_action()  # THIS item's own dialogs (per item)
+            await capture_screenshot(ctx, step)
             steps.append(step)
             # Feed outcomes back so the agent recovers instead of repeating itself.
             record = StepRecord(
@@ -294,10 +298,10 @@ def build_agent_graph(
             )
             if error is None and isinstance(action, WaitAction):
                 record.outcome, record.error = "waited", f"you already watched/waited {action.seconds:g}s"
-            history.append(record)
+            ctx.memory.history.append(record)
             if error is not None:
                 if i + 1 < len(items):
-                    history.append(StepRecord(
+                    ctx.memory.history.append(StepRecord(
                         n=n, kind="note", note=f"{n}. action {i + 1} failed, so {len(items) - i - 1} queued "
                         "action(s) were skipped",
                     ))
@@ -306,8 +310,10 @@ def build_agent_graph(
                 break
         # Keep sampling while the next observation is rendered and the model decides.
         if steps and steps[-1].error is None and not isinstance(steps[-1].action, WaitAction):
-            agent.start_watch(_watch_texts(session, known, SETTLE_WATCH_S, agent.noticed, frame_filter))
-        drained = agent.drain_noticed()
+            ctx.memory.start_watch(
+                _watch_texts(ctx.session, known, SETTLE_WATCH_S, ctx.memory.noticed, ctx.frame_filter)
+            )
+        drained = ctx.memory.drain_noticed()
         seen += [t for t in drained if t not in seen]
         return Command(
             update={"steps": steps, "texts_seen": seen[-400:], "last_action_key": key, "repeat_count": repeat},

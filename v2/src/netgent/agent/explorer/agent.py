@@ -23,6 +23,7 @@ from netgent.core.logger import get_logger
 from netgent.schema.actions import Action, GotoAction
 
 if TYPE_CHECKING:  # llm.py imports StepRecord from here; keep the cycle type-only
+    from netgent.agent.explorer.context import ExplorerContext
     from netgent.agent.llm import LLM
 
 logger = get_logger(__name__)
@@ -118,6 +119,28 @@ class AgentTrajectory(BaseModel):
     steps: list[AgentStep] = Field(default_factory=list)
 
 
+def upload_path(ctx: "ExplorerContext") -> str:
+    """The file offered to a file input: the caller's, else a sample created on demand."""
+    if ctx.upload_file is not None:
+        return str(ctx.upload_file)
+    sample = Path(tempfile.gettempdir()) / "netgent-upload-sample.txt"
+    if not sample.exists():
+        sample.write_text("netgent sample upload\n")
+    return str(sample)
+
+
+async def capture_screenshot(ctx: "ExplorerContext", step: AgentStep) -> None:
+    """Best-effort per-step screenshot into the run dir (never fails the run)."""
+    if ctx.run_dir is None:
+        return
+    rel = f"screenshots/step-{step.n:02d}{f'-{step.item}' if step.item else ''}.png"
+    try:
+        await ctx.session.screenshot(ctx.run_dir / rel)
+        step.screenshot = rel
+    except Exception:  # noqa: BLE001 — a screenshot must never fail the run
+        pass
+
+
 class Agent:
     def __init__(
         self,
@@ -175,25 +198,6 @@ class Agent:
     def note(self, text: str) -> None:
         """See ExplorerMemory.note."""
         self.memory.note(text)
-
-    def upload_path(self) -> str:
-        if self._upload_file is None:
-            sample = Path(tempfile.gettempdir()) / "netgent-upload-sample.txt"
-            if not sample.exists():
-                sample.write_text("netgent sample upload\n")
-            self._upload_file = sample
-        return str(self._upload_file)
-
-    async def capture_screenshot(self, session: BrowserSession, step: AgentStep) -> None:
-        """Best-effort per-step screenshot into the run dir (never fails the run)."""
-        if self._run_dir is None:
-            return
-        rel = f"screenshots/step-{step.n:02d}{f'-{step.item}' if step.item else ''}.png"
-        try:
-            await session.screenshot(self._run_dir / rel)
-            step.screenshot = rel
-        except Exception:  # noqa: BLE001 — a screenshot must never fail the run
-            pass
 
     async def run(
         self,
