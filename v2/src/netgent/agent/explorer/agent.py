@@ -20,7 +20,7 @@ from netgent.agent.explorer.decision import ALL_KINDS, DEFAULT_KINDS, MAX_BATCH
 from netgent.agent.explorer.memory import FOLD_MIN_STEPS, MAX_FOLDS, ExplorerMemory  # noqa: F401 — re-exported
 from netgent.browser.session import BrowserSession
 from netgent.core.logger import get_logger
-from netgent.schema.actions import Action, GotoAction
+from netgent.schema.actions import Action
 
 if TYPE_CHECKING:  # llm.py imports StepRecord from here; keep the cycle type-only
     from netgent.agent.explorer.context import ExplorerContext
@@ -207,43 +207,10 @@ class Agent:
         frame_filter: list[str] | None = None,
         max_steps: int | None = None,
     ) -> AgentTrajectory:
-        from netgent.agent.explorer.graph import build_agent_graph  # lazy: langgraph is in the `generate` extra
+        from netgent.agent.explorer.graph import explore  # lazy: langgraph is in the `generate` extra
 
-        traj = AgentTrajectory(task=task)
-        dialog_mark = len(session.dialogs_seen())  # only THIS run's dialogs are its evidence
-        if url:
-            await session.page.goto(url)
-            # Record the starting navigation as a real step, so a compiled workflow
-            # begins with this goto instead of assuming an already-open page.
-            traj.steps.append(
-                AgentStep(n=0, kind="goto", reasoning="starting URL", url=session.page.url, action=GotoAction(url=url))
-            )
-
-        budget = max_steps or self._max_steps
-        graph = build_agent_graph(self, session, task, frame_filter=frame_filter, max_steps=budget)
-        # Each loop iteration is up to three graph steps (observe, decide, act); the
-        # recursion limit is a backstop above the agent's own step budget, never the cap.
-        final = await graph.ainvoke({"steps": []}, config={"recursion_limit": 3 * budget + 8})
-
-        traj.steps.extend(final.get("steps", []))
-        traj.success = bool(final.get("success", False))
-        traj.stopped_reason = final.get("stopped_reason", "")
-        self.stop_watch()
-        traj.texts_seen = list(final.get("texts_seen") or [])
-        traj.texts_seen += [t for t in self.drain_noticed() if t not in traj.texts_seen]
-        try:  # the final page, for the verifier — scoped like the run was
-            from netgent.browser.dom import format_observation
-
-            snap = await session.snapshot()
-            if frame_filter is not None:
-                snap = snap.scoped_to(frame_filter)
-            traj.final_observation = format_observation(snap)
-            traj.final_url = snap.url
-        except Exception:  # noqa: BLE001 — a page mid-navigation: leave the evidence empty
-            pass
-        traj.dialogs = list(session.dialogs_seen())[dialog_mark:]
-
-        if self._run_dir is not None:
-            self._run_dir.mkdir(parents=True, exist_ok=True)
-            (self._run_dir / "trajectory.json").write_text(traj.model_dump_json(indent=2) + "\n")
-        return traj
+        return await explore(
+            session, task, llm=self.llm, memory=self.memory, url=url, frame_filter=frame_filter,
+            max_steps=max_steps or self._max_steps, run_dir=self._run_dir, allowed_kinds=self.allowed_kinds,
+            max_actions_per_step=self.max_actions_per_step, upload_file=self._upload_file,
+        )
