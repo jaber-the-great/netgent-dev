@@ -14,6 +14,10 @@ FORBIDDEN = {
     "netgent.browser": ["langchain", "langgraph", "langchain_core"],
     "netgent.executor": ["langchain", "langgraph", "langchain_core"],
     "netgent.report": ["playwright", "langchain", "langgraph", "langchain_core"],
+    # The agent package promises to load without the `generate` extra: langchain stays inside
+    # LangChainLLM, langgraph inside the graph modules (explorer/graph.py is the only module-level
+    # importer, resolved lazily from the package).
+    "netgent.agent": ["langchain", "langgraph", "langchain_core"],
 }
 
 
