@@ -4,21 +4,18 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any
 
 from netgent.agent.explorer.decision import ALL_KINDS, DEFAULT_KINDS, MAX_BATCH
 from netgent.agent.explorer.memory import ExplorerMemory
 from netgent.browser.session import BrowserSession
-
-if TYPE_CHECKING:
-    from netgent.agent.llm import LLM
 
 
 @dataclass(frozen=True, slots=True)
 class ExplorerContext:
     # Run dependencies — LangGraph's own words for this slot (langgraph/runtime.py:199-201).
     session: BrowserSession
-    llm: "LLM"
+    llm: Any  # an `LLM` (the seam, v1) or a chat model (explorer_v2); Any so pydantic can build tool schemas
     memory: ExplorerMemory
     task: str
     # Knobs.

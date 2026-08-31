@@ -7,6 +7,8 @@ time, and VERIFIES success by looking for a success marker in that form's own te
 agent's self-report. NetGent's philosophy: deterministic orchestration, verified outcomes.
 """
 
+import os
+
 from pydantic import BaseModel, Field
 
 from netgent.agent.explorer.agent import ExplorerAgent
@@ -45,6 +47,7 @@ class SweepResult(BaseModel):
     total: int = 0
     submitted: int = 0
     forms: list[FormResult] = Field(default_factory=list)
+    usage: dict[str, int] | None = None  # the v2 arm's token totals (v1 reports through the LLM seam)
 
 
 async def _form_frame_paths(session: BrowserSession) -> list[list[str]]:
@@ -118,9 +121,7 @@ async def sweep_forms(
         from pathlib import Path
 
         run_dir = Path(tempfile.mkdtemp(prefix="netgent-sweep-"))
-    agent = ExplorerAgent(
-        llm, max_steps=max_steps_per_form, max_actions_per_step=max_actions_per_step, run_dir=run_dir
-    )
+    agent = _explorer(llm, max_steps=max_steps_per_form, max_actions_per_step=max_actions_per_step, run_dir=run_dir)
     for i, frame_path in enumerate(frame_paths):
         verified = False
         traj = None
@@ -160,4 +161,18 @@ async def sweep_forms(
         result.submitted += int(verified)
         logger.info("sweep: form %d/%d %s", i + 1, len(frame_paths), "OK" if verified else "not verified")
 
+    result.usage = getattr(agent, "usage", None) if explorer_arm() == "v2" else None
     return result
+
+
+def explorer_arm() -> str:
+    """NETGENT_EXPLORER=v2 runs the sweep on the create_agent explorer (agent/explorer_v2); default v1."""
+    return os.getenv("NETGENT_EXPLORER", "v1")
+
+
+def _explorer(llm: LLM, **knobs):
+    if explorer_arm() == "v2":
+        from netgent.agent.explorer_v2 import ExplorerAgent as ExplorerAgentV2
+
+        return ExplorerAgentV2(getattr(llm, "_chat", llm), **knobs)  # v2 drives the chat model directly
+    return ExplorerAgent(llm, **knobs)

@@ -119,9 +119,10 @@ async def run_sweep(
         result = await sweep_forms(
             s, llm, max_steps_per_form=max_steps, retries=1, max_actions_per_step=_max_actions(), judge=_judge()
         )
-    usage = getattr(llm, "usage", None)
+    usage = result.usage or getattr(llm, "usage", None)
     return {
         "kind": "sweep",
+        "explorer": __import__("netgent.evals.sweep", fromlist=["explorer_arm"]).explorer_arm(),
         "backend": backend,
         "model": model,
         "max_steps_per_form": max_steps,
