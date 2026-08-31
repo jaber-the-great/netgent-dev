@@ -56,3 +56,13 @@ def test_orchestrator_nests_both_the_explorer_and_the_verifier():
     assert sorted(name for name, _ in pipeline.get_subgraphs()) == ["explore", "verify"]
     xray = pipeline.get_graph(xray=True).draw_mermaid()
     assert "subgraph verify" in xray and "gather(gather)" in xray and "judge(judge)" in xray
+
+
+def test_verifier_agent_facade_delegates_to_verify():
+    from netgent.agent.verifier import VerifierAgent
+
+    with pytest.raises(ValueError, match="max_screenshots"):
+        VerifierAgent(FakeLLM([]), max_screenshots=-1)
+    llm = FakeLLM([], verdicts=[Verdict(achieved=False, unmet=["x"])])
+    verdict = asyncio.run(VerifierAgent(llm).run(_traj(), "submit the form", params={"who": "Ada"}))
+    assert verdict.unmet == ["x"] and "${who} = 'Ada'" in llm.judged[0][0]["text"]

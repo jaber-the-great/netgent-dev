@@ -1,5 +1,5 @@
 """The compile-time agents (the LLM side): the explorer's observe → decide → act loop, the
-generator, the validator, the verifier, and the orchestrator that chains them.
+planner, the verifier, the generator, and the orchestrator that chains them.
 
 Imports LLM SDKs (langchain) lazily inside LangChainLLM and langgraph only inside the graph
 modules, so importing this package does not require the `netgent[generate]` extra until a

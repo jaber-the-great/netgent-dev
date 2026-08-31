@@ -1,5 +1,5 @@
 """`netgent generate` — the compile step, run by the orchestrator:
-explore (LLM agent) → generate (trajectory → NFA) → validate (zero-LLM replay)."""
+explore (LLM agent) → verify (LLM judge, advisory) → generate (trajectory → NFA)."""
 
 import asyncio
 from pathlib import Path
@@ -34,14 +34,11 @@ def generate(
     max_actions: Annotated[
         int, typer.Option(help="Atomic actions one decision may batch (1-4; each is still one transition).")
     ] = 1,
-    validate: Annotated[
-        bool, typer.Option("--validate/--no-validate", help="Replay the compiled workflow with zero LLM calls.")
-    ] = True,
     judge: Annotated[
         bool, typer.Option("--judge/--no-judge", help="LLM judge of the exploration from page evidence (advisory).")
     ] = True,
 ) -> None:
-    """Explore the task with the agent, compile its trajectory into a workflow, validate it."""
+    """Explore the task with the agent, judge the run from page evidence, compile it into a workflow."""
 
     try:
         from netgent.agent import make_llm
@@ -63,12 +60,11 @@ def generate(
         headless=headless,
         out=out,
         trajectory_dir=trajectory_dir,
-        validate_replay=validate,
         judge=judge,
     )
     llm = make_llm(model or get_settings().generator_model)
 
-    colors = {"explore": None, "verify": "yellow", "generate": "cyan", "validate": "magenta"}
+    colors = {"explore": None, "verify": "yellow", "generate": "cyan"}
 
     def listen(stage: str, text: str) -> None:
         fg = "red" if "FAILED" in text or "failed" in text else colors[stage]
@@ -82,5 +78,5 @@ def generate(
     if result.error:
         typer.secho(f"✗ {result.error}", bold=True, fg="red", err=True)
         raise typer.Exit(1)
-    if result.report is not None:
-        typer.secho("✓ validated: every edge replayed with zero LLM calls", bold=True, fg="green")
+    if result.workflow is not None:
+        typer.secho("✓ compiled", bold=True, fg="green")

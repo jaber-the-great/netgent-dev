@@ -1,17 +1,16 @@
 """The orchestrator: NetGent's entry point that chains the agents into the pipeline.
 
-    START → explore → generate → validate → END
+    START → explore → verify → generate → END
                │          │
-               └─ failed ─┴───────────────► END
+               └─ failed ─┴─ not achieved (retries spent) ► END
 
 One LangGraph StateGraph, one node per agent:
-- explore  (explorer)            LLM drives the browser; output: a trajectory
+- explore  (explorer)  LLM drives the browser; output: a trajectory
+- verify   (verifier)  LLM judge from page evidence (advisory); may re-explore
 - generate (generator) pure code; output: the workflow (NFA) artifact
-- validate (validator)         zero-LLM replay; output: a per-edge report
 
-`orchestrate()` is what `netgent generate` calls. Each stage opens its own fresh browser
-session, so exploration state can never leak into validation. The agents stay independent
-modules — the orchestrator is the only place that knows the order they run in.
+`orchestrate()` is what `netgent generate` calls. The agents stay independent modules — the
+orchestrator is the only place that knows the order they run in.
 """
 
 from collections.abc import Callable
@@ -23,14 +22,13 @@ from pydantic import BaseModel, Field
 from netgent.agent.explorer.models import AgentTrajectory
 from netgent.agent.generator.compiler import compile_trajectory
 from netgent.agent.llm import LLM
-from netgent.agent.validator.validate import ValidationReport, validate_workflow
 from netgent.browser.session import BrowserSession
 from netgent.core.logger import get_logger
 from netgent.schema.workflow import Workflow, dump_workflow
 
 logger = get_logger(__name__)
 
-Stage = Literal["explore", "verify", "generate", "validate"]
+Stage = Literal["explore", "verify", "generate"]
 Listener = Callable[[Stage, str], None]  # (stage, human-readable event) → for CLI progress
 
 
@@ -49,10 +47,9 @@ class GenerateRequest(BaseModel):
     headless: bool = True
     out: Path | None = None  # write the artifact here (yaml/json by suffix)
     trajectory_dir: Path | None = None
-    validate_replay: bool = True  # run the validation agent after generating
     # The verifier: an LLM judge of the exploration from page evidence (agent/verifier). Advisory —
     # a "not achieved" re-explores (up to `verify_retries` more times, with the unmet points
-    # appended to the task); "achieved" proceeds but never replaces the replay validation.
+    # appended to the task); "achieved" proceeds to generation.
     judge: bool = True
     verify_retries: int = 1
 
@@ -62,13 +59,8 @@ class GenerateResult(BaseModel):
 
     trajectory: AgentTrajectory | None = None
     workflow: Workflow | None = None
-    report: ValidationReport | None = None
     verdict: Any = None  # the verifier's Verdict (None when judging is off)
     error: str | None = None  # set when a stage stopped the pipeline
-
-    @property
-    def validated(self) -> bool:
-        return self.report is not None and self.report.validated
 
 
 class OrchestrationState(TypedDict, total=False):
@@ -77,12 +69,11 @@ class OrchestrationState(TypedDict, total=False):
     attempt: int  # exploration attempts so far (the verifier may ask for another)
     task_suffix: str  # what the verifier found unmet, appended to the task on re-exploration
     workflow: Any
-    report: Any
     error: str
 
 
 def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener | None = None):
-    """Compile the explore → generate → validate graph bound to one request."""
+    """Compile the explore → verify → generate graph bound to one request."""
     from langgraph.graph import END, START, StateGraph  # lazy: the `generate` extra
     from langgraph.types import Command
 
@@ -174,7 +165,7 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
             goto=END,
         )
 
-    async def generate(state: OrchestrationState) -> Command[Literal["validate", "__end__"]]:
+    async def generate(state: OrchestrationState) -> Command[Literal["__end__"]]:
         warnings: list[str] = []
         wf = compile_trajectory(state["trajectory"], name=req.name, params=req.params, warnings=warnings)
         if req.out is not None:
@@ -184,38 +175,25 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
             emit("generate", f"WARNING: {w}")
         for p in wf.params:
             emit("generate", f"param {p.name} (default: {p.default!r})")
-        return Command(update={"workflow": wf}, goto="validate" if req.validate_replay else END)
-
-    async def validate(state: OrchestrationState) -> Command[Literal["__end__"]]:
-        emit("validate", "zero-LLM replay with defaults")
-        report = await validate_workflow(state["workflow"], headless=req.headless)
-        for r in report.replays:
-            verdict = f"replay ok ({r.edges_ok} edges)" if r.success else f"replay FAILED at {r.failed_edge}: {r.error}"
-            emit("validate", verdict)
-        update: dict[str, Any] = {"report": report}
-        if not report.validated:
-            update["error"] = "artifact written but did not replay cleanly"
-        return Command(update=update, goto=END)
+        return Command(update={"workflow": wf}, goto=END)
 
     return (
         StateGraph(OrchestrationState)
         .add_node("explore", explore)
         .add_node("verify", verify)
         .add_node("generate", generate)
-        .add_node("validate", validate)
         .add_edge(START, "explore")
         .compile()
     )
 
 
 async def orchestrate(req: GenerateRequest, llm: LLM, listen: Listener | None = None) -> GenerateResult:
-    """Run the pipeline: explore → generate → validate. The entry point behind `netgent generate`."""
+    """Run the pipeline: explore → verify → generate. The entry point behind `netgent generate`."""
     graph = build_orchestration_graph(req, llm, listen)
     final = await graph.ainvoke({})
     return GenerateResult(
         trajectory=final.get("trajectory"),
         workflow=final.get("workflow"),
-        report=final.get("report"),
         verdict=final.get("verdict"),
         error=final.get("error"),
     )

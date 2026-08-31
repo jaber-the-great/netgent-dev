@@ -1,4 +1,4 @@
-"""The orchestrator chains explore → generate → validate on a local fixture with a scripted LLM."""
+"""The orchestrator chains explore → verify → generate on a local fixture with a scripted LLM."""
 
 import asyncio
 
@@ -12,7 +12,7 @@ FIXTURE = """<!doctype html><html><head><title>Hello</title></head><body>
 </body></html>"""
 
 
-def test_orchestrate_explores_generates_and_validates(tmp_path):
+def test_orchestrate_explores_verifies_and_generates(tmp_path):
     page = tmp_path / "p.html"
     page.write_text(FIXTURE)
     llm = FakeLLM(
@@ -39,8 +39,8 @@ def test_orchestrate_explores_generates_and_validates(tmp_path):
     # the explorer was TOLD the sample values (else it cannot use them and nothing abstracts)
     assert "${who} = 'Ada'" in result.trajectory.task and result.trajectory.task.startswith(req.task)
     assert (tmp_path / "hello.yaml").is_file()
-    assert result.validated, [(r.failed_edge, r.error) for r in result.report.replays]
-    assert [s for s, _ in events][0] == "explore" and "validate" in {s for s, _ in events}
+    assert result.verdict is not None and result.verdict.achieved  # FakeLLM's default verdict
+    assert [s for s, _ in events][0] == "explore" and {s for s, _ in events} == {"explore", "verify", "generate"}
 
 
 def test_orchestrate_stops_when_exploration_fails(tmp_path):
@@ -51,7 +51,7 @@ def test_orchestrate_stops_when_exploration_fails(tmp_path):
     result = asyncio.run(orchestrate(req, llm))
 
     assert result.error and "exploration failed" in result.error
-    assert result.workflow is None and result.report is None  # generate/validate never ran
+    assert result.workflow is None and result.verdict is None  # verify/generate never ran
     assert not (tmp_path / "never.yaml").exists()
 
 
@@ -76,7 +76,7 @@ def test_verifier_reexplores_once_when_the_judge_says_not_achieved(tmp_path):
                           params={"who": "Ada"}, out=tmp_path / "hello.yaml")
     result = asyncio.run(orchestrate(req, llm, lambda stage, text: events.append((stage, text))))
 
-    assert result.error is None and result.validated
+    assert result.error is None and result.workflow is not None
     assert result.verdict is not None and result.verdict.achieved
     assert [s for s, _ in events].count("verify") >= 2  # judged twice
     assert result.trajectory.task.endswith("before declaring done.")  # the retry carried the unmet points

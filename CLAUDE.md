@@ -20,7 +20,7 @@ atomic steps. Control flow is a bounded regular expression (`control_sequence`, 
 
 ```
 netgent generate "<task>" --url … -p name=sample [--runs N --variation name=value]
-   explore (LLM agent, N runs)  →  synthesize (pure code: one NFA)  →  validate (zero-LLM replay)
+   explore (LLM agent, N runs)  →  verify (LLM judge, advisory)  →  synthesize (pure code: one NFA)
 netgent run workflow.yaml --param name=value        # deterministic, zero LLM
 ```
 
@@ -43,7 +43,7 @@ netgent run workflow.yaml --param name=value        # deterministic, zero LLM
 | `schema/` | pydantic artifact models: workflow, actions, triggers, control (`Branch`/`Repeat`/`Interrupt`/`Param`), records |
 | `browser/` | the Playwright layer, split by role: `pw.py` (the single Playwright/Patchright import, `PATCHED_BROWSER`), `profile.py` (`BrowserProfile`: real Chrome, nothing spoofed), `factory.py` (launch → context → page → CDP, client-hints repair; capture hooks in here), `session.py` (`BrowserSession` facade), `resolution.py` (locator chains), `actions.py` (dispatch), `triggers.py` (state conditions, polling), `dom/` (`models.py`, `observer.py` — snapshot across frames/shadow DOM, `serializer.py` — the observation text the agent reads, `closed_shadow.py` — closed roots over CDP, `scripts/*.js` — the injected walker) |
 | `executor/` | control-program interpreter + parameter resolution (static + page-extracted, with guards) |
-| `agent/` | the compile-time agents, one package each: `explorer/` (functions + one compiled LangGraph: `graph.py` observe→decide→act nodes, `create_explorer_agent()`/`EXPLORER`, `explore()`; `context.py` the per-run `ExplorerContext`, `memory.py` the cross-run `ExplorerMemory`, `agent.py` the thin `ExplorerAgent` façade, `models.py` the values, plus decision/prompt/actions), `generator/` (trajectories → NFA), `verifier/` (LLM judge from page evidence, same layout: `graph.py` gather→judge, `VERIFIER`, `verify()`; `context.py`, `models.py`, `prompt.py`), `validator/` (zero-LLM replay check); `orchestrator.py` chains them (the entry behind `netgent generate`, itself a LangGraph); shared LLM seam in `llm.py` |
+| `agent/` | the compile-time agents, one package each: `explorer/` (functions + one compiled LangGraph: `graph.py` observe→decide→act nodes, `create_explorer_agent()`/`EXPLORER`, `explore()`; `context.py` the per-run `ExplorerContext`, `memory.py` the cross-run `ExplorerMemory`, `agent.py` the thin `ExplorerAgent` façade, `models.py` the values, plus decision/prompt/actions), `planner/` (task → `Plan` of explorer-sized sub-goals; same layout, `PLANNER`, `plan()`, `PlannerAgent`; not yet wired into the orchestrator), `generator/` (trajectories → NFA), `verifier/` (LLM judge from page evidence, same layout: `graph.py` gather→judge, `VERIFIER`, `verify()`; `context.py`, `models.py`, `prompt.py`, `agent.py` the `VerifierAgent` façade); `orchestrator.py` chains them (the entry behind `netgent generate`, itself a LangGraph); shared LLM seam in `llm.py` |
 | `cli/` | Typer commands: `run`, `generate`, `agent`, `trajectory`, `schema`, `doctor`, and the `eval` group (`dataset`, `observation`, `stress`, `matrix`) |
 | `evals/` | the runners behind `netgent eval` — importable functions returning rows/markdown, no `sys.exit`; results land in `v2/evals/results/<eval>/` |
 | `core/` | settings (pydantic-settings, `.env`), errors, logger |
