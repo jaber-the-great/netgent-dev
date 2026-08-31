@@ -118,6 +118,17 @@ def _target_selector(action: Action) -> str | None:
     return _locator_selector(locator) if locator else None
 
 
+def is_interruption_step(step) -> bool:
+    """A click that dismisses an overlay (ad-skip, cookie wall, pop-up): the step's reasoning
+    AND its click target must both look like interruption handling — reasoning alone flagged a
+    seek-slider click (v3 run, 2026-08-27). Shared with the multi-run merge, where cross-run
+    presence is the primary interrupt signal and this stays the single-run/tie-break rule."""
+    if step.action is None or step.action.type != "click" or not _INTERRUPTION_RE.search(step.reasoning or ""):
+        return False
+    sel = _target_selector(step.action)
+    return sel is not None and bool(_INTERRUPTION_TARGET_RE.search(sel))
+
+
 def compile_trajectory(
     traj: AgentTrajectory,
     name: str,
@@ -139,14 +150,8 @@ def compile_trajectory(
     # Interruption-handling clicks (ad-skip, cookie-dismiss, …) leave the main word and
     # become scoped ε-interrupts: the executor fires them whenever their anchor holds,
     # so a replay that gets no ad (or an ad at a different moment) still walks the word.
-    def _is_interruption(step) -> bool:
-        if step.action.type != "click" or not _INTERRUPTION_RE.search(step.reasoning or ""):
-            return False
-        sel = _target_selector(step.action)
-        return sel is not None and bool(_INTERRUPTION_TARGET_RE.search(sel))
-
-    interruption_steps = [s for s in all_steps if _is_interruption(s)]
-    steps = [s for s in all_steps if not _is_interruption(s)]
+    interruption_steps = [s for s in all_steps if is_interruption_step(s)]
+    steps = [s for s in all_steps if not is_interruption_step(s)]
     if not steps:
         raise ValueError("trajectory has no main-path steps to compile (all were interruptions)")
 

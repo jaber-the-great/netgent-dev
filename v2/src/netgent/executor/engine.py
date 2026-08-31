@@ -185,7 +185,14 @@ class Executor:
     def _resolve_count(self, count: str | int | None) -> int | None:
         if count is None or isinstance(count, int):
             return count
-        raise ExecutionError(f"repeat.count {count!r} is an unresolved param — run resolve_params() first")
+        if "${" in count:
+            raise ExecutionError(f"repeat.count {count!r} is an unresolved param — run resolve_params() first")
+        # A "${param}" count arrives here as the substituted string (resolve_params walks
+        # strings; Repeat.count keeps its declared str type) — e.g. "${watch_time}" -> "10".
+        try:
+            return int(float(count))
+        except ValueError as exc:
+            raise ExecutionError(f"repeat.count {count!r} did not resolve to a number") from exc
 
     async def _all_hold(self, triggers) -> bool:
         from netgent.schema.workflow import State
