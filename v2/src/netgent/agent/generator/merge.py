@@ -14,8 +14,10 @@ steps on (action type, durable target key) with a small sequence alignment, then
      text heuristics are the tie-break);
   3. runs genuinely diverge downstream and each continuation's first target distinguishes
      them → a ``Branch`` with one arm per continuation, guarded by those targets;
-  4. anything else → **reject**: a warning naming the column; the spine (run 1's) step is
-     kept so the artifact stays replayable, and another run may resolve the ambiguity.
+  4. anything else → **reject**, with a warning naming the column: a full-support column
+     keeps run 1's version (every run did it — required, just value-dependent), while a
+     minority-run step is dropped (the other runs achieved the task without it — the
+     structural intersection). Another run may overrule either call.
 
 Failed runs contribute NOTHING structural. Failures may one day mine *conditions*; they must
 never mine transitions — trajectory-shaped memory is poisoned by failures (AWM 44.4→42.2 with
@@ -70,8 +72,7 @@ class ColumnReport(BaseModel):
     """One aligned column's disposition — the merge's evidence trail."""
 
     index: int
-    # aligned | param | param-target | interrupt | branch | dropped | kept-spine |
-    # value-diverges | target-varies
+    # aligned | param | param-target | interrupt | branch | dropped | value-diverges | target-varies
     disposition: str
     support: int
     runs: list[int]
@@ -146,11 +147,31 @@ def _sig(step: AgentStep) -> tuple:
     return (action.type, _canonical_locator(action))
 
 
+def _target_shape(action: Action) -> tuple:
+    """How the target is addressed: (last locator fn, role) — nth disambiguation ignored."""
+    locator = getattr(action, "locator", None)
+    if not locator:
+        return (action.type,)
+    last = locator[-1]
+    if last.fn == "nth" and len(locator) >= 2:
+        last = locator[-2]
+    role = str(last.args[0]) if last.fn == "get_by_role" and last.args else None
+    return (last.fn, role)
+
+
 def _match_score(col: _Column, step: AgentStep) -> int:
     if _sig(step) in col.sigs():
         return 3
     if step.action.type in col.types() and step.action.type in _SUBSTITUTABLE:
-        return 1  # same intent, different target: a substitution column, not two gaps
+        # Same intent aimed at a different element — a substitution column. But only when
+        # the locator SHAPE agrees (both role=link, both css, …): a video-title link must
+        # not absorb a play-button css click just because both are clicks (measured on the
+        # YouTube 3-run merge: the shape-blind +1 merged exactly that).
+        same_shape = any(
+            s.action.type == step.action.type and _target_shape(s.action) == _target_shape(step.action)
+            for s in col.steps.values()
+        )
+        return 2 if same_shape else 0
     return -10  # never align across action types
 
 
@@ -429,19 +450,15 @@ def merge_trajectories(
                     interrupt_cands.append((rid, c.steps[rid]))
                 report(idx, c, "interrupt", note=f"present in {len(c.steps)}/{n_runs} runs, dismissal-shaped")
                 continue
-            if spine_rid in c.steps and some.action.type not in ("scroll", "wait"):
-                emits.append(_EmitStep(c.steps[spine_rid].action, c, anchor_ok=False))
-                report(idx, c, "kept-spine", note=f"run-1 only ({len(c.steps)}/{n_runs}); unsupported by other runs")
-                warnings.append(
-                    f"column {idx}: {some.action.type} present in {len(c.steps)}/{n_runs} runs with no "
-                    "distinguishing guard — kept run 1's step; another run may resolve it"
-                )
-                continue
+            # Structural intersection: the runs WITHOUT this step still achieved the task,
+            # so it is not required — drop it, whether or not the spine had it. (Measured on
+            # YouTube: keeping run-1-only steps put a suggestion click and a play click in
+            # the word, and both timed out at replay; the majority path replays.)
             report(idx, c, "dropped", note=f"present in {len(c.steps)}/{n_runs} runs, removable")
             if some.action.type not in ("scroll", "wait"):
                 warnings.append(
-                    f"column {idx}: {some.action.type} present in {len(c.steps)}/{n_runs} runs (not the spine) — "
-                    "dropped; another run may resolve it"
+                    f"column {idx}: {some.action.type} present in {len(c.steps)}/{n_runs} runs — the other "
+                    "runs achieved the task without it; dropped (another run can overrule this)"
                 )
         i = j
 
@@ -527,7 +544,14 @@ def _make_emit(col, spine_rid, values_by_run, confirmed, confirm, report, warnin
 def _try_branch(region: list[_Column], n_runs: int, run_ids: list[int]) -> _EmitBranch | None:
     """A Branch from a divergence region: every run covered, ≥2 distinct continuations, and
     each continuation's FIRST target selector is expressible and distinct (it becomes the
-    guard — the state whose conditions distinguish the runs)."""
+    guard — the state whose conditions distinguish the runs).
+
+    Presence-based ONLY: every region column must be a gap (each run walks its own steps —
+    the login-wall shape, where run 1 fills credentials the wall never showed run 2). A
+    full-support substitution column in the region is value variance, not a fork — a Branch
+    guarded on per-run targets would freeze the observed values into the artifact."""
+    if any(len(col.steps) == n_runs for col in region):
+        return None
     per_run: dict[int, list[AgentStep]] = {rid: [] for rid in run_ids}
     for col in region:
         for rid, step in col.steps.items():

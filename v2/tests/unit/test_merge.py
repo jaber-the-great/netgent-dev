@@ -135,14 +135,42 @@ def test_interrupt_candidate_from_cross_run_presence():
 
 
 def test_branch_from_downstream_divergence():
-    """Disposition 3: runs that genuinely fork (distinct targets, extra steps) become a
-    Branch with one arm per continuation, guarded by each arm's first target."""
+    """Disposition 3: presence-based forks (the login-wall shape — run 1 fills credentials a
+    wall never showed run 2) become a Branch with one arm per continuation, guarded by each
+    arm's first target. Guards must be plausibly exclusive page states, which is why only
+    all-gap regions qualify."""
     common_head = [
         _step(0, "goto", "https://site.test/", _goto("https://site.test/")),
     ]
     common_tail = [
         _step(5, "click", "https://site.test/done", _click("#finish")),
     ]
+    run1 = _traj("t", common_head + [
+        _step(1, "fill", "https://site.test/", _fill("#username", "ada")),
+        _step(2, "press", "https://site.test/", _press("#username")),
+    ] + common_tail)
+    run2 = _traj("t", common_head + [
+        _step(1, "click", "https://site.test/", _click("#continue-as-guest")),
+    ] + common_tail)
+    out = merge_trajectories([RunInput(run=1, trajectory=run1), RunInput(run=2, trajectory=run2)], name="t")
+    wf = out.workflow
+    branches = [n for n in wf.control if n.kind == "branch"]
+    (br,) = branches
+    assert len(br.arms) == 2 and br.else_ is None  # no arm matched = new territory, never a skip
+    guard_selectors = {wf.state(arm.when).conditions[0].selector for arm in br.arms}
+    assert guard_selectors == {"#username", "#continue-as-guest"}
+    # both arms converge on the same state, and the word continues to #finish from there
+    arm_last_edges = [arm.then[-1].edge for arm in br.arms]
+    targets = {wf.transition(e).target for e in arm_last_edges}
+    assert len(targets) == 1
+    assert out.generalized.branches[0]["runs_by_arm"] == [[1], [2]]
+
+
+def test_value_variance_never_becomes_a_branch():
+    """A substitution column (every run present, different targets) plus a trailing gap must
+    NOT compile to a Branch — arms guarded on per-run targets would freeze the values."""
+    common_head = [_step(0, "goto", "https://site.test/", _goto("https://site.test/"))]
+    common_tail = [_step(5, "click", "https://site.test/done", _click("#finish"))]
     run1 = _traj("t", common_head + [
         _step(1, "click", "https://site.test/", _click("#tab-basic")),
         _step(2, "fill", "https://site.test/", _fill("#name", "Ada")),
@@ -151,22 +179,15 @@ def test_branch_from_downstream_divergence():
         _step(1, "click", "https://site.test/", _click("#tab-pro")),
     ] + common_tail)
     out = merge_trajectories([RunInput(run=1, trajectory=run1), RunInput(run=2, trajectory=run2)], name="t")
-    wf = out.workflow
-    branches = [n for n in wf.control if n.kind == "branch"]
-    (br,) = branches
-    assert len(br.arms) == 2 and br.else_ is None  # no arm matched = new territory, never a skip
-    guard_selectors = {wf.state(arm.when).conditions[0].selector for arm in br.arms}
-    assert guard_selectors == {"#tab-basic", "#tab-pro"}
-    # both arms converge on the same state, and the word continues to #finish from there
-    arm_last_edges = [arm.then[-1].edge for arm in br.arms]
-    targets = {wf.transition(e).target for e in arm_last_edges}
-    assert len(targets) == 1
-    assert out.generalized.branches[0]["runs_by_arm"] == [[1], [2]]
+    assert not [n for n in (out.workflow.control or []) if n.kind == "branch"]
+    dispositions = [c.disposition for c in out.generalized.columns]
+    assert "target-varies" in dispositions and "dropped" in dispositions
 
 
-def test_reject_unresolved_divergence_keeps_spine_and_warns():
-    """Disposition 4: divergence with no distinguishing guard is rejected with a warning
-    naming the column; run 1's step is kept so the artifact stays replayable."""
+def test_reject_unsupported_minority_step_is_dropped_with_warning():
+    """Disposition 4 (minority step): the other runs achieved the task without it, so the
+    structural intersection drops it — with a warning naming the column. Measured on YouTube:
+    keeping run-1-only steps put a suggestion click in the word and replay timed out on it."""
     run1 = _search_run("x y", extra=(
         _step(3, "fill", "https://site.test/results", _fill("#extra", "only run 1")),
     ))
@@ -175,10 +196,9 @@ def test_reject_unresolved_divergence_keeps_spine_and_warns():
     out = merge_trajectories(
         [RunInput(run=1, trajectory=run1), RunInput(run=2, trajectory=run2)], name="s", warnings=warnings
     )
-    assert any("kept run 1" in w for w in warnings)
-    assert any(c.disposition == "kept-spine" for c in out.generalized.columns)
-    (extra_edge,) = [t for t in out.workflow.transitions if t.action.type == "fill" and "extra" in str(t.action)]
-    assert extra_edge.action.text == "only run 1"
+    assert any("achieved the task without it" in w for w in warnings)
+    assert any(c.disposition == "dropped" and c.action_type == "fill" for c in out.generalized.columns)
+    assert not any(t.action.type == "fill" and "extra" in str(t.action) for t in out.workflow.transitions)
 
 
 def test_gap_scroll_and_wait_are_dropped_quietly():
@@ -270,6 +290,27 @@ def test_target_varies_without_matching_value_is_rejected_with_warning():
     assert click_edge.action.locator[-1].kwargs["name"] == "first title"  # spine kept
     assert any("targets differ" in w for w in warnings)
     assert any(c.disposition == "target-varies" for c in out.generalized.columns)
+
+
+def test_alignment_prefers_same_locator_shape_over_bare_same_type():
+    """Run 1 clicks a role link THEN a css play button; run 2 clicks only a role link. The
+    link columns must align (same shape) and the play button must become the gap — not the
+    other way round (the shape-blind bug measured on the YouTube 3-run merge)."""
+    run1 = _traj("t", [
+        _step(0, "goto", "https://site.test/", _goto("https://site.test/")),
+        _step(1, "click", "https://site.test/watch", _click_role("link", "video one")),
+        _step(2, "click", "https://site.test/watch", _click("#player > button")),
+    ])
+    run2 = _traj("t", [
+        _step(0, "goto", "https://site.test/", _goto("https://site.test/")),
+        _step(1, "click", "https://site.test/watch", _click_role("link", "video two")),
+    ])
+    out = merge_trajectories([RunInput(run=1, trajectory=run1), RunInput(run=2, trajectory=run2)], name="t")
+    cols = out.generalized.columns
+    assert [c.disposition for c in cols] == ["aligned", "target-varies", "dropped"]
+    assert cols[1].support == 2 and cols[2].action_type == "click"
+    (kept_click,) = [t for t in out.workflow.transitions if t.action.type == "click"]
+    assert kept_click.action.locator[-1].fn == "get_by_role"  # the link column survived
 
 
 def test_single_achieved_run_degrades_to_single_run_compile():
