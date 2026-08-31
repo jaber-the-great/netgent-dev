@@ -17,7 +17,7 @@ from pathlib import Path
 
 CHALLENGE_URL = "https://browser-use.github.io/stress-tests/challenge.html"
 FORMS_URL = "https://browser-use.github.io/stress-tests/forms-comparison.html"
-DEFAULT_MODEL = "anthropic/claude-haiku-4-5-20251001"
+DEFAULT_MODEL = "anthropic:claude-haiku-4-5-20251001"
 BACKENDS = ("dom",)
 DEFAULT_MAX_STEPS = {"challenge": 60, "sweep": 30}
 

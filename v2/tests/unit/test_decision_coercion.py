@@ -97,7 +97,6 @@ def test_llm_seam_retries_an_invalid_response_in_place_before_giving_up():
             return self.outcomes.pop(0)
 
     llm = LangChainLLM.__new__(LangChainLLM)
-    llm._provider = "anthropic"
     llm.usage = {k: 0 for k in ("calls", "input_tokens", "output_tokens", "cache_read_tokens",
                                "cache_creation_tokens", "observation_chars", "history_chars")}
     llm.calls = []
@@ -114,3 +113,27 @@ def test_llm_seam_retries_an_invalid_response_in_place_before_giving_up():
     llm._structured = {(ALL_KINDS, 1): fake}
     with pytest.raises(ValueError, match="after 3 attempts"):
         asyncio.run(llm.decide("S", "T", "O", []))
+
+
+def test_llm_seam_runs_the_real_structured_output_path_on_a_fake_chat_model():
+    """LangChain's own test double (docs: langchain/test/unit-testing): a GenericFakeChatModel
+    injected through the LLM seam drives with_structured_output → PydanticToolsParser → the
+    retry ladder, with no key and no network. `bind_tools` must be a no-op for the fake, as in
+    langgraph-bigtool's tests, or with_structured_output refuses the model."""
+    from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+    from langchain_core.messages import AIMessage
+
+    class FakeModel(GenericFakeChatModel):
+        def bind_tools(self, *args, **kwargs):
+            return self
+
+    name = decision_schema(False).__name__
+    call = lambda args, i: AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"c{i}"}])  # noqa: E731
+    fake = FakeModel(messages=iter([
+        call({"kind": "click", "index": 0}, 1),  # no reasoning → validation error → retried in place
+        call({"reasoning": "ok", "kind": "click", "index": 0}, 2),
+    ]))
+    llm = LangChainLLM(fake)
+    got = asyncio.run(llm.decide("S", "T", "O", []))
+    assert got.kind == "click" and got.index == 0 and got.reasoning == "ok"
+    assert llm.usage["calls"] == 2 and llm.usage["parse_retries"] == 1

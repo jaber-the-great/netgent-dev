@@ -59,7 +59,8 @@ uv run netgent doctor
 ```
 
 Conventions: `GOOGLE_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` (no aliases); models are
-`provider/model` strings (cheap exploration model: `anthropic/claude-haiku-4-5-20251001`);
+`provider:model` strings as `init_chat_model` takes them, `/` also accepted (cheap exploration model:
+`anthropic:claude-haiku-4-5-20251001`; Gemini is `google_genai:gemini-…`);
 `--headed` to watch a run; `--trajectory DIR` to keep screenshots + records.
 
 ## Branches

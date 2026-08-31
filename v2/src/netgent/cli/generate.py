@@ -21,7 +21,7 @@ def generate(
             "--param", "-p", help="name=sample_value used during exploration; becomes a ${name} param (repeatable)."
         ),
     ] = None,
-    model: Annotated[str | None, typer.Option(help="LLM as provider/model (default: NETGENT_GENERATOR_MODEL).")] = None,
+    model: Annotated[str | None, typer.Option(help="LLM as provider:model (default: NETGENT_GENERATOR_MODEL).")] = None,
     max_steps: Annotated[int, typer.Option(help="Exploration step budget.")] = 25,
     trajectory_dir: Annotated[
         Path | None, typer.Option("--trajectory", help="Also write the exploration trajectory here.")

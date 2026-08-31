@@ -10,7 +10,7 @@ import typer
 def agent(
     task: Annotated[str, typer.Argument(help="What the agent should do, in plain language.")],
     url: Annotated[str | None, typer.Option(help="Starting URL.")] = None,
-    model: Annotated[str | None, typer.Option(help="LLM as provider/model (default: NETGENT_GENERATOR_MODEL).")] = None,
+    model: Annotated[str | None, typer.Option(help="LLM as provider:model (default: NETGENT_GENERATOR_MODEL).")] = None,
     max_steps: Annotated[int, typer.Option(help="Step budget.")] = 25,
     trajectory_dir: Annotated[
         Path | None, typer.Option("--trajectory", help="Write the agent trajectory here.")

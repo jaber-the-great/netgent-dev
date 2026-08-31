@@ -6,11 +6,14 @@ replays scripted decisions for tests with no network. Keeping model access behin
 means swapping frameworks later is a one-file change, not a sprawl.
 
 Message layout (docs/research/browser-agent-prompting.md §6.2 #8): the static part — system
-prompt + task — goes in a SystemMessage marked as a cache prefix; the step-varying part —
-history + observation — goes last in a HumanMessage. browser-use (`prompts.py:433-434`) and
-Skyvern (`stable_prefix_ordering`) lay their prompts out the same way. Whether the prefix is
-actually cached is provider- and length-dependent (Anthropic: ≥4096 tokens on Haiku 4.5, 1024
-on Sonnet 4.x); `usage["cache_read_tokens"]` reports what happened.
+prompt + task — goes in a SystemMessage; the step-varying part — history + observation — goes
+last in a HumanMessage. browser-use (`prompts.py:433-434`) and Skyvern
+(`stable_prefix_ordering`) lay their prompts out the same way. No explicit cache breakpoints:
+providers that cache stable prefixes implicitly may still do so, and `usage["cache_read_tokens"]`
+reports whatever happened.
+
+Models are named the way `init_chat_model` names them — `provider:model` (`anthropic:claude-…`,
+`google_genai:gemini-…`, `openai:gpt-…`); a `/` separator is accepted and rewritten to `:`.
 
 History rendering (browser-agent-memory.md §6.2a): fold/note records are always shown (they
 are a sweep's cross-task memory, bounded by MAX_FOLDS), then the last HISTORY_WINDOW acted
@@ -19,18 +22,15 @@ one line each.
 """
 
 import os
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from netgent.agent.explorer.decision import ALL_KINDS, MAX_BATCH, AgentAction, AgentDecision
 from netgent.agent.explorer.models import StepRecord
 
-# litellm-style "provider/model" → langchain model_provider id.
-_PROVIDER_ALIAS = {
-    "gemini": "google_genai",
-    "google": "google_genai",
-    "openai": "openai",
-    "anthropic": "anthropic",
-}
+if TYPE_CHECKING:
+    from langchain_core.language_models import BaseChatModel
+
+DEFAULT_MODEL = "google_genai:gemini-2.5-flash"
 
 HISTORY_WINDOW = 10  # acted records shown per step
 FULL_BLOCKS = 3  # of which the most recent are rendered with eval/memory/goal
@@ -121,20 +121,28 @@ def decision_schema(
     return create_model("AgentDecisionVariant", __doc__=AgentDecision.__doc__, **fields)
 
 
+def model_ref(model: str) -> str:
+    """`provider/model` (NetGent's older spelling) → `provider:model`, what `init_chat_model` parses."""
+    return model.replace("/", ":", 1)
+
+
 class LangChainLLM:
-    """Structured-output decisions from a chat model. Imports langchain lazily."""
+    """Structured-output decisions from a chat model. Imports langchain lazily.
 
-    def __init__(self, model: str = "gemini/gemini-2.5-flash"):
-        from langchain.chat_models import init_chat_model  # lazy: only when actually used
+    `model` is a `provider:model` string handed to `init_chat_model`, or an already-built
+    `BaseChatModel` (tests inject `GenericFakeChatModel` here)."""
 
-        provider, _, name = model.partition("/")
-        if not name:  # bare model name, no provider prefix
-            provider, name = "gemini", provider
-        self._provider = _PROVIDER_ALIAS.get(provider, provider)
-        # Claude 4.7+ / Claude 5 models reject `temperature` outright (400: "deprecated
-        # for this model") — omit it for anthropic; keep 0 elsewhere for determinism.
-        kwargs = {} if self._provider == "anthropic" else {"temperature": 0}
-        self._chat = init_chat_model(name, model_provider=self._provider, **kwargs)
+    def __init__(self, model: "str | BaseChatModel" = DEFAULT_MODEL):
+        if isinstance(model, str):
+            from langchain.chat_models import init_chat_model  # lazy: only when actually used
+
+            ref = model_ref(model)
+            # Claude 4.7+ / Claude 5 models reject `temperature` outright (400: "deprecated
+            # for this model") — omit it for anthropic; keep 0 elsewhere for determinism.
+            anthropic = ref.startswith("anthropic:") or ref.rsplit(":", 1)[-1].startswith("claude")
+            self._chat = init_chat_model(ref, **({} if anthropic else {"temperature": 0}))
+        else:
+            self._chat = model
         self._structured: dict[tuple, object] = {}  # per (allowed kinds, max_actions)
         # Running totals across decide() calls — what an exploration cost (the evals under
         # `netgent eval stress` report these per run). `input_tokens` is the provider's total
@@ -155,13 +163,7 @@ class LangChainLLM:
         from langchain_core.messages import HumanMessage, SystemMessage
 
         static, dynamic = render_prompt(system, task, observation, history)
-        if self._provider == "anthropic":
-            # Explicit cache breakpoint after the static prefix (tools → system → messages is
-            # the provider's prefix order, so the tool schema is cached with it).
-            content: str | list = [{"type": "text", "text": static, "cache_control": {"type": "ephemeral"}}]
-        else:
-            content = static  # OpenAI/Gemini cache stable prefixes implicitly
-        return [SystemMessage(content=content), HumanMessage(content=dynamic)]
+        return [SystemMessage(content=static), HumanMessage(content=dynamic)]
 
     def _structured_model(self, allowed_kinds: frozenset[str] | None, max_actions: int):
         key = (frozenset(allowed_kinds) if allowed_kinds is not None else ALL_KINDS, max_actions)
@@ -270,5 +272,5 @@ class FakeLLM:
         return decision
 
 
-def make_llm(model: str) -> LLM:
+def make_llm(model: "str | BaseChatModel") -> LLM:
     return LangChainLLM(model)

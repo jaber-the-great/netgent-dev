@@ -106,7 +106,7 @@ def stress(
     backend: Annotated[str, typer.Option(help="Observation backend (this branch: dom).")] = "dom",
     runs: Annotated[int, typer.Option(help="Repetitions (results are noisy; the docs use 3).")] = 1,
     max_steps: Annotated[int | None, typer.Option(help="Step budget (challenge: 60; sweep: 30 per form).")] = None,
-    model: Annotated[str, typer.Option(help="LLM as provider/model.")] = "anthropic/claude-haiku-4-5-20251001",
+    model: Annotated[str, typer.Option(help="LLM as provider:model.")] = "anthropic:claude-haiku-4-5-20251001",
     tag: Annotated[str, typer.Option(help="Suffix for the result dir, e.g. '-M' (use --tag=-M).")] = "",
     out: Annotated[Path | None, typer.Option(help="Results root (default: evals/results/stress/).")] = None,
     headless: Annotated[bool, typer.Option("--headless/--headed", help="Run the browser headless.")] = True,

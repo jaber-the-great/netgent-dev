@@ -14,6 +14,7 @@ MIN_PYTHON = (3, 11)
 
 # Provider prefix in NETGENT_GENERATOR_MODEL -> env vars that can satisfy it.
 PROVIDER_KEYS: dict[str, tuple[str, ...]] = {
+    "google_genai": ("GOOGLE_API_KEY",),
     "gemini": ("GOOGLE_API_KEY",),
     "openai": ("OPENAI_API_KEY",),
     "anthropic": ("ANTHROPIC_API_KEY",),
@@ -76,7 +77,7 @@ def _check_llm_keys(env_file: dict[str, str]) -> CheckResult:
         {key for keys in PROVIDER_KEYS.values() for key in keys if _env(env_file, key)}
     )
     model = _env(env_file, "NETGENT_GENERATOR_MODEL")
-    provider = model.partition("/")[0] if "/" in model else ""
+    provider = model.replace("/", ":", 1).partition(":")[0] if ("/" in model or ":" in model) else ""
 
     if provider and provider in PROVIDER_KEYS:
         needed = PROVIDER_KEYS[provider]

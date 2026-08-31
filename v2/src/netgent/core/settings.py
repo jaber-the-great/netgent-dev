@@ -30,8 +30,8 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
 
-    # ── Model selection (litellm-style provider/model) ───────────────────────────────────
-    generator_model: str = Field(default="gemini/gemini-2.5-flash", validation_alias="NETGENT_GENERATOR_MODEL")
+    # ── Model selection (`provider:model`, init_chat_model's syntax; `/` also accepted) ─────
+    generator_model: str = Field(default="google_genai:gemini-2.5-flash", validation_alias="NETGENT_GENERATOR_MODEL")
     secondary_model: str | None = Field(default=None, validation_alias="NETGENT_SECONDARY_MODEL")
 
     # ── Browser ──────────────────────────────────────────────────────────────────────────
@@ -45,8 +45,10 @@ class Settings(BaseSettings):
     log_level: str = Field(default="info", validation_alias="NETGENT_LOG_LEVEL")
 
     def provider_key(self, provider: str) -> str | None:
-        """The API key for a litellm-style provider prefix ('gemini'/'openai'/'anthropic')."""
+        """The API key for a provider prefix ('google_genai'/'openai'/'anthropic'; 'gemini' and 'google'
+        are accepted spellings of the Google key)."""
         return {
+            "google_genai": self.google_api_key,
             "gemini": self.google_api_key,
             "google": self.google_api_key,
             "openai": self.openai_api_key,
