@@ -138,9 +138,9 @@ async def sweep_forms(
         unmet: list[str] = []
         cited: list[str] = []
         if judge and traj is not None:
-            from netgent.agent.verifier import Evidence, judge_trajectory
+            from netgent.agent.verifier.graph import verify
 
-            verdict = await judge_trajectory(llm, Evidence.from_trajectory(FORM_TASK, traj, run_dir=run_dir))
+            verdict = await verify(traj, FORM_TASK, llm=llm, run_dir=run_dir)
             judged, unmet, cited = verdict.achieved, list(verdict.unmet), list(verdict.evidence)
             logger.info("sweep: form %d judge=%s page=%s", i + 1, judged, verified)
         result.forms.append(

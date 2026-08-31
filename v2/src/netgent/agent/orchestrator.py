@@ -86,13 +86,15 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
     from langgraph.graph import END, START, StateGraph  # lazy: the `generate` extra
     from langgraph.types import Command
 
-    # Imported here, not inside the node, and EXPLORER is named in the node's own source: that is
+    # Imported here, not inside the nodes, and EXPLORER/VERIFIER are named in the nodes' own source: that is
     # what LangGraph's static walk (get_function_nonlocals → find_subgraph_pregel) needs to list
-    # the explorer as this node's subgraph, so get_subgraphs()/get_graph(xray=True)/Studio show
-    # observe → decide → act nested in the pipeline (langgraph-agent-structure.md §3d, C → A).
+    # the explorer and verifier as the nodes' subgraphs, so get_subgraphs()/get_graph(xray=True)/Studio
+    # show observe → decide → act and gather → judge nested in the pipeline (langgraph-agent-structure.md §3d, C → A).
     from netgent.agent.explorer.decision import DEFAULT_KINDS
     from netgent.agent.explorer.graph import EXPLORER
     from netgent.agent.explorer.graph import explore as run_explorer
+    from netgent.agent.verifier.graph import VERIFIER
+    from netgent.agent.verifier.graph import verify as run_verifier
 
     def emit(stage: Stage, text: str) -> None:
         logger.info("%s: %s", stage, text)
@@ -147,11 +149,9 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
 
     async def verify(state: OrchestrationState) -> Command[Literal["explore", "generate", "__end__"]]:
         """The LLM judge (advisory). Sees page evidence, never the explorer's reasoning."""
-        from netgent.agent.verifier import Evidence, judge_trajectory
-
-        traj = state["trajectory"]
-        ev = Evidence.from_trajectory(req.task, traj, params=req.params, run_dir=run_dir)
-        verdict = await judge_trajectory(llm, ev)
+        verdict = await run_verifier(
+            state["trajectory"], req.task, llm=llm, params=req.params, run_dir=run_dir, graph=VERIFIER
+        )
         emit("verify", f"judge: {'achieved' if verdict.achieved else 'NOT achieved'} ({verdict.confidence} confidence)"
              + (f" — unmet: {'; '.join(verdict.unmet)}" if verdict.unmet else ""))
         for e in verdict.evidence[:4]:

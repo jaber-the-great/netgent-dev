@@ -8,8 +8,37 @@ dialogs, the final URL and the last few screenshots. Its verdict routes the pipe
 the zero-LLM replay still gates. Rationale and numbers: docs/research/agent-verification.md,
 verification-papers.md (LLM judges ≤69.8% precision; all four failure modes are sycophancy
 toward the agent's own narration, hence the reasoning is withheld).
+
+Same layout as the explorer: `models.py` (Evidence, Verdict), `prompt.py` (JUDGE_SYSTEM,
+build_judge_content), `context.py` (VerifierContext — the LLM and screenshot dir, passed as
+LangGraph `Runtime.context`), `graph.py` (gather → judge nodes, `create_verifier_agent()`,
+the module-level `VERIFIER`, and `verify()` — the one run API). `verify`, `VERIFIER`,
+`create_verifier_agent` and `judge_trajectory` import langgraph and are resolved lazily.
 """
 
-from netgent.agent.verifier.judge import JUDGE_SYSTEM, Evidence, Verdict, build_judge_content, judge_trajectory
+from netgent.agent.verifier.context import VerifierContext
+from netgent.agent.verifier.models import MAX_SCREENSHOTS, Evidence, Verdict
+from netgent.agent.verifier.prompt import JUDGE_SYSTEM, build_judge_content
 
-__all__ = ["JUDGE_SYSTEM", "Evidence", "Verdict", "build_judge_content", "judge_trajectory"]
+__all__ = [
+    "JUDGE_SYSTEM",
+    "MAX_SCREENSHOTS",
+    "VERIFIER",
+    "Evidence",
+    "Verdict",
+    "VerifierContext",
+    "build_judge_content",
+    "create_verifier_agent",
+    "judge_trajectory",
+    "verify",
+]
+
+_LAZY = {"VERIFIER", "create_verifier_agent", "judge_trajectory", "verify"}
+
+
+def __getattr__(name: str):  # PEP 562: the graph module imports langgraph
+    if name in _LAZY:
+        from netgent.agent.verifier import graph
+
+        return getattr(graph, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

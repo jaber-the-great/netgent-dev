@@ -87,7 +87,7 @@ def test_orchestrator_sees_the_explorer_as_a_nested_subgraph():
     from netgent.agent.orchestrator import build_orchestration_graph
 
     pipeline = build_orchestration_graph(GenerateRequest(task="t"), FakeLLM([]))
-    assert [name for name, _ in pipeline.get_subgraphs()] == ["explore"]
+    assert "explore" in [name for name, _ in pipeline.get_subgraphs()]  # (+ "verify": test_verifier_graph)
     xray = pipeline.get_graph(xray=True).draw_mermaid()
     assert "subgraph explore" in xray
     for node in ("observe", "decide", "act"):  # namespaced ids: "explore:observe" is rendered explore\3aobserve
