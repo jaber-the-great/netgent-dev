@@ -203,10 +203,17 @@ def _run_value_forms(value: str) -> tuple[str, ...]:
     return (value, quote_plus(value))
 
 
+def _number_in(value: str) -> float | None:
+    """The number a natural-language value carries ("5 seconds" → 5.0), or None."""
+    m = re.search(r"\d+(?:\.\d+)?", value)
+    return float(m.group()) if m else None
+
+
 def _field_matches_value(field_value: object, value: str, field: str) -> bool:
     if field == "seconds":
+        n = _number_in(value)
         try:
-            return float(value) == float(field_value)  # type: ignore[arg-type]
+            return n is not None and n == float(field_value)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             return False
     if not isinstance(field_value, str):
@@ -495,6 +502,16 @@ def _make_emit(col, spine_rid, values_by_run, confirmed, confirm, report, warnin
             return _EmitStep(action, col, anchor_ok=True)
         confirm(pname, col)
         if field == "seconds":
+            # The param feeds Repeat.count, so its stored values must be bare numbers even
+            # when the planner wrote "10 seconds" — the count is 1 s slices.
+            rep = confirmed[pname]
+
+            def _num_str(v: str) -> str:
+                n = _number_in(v)
+                return v if n is None else (str(int(n)) if n == int(n) else str(n))
+
+            rep.default = _num_str(rep.default)
+            rep.values_by_run = {rid: _num_str(v) for rid, v in rep.values_by_run.items()}
             observed = max(int(float(v)) for v in per_run.values())  # type: ignore[arg-type]
             report(idx, col, "param", param=pname, note=f'dwell parameterized: Repeat(count="${{{pname}}}")')
             return _EmitStep(action, col, anchor_ok=True, param=pname,

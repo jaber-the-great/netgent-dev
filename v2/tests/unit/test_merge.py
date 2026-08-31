@@ -214,6 +214,26 @@ def test_parameterized_dwell_compiles_to_repeat_count():
     assert p.name == "watch_time" and p.default == "5"
 
 
+def test_parameterized_dwell_tolerates_units_in_planner_values():
+    """Planners write durations in natural language ("10 seconds"); the seconds match
+    extracts the number, and the stored param values are bare numbers (they feed
+    Repeat.count, which counts 1 s slices)."""
+    def run(seconds):
+        return _traj("watch", [
+            _step(0, "goto", "https://site.test/watch", _goto("https://site.test/watch")),
+            _step(1, "wait", "https://site.test/watch", _wait(seconds)),
+        ])
+    runs = [
+        RunInput(run=1, trajectory=run(5.0), values={"watch_time": "5 seconds"}),
+        RunInput(run=2, trajectory=run(10.0), values={"watch_time": "10 seconds"}),
+    ]
+    wf = merge_trajectories(runs, name="w").workflow
+    (rep,) = [n for n in wf.control if n.kind == "repeat"]
+    assert rep.count == "${watch_time}"
+    (p,) = wf.params
+    assert p.default == "5"  # bare number, so resolve_params -> a coercible count
+
+
 def test_target_generalization_role_name_contains_value():
     """A click column whose role-name targets each contain that run's value becomes
     get_by_role(role, name="${param}") + nth(0) — the first match naming the value."""
