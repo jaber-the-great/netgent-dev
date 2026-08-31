@@ -127,10 +127,8 @@ def compile_trajectory(
 ) -> Workflow:
     """Compile the trajectory's successful action steps into a replayable Workflow.
 
-    `params` maps a param name to the sample value used during exploration. Binding is
-    structural first: a step whose `param` names one of them gets `${name}` in its action's
-    value field (and in a locator name that IS the sample value). The old case-insensitive
-    literal sweep remains as a fallback for value fields and state conditions — never inside
+    `params` maps a param name to the sample value used during exploration. Binding is a
+    case-insensitive literal sweep over value fields and state conditions — never inside
     locators, where substring matches over-abstracted names. Anything the compiler could not
     bind is reported in `warnings` (appended in place) instead of failing silently.
     """
@@ -243,9 +241,6 @@ def compile_trajectory(
     return wf
 
 
-_VALUE_FIELD = {"fill": "text", "select": "value", "goto": "url"}  # the action field a param lands in
-
-
 def _bind_params(wf: Workflow, steps: list, params: dict[str, str], warnings: list[str]) -> Workflow:
     data = wf.model_dump(mode="json")
     bound: dict[str, int] = dict.fromkeys(params, 0)
@@ -260,51 +255,8 @@ def _bind_params(wf: Workflow, steps: list, params: dict[str, str], warnings: li
             n_total += n
         return text, n_total
 
-    # 1. Structural: the explorer declared which step carried which parameter.
-    # Steps pair with the word's primary edges t1..tN only — dwell twins (t{i}_dwell)
-    # and interrupt resolutions (ti{k}) are compiler-synthesized and carry no step.
-    word_edges = [tr for tr in data["transitions"] if re.fullmatch(r"t\d+", tr["id"])]
-    for step, tr in zip(steps, word_edges, strict=True):
-        pname = getattr(step, "param", None)
-        if not pname:
-            continue
-        if pname not in params:
-            warnings.append(f"step {step.n}: declared param {pname!r} is not a known parameter {sorted(params)}")
-            continue
-        value, placeholder, action = params[pname], "${" + pname + "}", tr["action"]
-        field = _VALUE_FIELD.get(action["type"])
-        if field == "url":
-            new, n = sub_literal(action["url"], pname, value)
-            if n:
-                action["url"], bound[pname] = new, bound[pname] + 1
-            else:
-                warnings.append(
-                    f"step {step.n}: tagged goto as {placeholder} but the sample {value!r} is not in {action['url']!r}"
-                )
-        elif field is not None:
-            typed = action[field]
-            if typed.strip().lower() != value.strip().lower():
-                warnings.append(
-                    f"step {step.n}: explorer tagged this {action['type']} as {placeholder} but typed {typed!r}, "
-                    f"not the sample {value!r} — bound to the placeholder anyway"
-                )
-            action[field], bound[pname] = placeholder, bound[pname] + 1
-        # A locator whose name IS the sample value (a link named after the channel) — whole
-        # value only, never a substring, and only on the step that declared the param.
-        for ls in action.get("locator") or []:
-            for k, v in list(ls.get("kwargs", {}).items()):
-                if isinstance(v, str) and v.strip().lower() == value.strip().lower():
-                    ls["kwargs"][k], bound[pname] = placeholder, bound[pname] + 1
-            ls["args"] = [
-                placeholder if isinstance(a, str) and a.strip().lower() == value.strip().lower() else a
-                for a in ls.get("args", [])
-            ]
-        if field is None and not any(placeholder in str(ls) for ls in action.get("locator") or []):
-            warnings.append(
-                f"step {step.n}: param {placeholder} declared on a {action['type']} action carrying no value — ignored"
-            )
-
-    # 2. Fallback: the literal sweep over value fields and state conditions (not locators).
+    # The literal sweep over value fields and state conditions (never locators): the sample value
+    # the caller named, wherever the explorer typed or reached it, becomes the placeholder.
     # Longest sample values first, so overlapping values substitute correctly; case-insensitive
     # because sites re-case what was typed and Playwright's role-name matching is too.
     ordered = sorted(params.items(), key=lambda kv: -len(kv[1]))
@@ -325,8 +277,8 @@ def _bind_params(wf: Workflow, steps: list, params: dict[str, str], warnings: li
     for pname, n in bound.items():
         if n == 0:
             warnings.append(
-                f"parameter {pname!r} was never bound: no step declared param={pname!r} and the sample "
-                f"{params[pname]!r} appears in no action value or state condition — replay will not vary it"
+                f"parameter {pname!r} was never bound: the sample {params[pname]!r} appears in no action value "
+                "or state condition — replay will not vary it"
             )
     data["params"] = [
         Param(name=n, default=v, description=f"exploration used {v!r}").model_dump(mode="json")

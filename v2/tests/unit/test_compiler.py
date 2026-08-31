@@ -266,7 +266,6 @@ def test_params_bind_on_trajectories_with_interrupts_and_dwells():
     zip must pair steps with the word's primary edges t1..tN only."""
     steps = list(_ad_traj().steps)
     steps.insert(1, AgentStep(n=10, kind="fill", reasoning="search", url="https://yt.com/watch?v=x",
-                              param="query",
                               action={"type": "fill", "locator": [{"fn": "locator", "args": ["input#q"]}],
                                       "text": "cat videos"}))
     traj = AgentTrajectory(task="t", success=True, steps=steps)

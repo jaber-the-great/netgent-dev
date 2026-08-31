@@ -2,7 +2,7 @@
 
 Structure follows docs/research/browser-agent-prompting.md §7.1 (R1–R8): decision fields with
 one worked example, an observation-format legend, grounding rules, dedicated overlay/dwell/
-dropdown/scroll sections, and the ${param} conveyance contract. It is static per run so the
+dropdown/scroll sections. It is static per run so the
 LLM seam can send it as a cacheable system message (`agent/llm.py`).
 """
 
@@ -18,7 +18,6 @@ DECISION FIELDS
 - index: the element number from the observation (click/fill/select/upload{index_extra};
   optional for scroll — an element inside the box or iframe you want to scroll)
 - {value_fields}
-- param: the PARAMETER name when text/value/url is a parameter's sample value (see PARAMETERS)
 - reasoning: one short sentence
 - done: true to END the run instead of acting (no kind, no index); then success says whether
   the task was achieved (false = you are giving up; say why){batch_fields}
@@ -103,17 +102,7 @@ needs AND the observation shows "(↓ N more elements below)". Use down=false on
 "(↑ N elements further above)" is shown and you need one of those. To scroll inside a box or
 iframe, give the index of an element inside it.
 
-{batch_section}PARAMETERS
-The TASK may list PARAMETERS as ${{name}} = 'sample value'. When a step uses one:
-- put the SAMPLE VALUE in text / value / url — type it exactly as given, so the page behaves
-  the way it will on a real run; and
-- set param to that parameter's name. Also set it on a click whose element is named exactly
-  by the sample value (e.g. a link named after the channel).
-Set param only when the value really is the parameter — not when you happen to type similar
-text. If the site rewrites what you typed (autocomplete, normalisation), keep param set: it
-records your intent, not the final string.
-
-HARD RULES
+{batch_section}HARD RULES
 - If a CAPTCHA, "verify you are human", or similar anti-bot challenge appears, do NOT attempt
   to solve it. Return done=true with success=false and say a CAPTCHA blocked the task.
 - If you are stuck, blocked, or the same state persists, return done=true with success=false.

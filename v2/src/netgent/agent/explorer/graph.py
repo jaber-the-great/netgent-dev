@@ -281,7 +281,6 @@ async def act(state: AgentState, runtime: Runtime[ExplorerContext]) -> Command[L
 
         step = AgentStep(
             n=n, item=i, kind=item.kind or "", reasoning=decision.reasoning, url=ctx.session.page.url, error=error,
-            param=item.param or None,
             evaluation=decision.evaluation, memory=decision.memory, next_goal=decision.next_goal,
         )
         if error is None:

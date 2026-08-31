@@ -102,16 +102,14 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
     async def explore(state: OrchestrationState) -> Command[Literal["verify", "generate", "__end__"]]:
         attempt = state.get("attempt", 0) + 1
         emit("explore", f"exploring: {req.task}" + (f" (attempt {attempt})" if attempt > 1 else ""))
-        # The params are declared to the explorer as ${name} = 'sample' placeholders (Stagehand's
-        # %var% contract): it types the sample AND reports `param` on the step that used it, so
-        # the compiler binds ${name} structurally (the prompt's PARAMETERS rule).
+        # The params are declared to the explorer as ${name} = 'sample' values to use verbatim; the
+        # compiler then binds ${name} by sweeping the sample values out of the trajectory.
         task = req.task
         if req.params:
             decl = "; ".join(f"${{{k}}} = {v!r}" for k, v in req.params.items())
             task = (
                 f"{req.task}\n\nPARAMETERS: {decl}\n"
-                "Where the task refers to one of these, the value above is the sample to type or pick, "
-                "and you must set `param` to its name on that step."
+                "Where the task refers to one of these, type or pick the value above exactly as given."
             )
         if state.get("task_suffix"):
             task = f"{task}\n\n{state['task_suffix']}"

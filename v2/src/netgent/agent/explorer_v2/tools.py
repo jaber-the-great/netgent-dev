@@ -71,8 +71,7 @@ async def _execute(runtime: Runtime, item: AgentAction, reasoning: str) -> Comma
         except (ExecutionError, ValueError) as exc:
             error = str(exc)
             logger.warning("step %d %s failed: %s", n, item.kind, error)
-        step = AgentStep(n=n, kind=item.kind or "", reasoning=reasoning, url=session.page.url, error=error,
-                         param=item.param or None)
+        step = AgentStep(n=n, kind=item.kind or "", reasoning=reasoning, url=session.page.url, error=error)
         if error is None:
             step.action = action
             step.locator_check = note
@@ -93,21 +92,21 @@ async def _execute(runtime: Runtime, item: AgentAction, reasoning: str) -> Comma
 
 
 @tool
-async def click(runtime: Runtime, index: int, reasoning: str, param: str | None = None) -> Command:
+async def click(runtime: Runtime, index: int, reasoning: str) -> Command:
     """Click the element with this index from the observation."""
-    return await _execute(runtime, AgentAction(kind="click", index=index, param=param), reasoning)
+    return await _execute(runtime, AgentAction(kind="click", index=index), reasoning)
 
 
 @tool
-async def fill(runtime: Runtime, index: int, text: str, reasoning: str, param: str | None = None) -> Command:
+async def fill(runtime: Runtime, index: int, text: str, reasoning: str) -> Command:
     """Type `text` into the input/textarea/editor with this index (replaces its value)."""
-    return await _execute(runtime, AgentAction(kind="fill", index=index, text=text, param=param), reasoning)
+    return await _execute(runtime, AgentAction(kind="fill", index=index, text=text), reasoning)
 
 
 @tool
-async def select(runtime: Runtime, index: int, value: str, reasoning: str, param: str | None = None) -> Command:
+async def select(runtime: Runtime, index: int, value: str, reasoning: str) -> Command:
     """Choose `value` (one of the listed options=[…]) in the <select> with this index."""
-    return await _execute(runtime, AgentAction(kind="select", index=index, value=value, param=param), reasoning)
+    return await _execute(runtime, AgentAction(kind="select", index=index, value=value), reasoning)
 
 
 @tool
@@ -129,9 +128,9 @@ async def press(runtime: Runtime, keys: str, reasoning: str, index: int | None =
 
 
 @tool
-async def goto(runtime: Runtime, url: str, reasoning: str, param: str | None = None) -> Command:
+async def goto(runtime: Runtime, url: str, reasoning: str) -> Command:
     """Navigate to `url`."""
-    return await _execute(runtime, AgentAction(kind="goto", url=url, param=param), reasoning)
+    return await _execute(runtime, AgentAction(kind="goto", url=url), reasoning)
 
 
 @tool

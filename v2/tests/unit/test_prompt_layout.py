@@ -28,7 +28,7 @@ def test_prompt_reflects_the_allowed_kinds_only():
 
 def test_prompt_has_the_rule_sections_the_survey_converged_on():
     for section in ("OBSERVATION FORMAT", "GROUNDING", "OVERLAYS AND ADS", "DWELL", "DROPDOWNS", "SCROLLING",
-                    "PARAMETERS", "HARD RULES"):
+                    "HARD RULES"):
         assert section in SYSTEM_PROMPT, section
     assert "near the current viewport" not in SYSTEM_PROMPT  # the misdescribed slice
     assert "WITHOUT scrolling" in SYSTEM_PROMPT and "*[index]" in SYSTEM_PROMPT

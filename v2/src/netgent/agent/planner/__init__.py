@@ -2,7 +2,7 @@
 
 docs/OVERVIEW.md gives the Planner two jobs — cold-start hypothesis generator / fleet
 orchestrator, and runtime emitter of the control sequence. This package is the first: one LLM
-call that turns a task (+ start URL, parameters) into a `Plan` of explorer-sized steps, each
+call that turns a task (+ start URL) into a `Plan` of explorer-sized steps, each
 with the page outcome that proves it done. It is not yet wired into the orchestrator.
 
 Same layout as the explorer: `models.py` (Plan, PlanStep), `prompt.py` (PLANNER_SYSTEM,

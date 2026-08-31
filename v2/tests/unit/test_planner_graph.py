@@ -27,15 +27,15 @@ def test_planner_is_one_compiled_graph():
     assert create_planner_agent().get_graph().draw_mermaid() == mermaid
 
 
-def test_prompt_layout_carries_task_url_and_params():
-    [block] = build_planner_content("book a room", "https://x", {"who": "Ada"})
-    assert block["text"] == "TASK: book a room\nSTART URL: https://x\nPARAMETERS: ${who} = 'Ada'\n\nPlan:"
-    assert "PARAMETERS: (none)" in build_planner_content("t")[0]["text"]
+def test_prompt_layout_carries_task_and_url():
+    [block] = build_planner_content("book a room", "https://x")
+    assert block["text"] == "TASK: book a room\nSTART URL: https://x\n\nPlan:"
+    assert "START URL: (none)" in build_planner_content("t")[0]["text"]
 
 
 def test_graph_runs_through_the_llm_seam_and_caps_the_steps():
     llm = FakeLLM([], verdicts=[PLAN])
-    out = asyncio.run(plan("submit the form", llm=llm, params={"who": "Ada"}, max_steps=1))
+    out = asyncio.run(plan("submit the form", llm=llm, max_steps=1))
     assert out.goal == PLAN.goal and len(out.steps) == 1 and out.notes == PLAN.notes
     assert out.as_tasks() == ["fill the form Done when: all fields hold values"]
     assert "TASK: submit the form" in llm.judged[0][0]["text"]

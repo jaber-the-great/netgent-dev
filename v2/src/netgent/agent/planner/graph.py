@@ -2,7 +2,7 @@
 
     START → draft → END
 
-`draft` is the one LLM call: task (+ url, params) in, Plan out, through the agent's LLM seam.
+`draft` is the one LLM call: task (+ url) in, Plan out, through the agent's LLM seam.
 `PLANNER` is compiled once at import; the LLM travels as `Runtime.context` (a PlannerContext).
 `plan()` is the one run API. The planner is not yet wired into the orchestrator: it is the
 cold-start hypothesis generator of docs/OVERVIEW.md ("The Planner's two jobs"), and how its
@@ -28,14 +28,13 @@ if TYPE_CHECKING:
 class PlannerState(TypedDict, total=False):
     task: str
     url: str | None
-    params: dict[str, str]
     plan: Any  # Plan (draft's output)
 
 
 async def draft(state: PlannerState, runtime: Runtime[PlannerContext]) -> dict:
     """Task → Plan: the one LLM call, bounded to the context's max_steps."""
     ctx = runtime.context
-    content = build_planner_content(state["task"], state.get("url"), state.get("params"))
+    content = build_planner_content(state["task"], state.get("url"))
     plan: Plan = await ctx.llm.judge(PLANNER_SYSTEM, content, Plan)
     if len(plan.steps) > ctx.max_steps:
         plan = plan.model_copy(update={"steps": plan.steps[: ctx.max_steps]})
@@ -61,12 +60,11 @@ async def plan(
     *,
     llm: "LLM",
     url: str | None = None,
-    params: dict[str, str] | None = None,
     max_steps: int | None = None,
     graph: CompiledStateGraph | None = None,
 ) -> Plan:
     """The ONE run API: decompose `task` into a Plan. `graph` defaults to PLANNER."""
     graph = PLANNER if graph is None else graph
     ctx = PlannerContext(llm=llm) if max_steps is None else PlannerContext(llm=llm, max_steps=max_steps)
-    final = await graph.ainvoke({"task": task, "url": url, "params": dict(params or {})}, context=ctx)
+    final = await graph.ainvoke({"task": task, "url": url}, context=ctx)
     return final["plan"]

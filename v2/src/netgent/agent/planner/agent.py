@@ -16,8 +16,8 @@ class PlannerAgent:
         self.max_steps = max_steps
         PlannerContext(llm=llm, max_steps=max_steps)  # validate the knobs now
 
-    async def run(self, task: str, url: str | None = None, params: dict[str, str] | None = None) -> Plan:
+    async def run(self, task: str, url: str | None = None) -> Plan:
         """Decompose `task` into ordered sub-goals for the explorer."""
         from netgent.agent.planner.graph import plan  # lazy: langgraph is in the `generate` extra
 
-        return await plan(task, llm=self.llm, url=url, params=params, max_steps=self.max_steps)
+        return await plan(task, llm=self.llm, url=url, max_steps=self.max_steps)

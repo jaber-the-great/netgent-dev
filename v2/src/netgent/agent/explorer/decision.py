@@ -111,14 +111,6 @@ _ACTION_FIELDS = dict(
     down=Field(default=None, description="Scroll direction: true=down, false=up (scroll)."),
     seconds=Field(default=None, description="How long to dwell/watch, in seconds (wait)."),
     pages=Field(default=None, description="Scroll amount in viewport pages, e.g. 1.0 (scroll)."),
-    # Parameter conveyance (docs/research/browser-agent-prompting.md §7.3): the model DECLARES
-    # which ${name} a value came from, so the compiler binds structurally instead of
-    # string-matching the sample value back out of the artifact.
-    param=Field(
-        default=None,
-        description="If text/value/url (or a clicked element's name) is a PARAMETER's sample value, that "
-        "parameter's name (without ${}). Null for a literal that is not a parameter.",
-    ),
 )
 
 
@@ -135,7 +127,6 @@ class AgentAction(_ActionCoercion):
     down: bool | None = _ACTION_FIELDS["down"]
     seconds: float | None = _ACTION_FIELDS["seconds"]
     pages: float | None = _ACTION_FIELDS["pages"]
-    param: str | None = _ACTION_FIELDS["param"]
 
 
 # Kinds that end a batch: after them the pre-batch snapshot's indices mean nothing (a
@@ -180,7 +171,6 @@ class AgentDecision(_ActionCoercion):
     down: bool | None = _ACTION_FIELDS["down"]
     seconds: float | None = _ACTION_FIELDS["seconds"]
     pages: float | None = _ACTION_FIELDS["pages"]
-    param: str | None = _ACTION_FIELDS["param"]
     then: list[AgentAction] = Field(
         default_factory=list,
         max_length=MAX_BATCH - 1,

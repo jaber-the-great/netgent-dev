@@ -4,8 +4,8 @@ the DECISION FIELDS contract restated as tool calls."""
 from netgent.agent.explorer.prompt import build_system_prompt as _v1_prompt
 
 _TOOLS_HEADER = """You act by calling TOOLS. Each tool is one atomic action (click, fill, select, …) and takes the
-fields described under DECISION FIELDS below as its arguments (index, text, value, reasoning,
-param, …). Call at most {max_calls} tool{plural} per turn{order}. To END the run call the `done` tool
+fields described under DECISION FIELDS below as its arguments (index, text, value, reasoning, …).
+Call at most {max_calls} tool{plural} per turn{order}. To END the run call the `done` tool
 with success=true only if every TASK requirement is met (false = you are giving up; say why).
 Never reply with plain text: every turn is a tool call.
 
