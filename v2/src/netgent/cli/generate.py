@@ -37,6 +37,14 @@ def generate(
     judge: Annotated[
         bool, typer.Option("--judge/--no-judge", help="LLM judge of the exploration from page evidence (advisory).")
     ] = True,
+    runs: Annotated[
+        int, typer.Option("--runs", min=1, help="Explore N planned task variations independently and merge "
+                          "them into one generalized workflow (params inferred; zero-LLM replay check).")
+    ] = 1,
+    variation: Annotated[
+        list[str] | None,
+        typer.Option("--variation", help="Pin one variation's value as name=value (repeatable; needs --runs > 1)."),
+    ] = None,
 ) -> None:
     """Explore the task with the agent, judge the run from page evidence, compile it into a workflow."""
 
@@ -61,13 +69,16 @@ def generate(
         out=out,
         trajectory_dir=trajectory_dir,
         judge=judge,
+        runs=runs,
+        variation=dict(v.split("=", 1) for v in (variation or [])),
     )
     llm = make_llm(model or get_settings().generator_model)
 
-    colors = {"explore": None, "verify": "yellow", "generate": "cyan"}
+    colors = {"plan": "magenta", "explore": None, "verify": "yellow",
+              "merge": "blue", "generate": "cyan", "replay": "green"}
 
     def listen(stage: str, text: str) -> None:
-        fg = "red" if "FAILED" in text or "failed" in text else colors[stage]
+        fg = "red" if "FAILED" in text or "failed" in text else colors.get(stage)
         typer.secho(f"[{stage}] {text}", fg=fg)
 
     result = asyncio.run(orchestrate(req, llm, listen))
