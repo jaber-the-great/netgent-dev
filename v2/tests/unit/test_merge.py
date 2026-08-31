@@ -313,6 +313,41 @@ def test_alignment_prefers_same_locator_shape_over_bare_same_type():
     assert kept_click.action.locator[-1].fn == "get_by_role"  # the link column survived
 
 
+def test_alignment_pairs_by_url_effect_when_shapes_differ():
+    """Run 1 clicks the video as a role link then a css play button; run 2 clicks the video
+    as `a >> filter(has_text)`. Shapes differ, but both video clicks navigate results→watch
+    while the play click stays on the page — the URL effect must decide the pairing
+    (measured on the second real YouTube merge: the play button absorbed run 2's video
+    click and the compiled word never opened a video)."""
+    filter_click = {"type": "click", "locator": [
+        {"fn": "locator", "args": ["a"]}, {"fn": "filter", "args": [], "kwargs": {"has_text": "10:58"}},
+    ]}
+    run1 = _traj("t", [
+        _step(0, "goto", "https://site.test/results", _goto("https://site.test/results")),
+        _step(1, "click", "https://site.test/watch", _click_role("link", "video one")),
+        _step(2, "click", "https://site.test/watch", _click("#player > button")),
+        _step(3, "wait", "https://site.test/watch", _wait(10.0)),
+    ])
+    run2 = _traj("t", [
+        _step(0, "goto", "https://site.test/results", _goto("https://site.test/results")),
+        _step(1, "click", "https://site.test/watch", filter_click),
+        _step(2, "wait", "https://site.test/watch", _wait(5.0)),
+    ])
+    out = merge_trajectories(
+        [RunInput(run=1, trajectory=run1, values={"watch_time": "10"}),
+         RunInput(run=2, trajectory=run2, values={"watch_time": "5"})], name="t"
+    )
+    cols = out.generalized.columns
+    assert [c.disposition for c in cols] == ["aligned", "target-varies", "dropped", "param"]
+    # the surviving click is the VIDEO click (run 1's role link), not the play button
+    clicks = [t for t in out.workflow.transitions if t.action.type == "click"]
+    (kept,) = clicks
+    assert kept.action.locator[-1].fn == "get_by_role"
+    # and the state it lands in requires the navigation both runs witnessed
+    target = out.workflow.state(kept.target)
+    assert any(c.type == "url_matches" and "watch" in c.pattern for c in target.conditions)
+
+
 def test_single_achieved_run_degrades_to_single_run_compile():
     runs = [
         RunInput(run=1, trajectory=_search_run("cat videos"), values={"query": "cat videos"}),

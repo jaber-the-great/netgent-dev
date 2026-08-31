@@ -159,23 +159,43 @@ def _target_shape(action: Action) -> tuple:
     return (last.fn, role)
 
 
-def _match_score(col: _Column, step: AgentStep) -> int:
+Effect = tuple[bool, str]  # (did the step change the page's base URL, the base it landed on)
+
+
+def _step_effects(seqs: dict[int, list[AgentStep]]) -> dict[int, Effect]:
+    """Per step (by identity): what it DID to the page — the discriminator locator shape
+    can't provide. Measured on YouTube: run A clicks a video as a role link, run B as
+    `a >> filter(has_text)` — shapes differ, but both navigate results → watch, while run
+    A's play-button click (same type, same page) must not absorb either."""
+    eff: dict[int, Effect] = {}
+    for steps in seqs.values():
+        prev: str | None = None
+        for s in steps:
+            post = _base_url(s.url)
+            eff[id(s)] = (prev is None or post != prev, post)
+            prev = post
+    return eff
+
+
+def _match_score(col: _Column, step: AgentStep, eff: dict[int, Effect]) -> int:
     if _sig(step) in col.sigs():
         return 3
     if step.action.type in col.types() and step.action.type in _SUBSTITUTABLE:
-        # Same intent aimed at a different element — a substitution column. But only when
-        # the locator SHAPE agrees (both role=link, both css, …): a video-title link must
-        # not absorb a play-button css click just because both are clicks (measured on the
-        # YouTube 3-run merge: the shape-blind +1 merged exactly that).
-        same_shape = any(
-            s.action.type == step.action.type and _target_shape(s.action) == _target_shape(step.action)
-            for s in col.steps.values()
-        )
-        return 2 if same_shape else 0
+        # Same intent aimed at a different element — a substitution column. Rank the pairing
+        # by evidence: locator shape (both role=link, both css, …) and URL effect each count;
+        # a pairing with neither is worth nothing and loses to any real partner.
+        best = 0
+        for s in col.steps.values():
+            if s.action.type != step.action.type:
+                continue
+            same_shape = _target_shape(s.action) == _target_shape(step.action)
+            same_effect = eff.get(id(s)) == eff.get(id(step))
+            best = max(best, 2 if (same_shape and same_effect) else (1 if (same_shape or same_effect) else 0))
+        return best
     return -10  # never align across action types
 
 
-def _align_one(cols: list[_Column], rid: int, steps: list[AgentStep]) -> list[_Column]:
+def _align_one(cols: list[_Column], rid: int, steps: list[AgentStep], eff: dict[int, Effect]) -> list[_Column]:
     """Needleman-Wunsch of one run against the running column list (gap = -1)."""
     gap = -1
     n, m = len(cols), len(steps)
@@ -187,14 +207,14 @@ def _align_one(cols: list[_Column], rid: int, steps: list[AgentStep]) -> list[_C
     for i in range(1, n + 1):
         for j in range(1, m + 1):
             dp[i][j] = max(
-                dp[i - 1][j - 1] + _match_score(cols[i - 1], steps[j - 1]),
+                dp[i - 1][j - 1] + _match_score(cols[i - 1], steps[j - 1], eff),
                 dp[i - 1][j] + gap,
                 dp[i][j - 1] + gap,
             )
     out: list[_Column] = []
     i, j = n, m
     while i > 0 or j > 0:
-        if i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + _match_score(cols[i - 1], steps[j - 1]):
+        if i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + _match_score(cols[i - 1], steps[j - 1], eff):
             col = cols[i - 1]
             col.steps[rid] = steps[j - 1]
             out.append(col)
@@ -211,9 +231,10 @@ def _align_one(cols: list[_Column], rid: int, steps: list[AgentStep]) -> list[_C
 
 def _align(seqs: dict[int, list[AgentStep]]) -> list[_Column]:
     run_ids = sorted(seqs)
+    eff = _step_effects(seqs)
     cols = [_Column({run_ids[0]: s}) for s in seqs[run_ids[0]]]
     for rid in run_ids[1:]:
-        cols = _align_one(cols, rid, seqs[rid])
+        cols = _align_one(cols, rid, seqs[rid], eff)
     return cols
 
 
