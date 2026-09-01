@@ -39,19 +39,6 @@
     const s = getComputedStyle(el);
     return s.visibility !== 'hidden' && s.display !== 'none' && s.opacity !== '0';
   };
-  // Media ground truth. A player's control bar freezes when the controls auto-hide (YouTube:
-  // the timer label and the Play/Pause aria string stop updating after ~3 s without mouse
-  // movement), so the DOM the agent reads goes stale while the video keeps playing — the
-  // element's own properties never do. Reported for every <video>/<audio> that has loaded.
-  const media = [...document.querySelectorAll('video, audio')]
-    .filter((m) => m.readyState > 0 || m.currentTime > 0 || !m.paused)
-    .slice(0, 4)
-    .map((m) => ({
-      tag: m.tagName.toLowerCase(),
-      currentTime: Math.round(m.currentTime * 10) / 10,
-      duration: Number.isFinite(m.duration) ? Math.round(m.duration * 10) / 10 : null,
-      paused: !!m.paused, muted: !!m.muted, ended: !!m.ended,
-    }));
   // Zero-width characters count as content but carry none — MUI renders an empty select's
   // display as U+200B, which otherwise becomes a "name"/"value" of invisible text.
   const clean = (s) => (s || '').replace(/[\u200b\u200c\u200d\ufeff]/g, '')
@@ -282,5 +269,5 @@
     }
   };
   walk(document, false);
-  return { elements: results, texts, media };
+  return { elements: results, texts };
 }

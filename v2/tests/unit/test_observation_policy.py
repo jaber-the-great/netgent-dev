@@ -134,13 +134,3 @@ def test_element_key_survives_renumbering_and_moving():
 
 def test_iframe_headers_env_flag_still_respected():
     assert os.getenv("NETGENT_IFRAME_HEADERS", "1") != "0"
-
-
-def test_media_state_line_formats_clock_and_state():
-    from netgent.browser.dom.models import MediaState
-
-    assert MediaState(tag="video", currentTime=28.4, duration=423.0, paused=False, muted=True).line() == (
-        "video 0:28/7:03 playing muted"
-    )
-    assert MediaState(tag="audio", currentTime=3661, paused=True).line() == "audio 1:01:01 paused"
-    assert MediaState(tag="video", currentTime=5, duration=5, ended=True).line() == "video 0:05/0:05 ended"
