@@ -14,6 +14,9 @@ reports whatever happened.
 
 Models are named the way `init_chat_model` names them — `provider:model` (`anthropic:claude-…`,
 `google_genai:gemini-…`, `openai:gpt-…`); a `/` separator is accepted and rewritten to `:`.
+`claude-code:<model>` routes to the local Claude Code CLI via `langchain-claude-code` (the
+`claude-code` extra): subscription-billed, locked down to a plain model (no tools, no settings,
+no MCP), API keys stripped from the subprocess env.
 
 History rendering (browser-agent-memory.md §6.2a): fold/note records are always shown (they
 are a sweep's cross-task memory, bounded by MAX_FOLDS), then the last HISTORY_WINDOW acted
@@ -134,13 +137,20 @@ class LangChainLLM:
 
     def __init__(self, model: "str | BaseChatModel" = DEFAULT_MODEL):
         if isinstance(model, str):
-            from langchain.chat_models import init_chat_model  # lazy: only when actually used
-
             ref = model_ref(model)
-            # Claude 4.7+ / Claude 5 models reject `temperature` outright (400: "deprecated
-            # for this model") — omit it for anthropic; keep 0 elsewhere for determinism.
-            anthropic = ref.startswith("anthropic:") or ref.rsplit(":", 1)[-1].startswith("claude")
-            self._chat = init_chat_model(ref, **({} if anthropic else {"temperature": 0}))
+            if ref.startswith("claude-code:"):
+                # The local Claude Code CLI, subscription-billed, reduced to a model
+                # (no tools/settings/MCP; API keys stripped from the subprocess env).
+                from langchain_claude_code import ChatClaudeCode  # lazy: the claude-code extra
+
+                self._chat = ChatClaudeCode(model=ref.split(":", 1)[1] or "sonnet", auth="subscription")
+            else:
+                from langchain.chat_models import init_chat_model  # lazy: only when actually used
+
+                # Claude 4.7+ / Claude 5 models reject `temperature` outright (400: "deprecated
+                # for this model") — omit it for anthropic; keep 0 elsewhere for determinism.
+                anthropic = ref.startswith("anthropic:") or ref.rsplit(":", 1)[-1].startswith("claude")
+                self._chat = init_chat_model(ref, **({} if anthropic else {"temperature": 0}))
         else:
             self._chat = model
         self._structured: dict[tuple, object] = {}  # per (allowed kinds, max_actions)

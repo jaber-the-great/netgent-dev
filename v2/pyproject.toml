@@ -28,12 +28,20 @@ generate = [
     "langchain-openai>=1.5.1",
     "langgraph>=1.2.11",
 ]
+# `claude-code:<model>` route: the local Claude Code CLI as a locked-down chat
+# model (subscription-billed fallback when the API budget is out).
+claude-code = [
+    "langchain-claude-code",
+]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
     "ruff>=0.8",
 ]
+
+[tool.uv.sources]
+langchain-claude-code = { path = "../langchain-claude-code", editable = true }
 
 [tool.ruff]
 line-length = 120
