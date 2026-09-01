@@ -134,3 +134,19 @@ def test_element_key_survives_renumbering_and_moving():
 
 def test_iframe_headers_env_flag_still_respected():
     assert os.getenv("NETGENT_IFRAME_HEADERS", "1") != "0"
+
+
+def test_media_line_renders_playback_ground_truth_under_title():
+    from netgent.browser.dom.models import MediaState
+
+    snap = DomSnapshot(url="u", title="t", elements=[_el("Play", y=10)], media=[
+        MediaState(tag="video", current=449, duration=515, paused=False),
+        MediaState(tag="audio", current=7, duration=None, paused=True, muted=True),
+    ])
+    text = format_observation(snap)
+    lines = text.splitlines()
+    # right under TITLE, before POSITION/elements — the first thing the model reads
+    assert lines[2] == "MEDIA: video PLAYING at 7:29 / 8:35"
+    assert lines[3] == "MEDIA: audio PAUSED at 0:07 [muted]"
+    # no media → no line (non-video pages see zero change)
+    assert "MEDIA:" not in format_observation(DomSnapshot(url="u", title="t", elements=[_el("Play", y=10)]))

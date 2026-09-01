@@ -3,6 +3,8 @@
 Compile-time only — the observation feeds the explore agent; replay never calls it.
 """
 
+import time
+
 from netgent.browser.dialogs import DialogLog
 from netgent.browser.dom.closed_shadow import ClosedShadowObserver
 from netgent.browser.dom.models import DomElement, DomSnapshot, MediaState, TextBlock
@@ -109,6 +111,7 @@ class DomObserver:
             elements=elements,
             texts=texts,
             media=media,
+            taken_at=time.time(),
             viewport_height=int(viewport_height),
             frames_skipped=len(skipped),
             skipped_frames=skipped,

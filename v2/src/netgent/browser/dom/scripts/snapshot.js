@@ -16,7 +16,12 @@
 // (scripts/__init__.py) strips them and hands the rest to `frame.evaluate` and to CDP
 // `Runtime.callFunctionOn(functionDeclaration=…)` unchanged.
 (...closedRoots) => {
-  const INTERACTIVE = new Set(['A','BUTTON','INPUT','SELECT','TEXTAREA']);
+  // VIDEO/AUDIO are interactive on purpose: a visible player is a real click target (players
+  // toggle play/pause on click) and the natural receiver for keyboard shortcuts (k/l/j,
+  // arrows) — without it listed, an agent that must seek precisely has no element to press
+  // on and falls back to proportional seek-bar clicks (measured: 4-minute overshoots on
+  // YouTube). Invisible/0x0 media (background <audio>) is still filtered by visible().
+  const INTERACTIVE = new Set(['A','BUTTON','INPUT','SELECT','TEXTAREA','VIDEO','AUDIO']);
   // Roles you actually operate on. Container roles (radiogroup, group, list, tablist, …)
   // are NOT here: listing them makes the agent try to click a wrapper and time out.
   const INTERACTIVE_ROLES = new Set(['button','link','checkbox','radio','textbox','combobox',

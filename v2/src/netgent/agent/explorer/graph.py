@@ -22,6 +22,7 @@ import asyncio
 import operator
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
@@ -36,7 +37,7 @@ from netgent.agent.explorer.decision import DEFAULT_KINDS, TERMINATES_BATCH
 from netgent.agent.explorer.memory import ExplorerMemory
 from netgent.agent.explorer.models import AgentStep, AgentTrajectory, StepRecord
 from netgent.agent.explorer.prompt import build_system_prompt
-from netgent.browser.dom import element_lines, format_observation
+from netgent.browser.dom import element_lines, format_observation, media_line
 from netgent.browser.locators import capture_locator, durable_locator
 from netgent.browser.session import BrowserSession
 from netgent.core.errors import ExecutionError
@@ -56,6 +57,12 @@ SETTLE_WATCH_S = 6.0
 # REPEAT_STOP (browser-use's "repeated failure" guard, tool-calling doc §5.2).
 REPEAT_NUDGE = 3
 REPEAT_STOP = 6  # how long after an action the page is sampled for text that appears (then vanishes)
+
+
+def _media_of(snapshot) -> str | None:
+    """The snapshot's playback state as one compact string for the step record (verifier
+    evidence): 'video PLAYING at 0:21 / 8:35'. None when the page has no observed media."""
+    return "; ".join(media_line(m) for m in snapshot.media[:3]) or None
 
 
 async def _watch_texts(
@@ -146,7 +153,8 @@ async def observe(state: AgentState, runtime: Runtime[ExplorerContext]) -> Comma
     # (measured, explorer-optimisation.md); the hard stop below stays.
     if no_progress >= MAX_REPEAT:
         reason = f"stuck: {MAX_REPEAT} steps with no change on screen"
-        stop = AgentStep(n=n, kind="done", reasoning=reason, url=snapshot.url, error=reason)
+        stop = AgentStep(n=n, kind="done", reasoning=reason, url=snapshot.url, error=reason,
+                         media=_media_of(snapshot), t=snapshot.taken_at or time.time())
         return Command(update={"n": n, "steps": [stop], "stopped_reason": reason}, goto=END)
     seen += fresh[:50]
     return Command(
@@ -193,7 +201,8 @@ async def decide(state: AgentState, runtime: Runtime[ExplorerContext]) -> Comman
     logger.info("step %d: %s — %s", n, "done" if decision.done else decision.kind, decision.reasoning)
 
     if decision.done:
-        step = AgentStep(n=n, kind="done", reasoning=decision.reasoning, url=state["snapshot"].url)
+        step = AgentStep(n=n, kind="done", reasoning=decision.reasoning, url=state["snapshot"].url,
+                         media=_media_of(state["snapshot"]), t=state["snapshot"].taken_at or time.time())
         return Command(
             update={
                 "steps": [step],
@@ -288,6 +297,7 @@ async def act(state: AgentState, runtime: Runtime[ExplorerContext]) -> Command[L
         step = AgentStep(
             n=n, item=i, kind=item.kind or "", reasoning=decision.reasoning, url=ctx.session.page.url, error=error,
             evaluation=decision.evaluation, memory=decision.memory, next_goal=decision.next_goal,
+            media=_media_of(snapshot), t=snapshot.taken_at or time.time(),
         )
         if error is None:
             step.action = action  # the compilable record of what actually ran

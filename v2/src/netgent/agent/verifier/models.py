@@ -37,6 +37,13 @@ class Evidence(BaseModel):
     action_log: list[str] = Field(default_factory=list)  # "3. fill 'Email' = 'a@b.c'" — what ran, and failures
     final_observation: str = ""
     final_url: str = ""
+    # "9. [t+42s] wait = '15.0' — video PLAYING at 0:04 / 8:35": playback position observed
+    # just BEFORE each step ran, stamped with wall-clock seconds since the first reading.
+    # Consecutive readings are how timed watch/pause/seek phases are verified: position delta
+    # vs wall-clock delta tells a seek jump from natural playback — a summed "expected final
+    # position" is wrong because playback continues between actions. Empty for runs that
+    # never observed media.
+    media_timeline: list[str] = Field(default_factory=list)
     texts_seen: list[str] = Field(default_factory=list)
     dialogs: list[str] = Field(default_factory=list)
     # How the run ended when the harness ended it (stuck / budget) — objective, not the agent's
@@ -54,6 +61,8 @@ class Evidence(BaseModel):
         max_screenshots: int = MAX_SCREENSHOTS,
     ) -> Evidence:
         log = []
+        timeline = []
+        t0 = next((s.t for s in traj.steps if s.media and s.t), None)
         for s in traj.steps:
             a = s.action
             what = ""
@@ -76,6 +85,9 @@ class Evidence(BaseModel):
             if s.dialogs:
                 line += f" -> dialog: {' | '.join(s.dialogs)[:160]}"
             log.append(line)
+            if s.media:
+                at = f"[t+{s.t - t0:.0f}s] " if s.t and t0 is not None else ""
+                timeline.append(f"{s.n}. {at}{what} — {s.media}")
         shots: list[bytes] = []
         if run_dir is not None:
             paths = [run_dir / s.screenshot for s in traj.steps if s.screenshot]
@@ -88,6 +100,7 @@ class Evidence(BaseModel):
             task=task,
             params=dict(params or {}),
             action_log=log,
+            media_timeline=timeline,
             final_observation=traj.final_observation,
             final_url=traj.final_url or (traj.steps[-1].url if traj.steps else ""),
             texts_seen=list(traj.texts_seen),

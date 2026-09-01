@@ -23,7 +23,7 @@ import os
 
 from netgent.browser.dom.models import DomElement, DomSnapshot, TextBlock
 
-__all__ = ["element_key", "element_lines", "format_observation"]
+__all__ = ["element_key", "element_lines", "format_observation", "media_line"]
 
 # Format hints for date/time inputs, copied from browser-use (dom/serializer/serializer.py:1157-1167):
 # the model cannot miss the required format when it is on the element's own line.
@@ -78,9 +78,7 @@ def format_observation(
     # signal — and its ticking currentTime keeps a playing page from ever comparing equal
     # to its previous observation (stuck detection).
     for m in snapshot.media[:3]:
-        state = "ENDED" if m.ended else ("PAUSED" if m.paused else "PLAYING")
-        pos = _mmss(m.current) + (f" / {_mmss(m.duration)}" if m.duration is not None else "")
-        lines.append(f"MEDIA: {m.tag} {state} at {pos}" + (" [muted]" if m.muted else ""))
+        lines.append(f"MEDIA: {media_line(m)}")
 
     # Page the elements by top-viewport position so scroll reveals the next batch.
     vh = snapshot.viewport_height or 0
@@ -195,6 +193,14 @@ def format_observation(
 def _mmss(seconds: int) -> str:
     m, s = divmod(max(0, int(seconds)), 60)
     return f"{m}:{s:02d}"
+
+
+def media_line(m) -> str:
+    """One MediaState as the compact reading used in observations, step records and the
+    verifier's media timeline: 'video PLAYING at 0:29 / 7:56'."""
+    state = "ENDED" if m.ended else ("PAUSED" if m.paused else "PLAYING")
+    pos = _mmss(m.current) + (f" / {_mmss(m.duration)}" if m.duration is not None else "")
+    return f"{m.tag} {state} at {pos}" + (" [muted]" if m.muted else "")
 
 
 def _render(el: DomElement) -> str:
