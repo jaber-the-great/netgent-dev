@@ -68,7 +68,7 @@ def build_options(
     setting_sources: list[Any] | None = None,
     mcp_servers: dict[str, McpServerConfig] | None = None,
     strict_mcp_config: bool = True,
-    max_turns: int | None = 1,
+    max_turns: int | None = 3,
     cwd: str | Path | None = None,
     cli_path: str | Path | None = None,
     env: dict[str, str] | None = None,
