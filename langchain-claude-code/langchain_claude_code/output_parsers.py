@@ -69,6 +69,6 @@ def parse_structured_message(message: BaseMessage, schema: dict[str, Any] | type
     return data
 
 
-def make_structured_output_parser(schema: dict[str, Any] | type) -> RunnableLambda:
+def make_structured_output_parser(schema: dict[str, Any] | type) -> RunnableLambda[Any, Any]:
     """A runnable mapping the model's AIMessage to the parsed structured value."""
     return RunnableLambda(lambda message: parse_structured_message(message, schema))
