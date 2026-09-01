@@ -58,11 +58,28 @@ class TextBlock(BaseModel):
     frame_path: list[str] = Field(default_factory=list)  # which frame the text is in
 
 
+class MediaState(BaseModel):
+    """A <video>/<audio> element's playback state, read from its DOM properties.
+
+    The properties are ground truth: they keep ticking while a player's on-screen controls
+    are auto-hidden and their labels/timers frozen (YouTube stops updating hidden controls —
+    the accessibility strings lied to the agent; currentTime cannot)."""
+
+    tag: str  # video | audio
+    current: int  # currentTime, whole seconds
+    duration: int | None = None  # None while unknown (streaming/not loaded)
+    paused: bool = False
+    ended: bool = False
+    muted: bool = False
+    frame_path: list[str] = Field(default_factory=list)
+
+
 class DomSnapshot(BaseModel):
     url: str
     title: str
     elements: list[DomElement] = Field(default_factory=list)
     texts: list[TextBlock] = Field(default_factory=list)
+    media: list[MediaState] = Field(default_factory=list)  # playing/paused <video>/<audio>
     viewport_height: int = 0  # top-frame innerHeight; 0 = unknown (show everything)
     # Frames whose walk failed (detached mid-snapshot, unreachable): their elements are
     # missing from this observation. Counted and named so the agent and the trajectory can
@@ -89,6 +106,7 @@ class DomSnapshot(BaseModel):
             title=self.title,
             elements=[e for e in self.elements if e.frame_path == frame_path],
             texts=[t for t in self.texts if t.frame_path == frame_path],
+            media=[m for m in self.media if m.frame_path == frame_path],
             viewport_height=0,
             frames_skipped=self.frames_skipped,
             skipped_frames=self.skipped_frames,

@@ -36,6 +36,14 @@
   const visible = (el) => {
     const r = el.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) return false;
+    // checkVisibility (native, Chromium) sees what the own-style check below cannot: an
+    // ANCESTOR's opacity:0. YouTube auto-hides its control bar that way and stops updating
+    // the hidden controls' labels — without the ancestor check the walker reports a frozen
+    // "Play (k)" / timer as live UI (measured: the pause-toggle and frozen-ad stuck loops).
+    if (el.checkVisibility) {
+      try { return el.checkVisibility({ opacityProperty: true, visibilityProperty: true }); }
+      catch (e) { /* fall through to the own-style check */ }
+    }
     const s = getComputedStyle(el);
     return s.visibility !== 'hidden' && s.display !== 'none' && s.opacity !== '0';
   };
@@ -160,6 +168,24 @@
 
   const results = [];
   const texts = [];
+  // Media ground truth, read from the element PROPERTIES — currentTime/paused never freeze,
+  // unlike YouTube's accessibility strings, which stop updating while the control bar is
+  // auto-hidden. Read-only property access; never call play()/pause() here. An invisible but
+  // audibly playing element (background <audio>) is still reported.
+  const media = [];
+  const observeMedia = (el) => {
+    try {
+      if (!visible(el) && el.paused) return;
+      media.push({
+        tag: el.tagName.toLowerCase(),
+        current: Math.floor(el.currentTime || 0),
+        duration: Number.isFinite(el.duration) ? Math.floor(el.duration) : null,
+        paused: !!el.paused,
+        ended: !!el.ended,
+        muted: !!el.muted,
+      });
+    } catch (e) { /* skip pathological media node */ }
+  };
   const seenText = new Set();
   // Inline children are part of their parent's sentence: "Score: <span>1</span> / 17" must
   // read as one text block, not "Score: / 17" plus a stray "1" (measured on the challenge
@@ -198,6 +224,7 @@
         // iframes are NOT descended here — the Python layer iterates page.frames and
         // evaluates this walk inside EACH frame's own context (works cross-origin via CDP).
         if (el.tagName === 'IFRAME') continue;
+        if (el.tagName === 'VIDEO' || el.tagName === 'AUDIO') observeMedia(el);
         if (isInteractive(el)) {
           // A hidden file input is still ACTIONABLE: set_input_files works on it, and custom
           // upload widgets (Bootstrap custom-file opacity:0, Material UI display:none behind a
@@ -269,5 +296,5 @@
     }
   };
   walk(document, false);
-  return { elements: results, texts };
+  return { elements: results, texts, media };
 }

@@ -124,12 +124,23 @@ async def observe(state: AgentState, runtime: Runtime[ExplorerContext]) -> Comma
         previous_texts=state.get("prev_texts") if same_page else None,
     )
 
+    # Accumulate every text observed during the run: success banners are often transient
+    # (hidden again after ~3 s), so post-run verification must be able to check what was
+    # SEEN, not only what is still on screen (sweep._form_succeeded).
+    seen = list(state.get("texts_seen") or [])
+    known = set(seen)
+    fresh = [t.text for t in snapshot.texts if t.text not in known]
+
     # Stuck detection is observation-based: an action that changes nothing on screen
-    # makes no progress; a scroll that reveals a new batch does change it.
+    # makes no progress; a scroll that reveals a new batch does change it. The rendered
+    # slice caps visible text, so a page changing OUTSIDE that slice (an ad's captions,
+    # a live ticker) can compare byte-equal while demonstrably alive — never-seen text
+    # is the tiebreaker (measured: 'stuck: no change on screen' fired mid-ad while
+    # texts_seen was recording the ad's captions advancing).
     prev = state.get("prev_observation")
     no_progress = state.get("no_progress", 0)
     if prev is not None:
-        no_progress = no_progress + 1 if plain == prev else 0
+        no_progress = no_progress + 1 if plain == prev and not fresh else 0
     # Deliberately NOT written back into the step record: telling the model "no visible
     # change" made it re-run the action whenever the change was invisible to the walker
     # (measured, explorer-optimisation.md); the hard stop below stays.
@@ -137,12 +148,7 @@ async def observe(state: AgentState, runtime: Runtime[ExplorerContext]) -> Comma
         reason = f"stuck: {MAX_REPEAT} steps with no change on screen"
         stop = AgentStep(n=n, kind="done", reasoning=reason, url=snapshot.url, error=reason)
         return Command(update={"n": n, "steps": [stop], "stopped_reason": reason}, goto=END)
-    # Accumulate every text observed during the run: success banners are often transient
-    # (hidden again after ~3 s), so post-run verification must be able to check what was
-    # SEEN, not only what is still on screen (sweep._form_succeeded).
-    seen = list(state.get("texts_seen") or [])
-    known = set(seen)
-    seen += [t.text for t in snapshot.texts if t.text not in known][:50]
+    seen += fresh[:50]
     return Command(
         update={
             "n": n,

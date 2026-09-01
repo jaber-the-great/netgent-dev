@@ -73,6 +73,14 @@ def format_observation(
     navigation, so a new page is not starred wholesale.
     """
     lines = [f"URL: {snapshot.url}", f"TITLE: {snapshot.title}"]
+    # Playback ground truth (walker reads the <video>/<audio> properties): the on-screen
+    # controls freeze while auto-hidden, so this line is the only reliable playing/paused
+    # signal — and its ticking currentTime keeps a playing page from ever comparing equal
+    # to its previous observation (stuck detection).
+    for m in snapshot.media[:3]:
+        state = "ENDED" if m.ended else ("PAUSED" if m.paused else "PLAYING")
+        pos = _mmss(m.current) + (f" / {_mmss(m.duration)}" if m.duration is not None else "")
+        lines.append(f"MEDIA: {m.tag} {state} at {pos}" + (" [muted]" if m.muted else ""))
 
     # Page the elements by top-viewport position so scroll reveals the next batch.
     vh = snapshot.viewport_height or 0
@@ -182,6 +190,11 @@ def format_observation(
             prefix = "  !ALERT " if t.alert else "  "
             lines.append(f"{prefix}{t.text}")
     return "\n".join(lines)
+
+
+def _mmss(seconds: int) -> str:
+    m, s = divmod(max(0, int(seconds)), 60)
+    return f"{m}:{s:02d}"
 
 
 def _render(el: DomElement) -> str:
