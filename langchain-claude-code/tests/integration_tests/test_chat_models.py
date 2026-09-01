@@ -95,4 +95,5 @@ async def test_astream():
     assert len(chunks) > 1
     text = "".join(chunk.content for chunk in chunks)
     assert "5" in text
-    assert chunks[-1].usage_metadata is not None
+    # langchain-core appends a synthetic final chunk; usage rides on ours.
+    assert any(chunk.usage_metadata is not None for chunk in chunks)
