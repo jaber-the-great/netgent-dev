@@ -26,7 +26,7 @@ class TestSafeDefaults:
         assert options.permission_mode == "dontAsk"
         assert options.mcp_servers == {}
         assert options.strict_mcp_config is True
-        assert options.max_turns == 1
+        assert options.max_turns == 3
         assert "no-session-persistence" in options.extra_args
         assert "disable-slash-commands" in options.extra_args
         assert options.model == MODEL
