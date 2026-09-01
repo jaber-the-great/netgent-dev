@@ -9,7 +9,15 @@ from netgent.browser.pw import Page
 from netgent.browser.resolution import LocatorResolver
 from netgent.core.errors import TriggerTimeoutError
 from netgent.schema.control import ParamSource
-from netgent.schema.triggers import DialogMatches, SelectorHidden, SelectorVisible, TitleContains, Trigger, UrlMatches
+from netgent.schema.triggers import (
+    DialogMatches,
+    MediaPlaying,
+    SelectorHidden,
+    SelectorVisible,
+    TitleContains,
+    Trigger,
+    UrlMatches,
+)
 from netgent.schema.workflow import State
 
 POLL_INTERVAL_S = 0.1
@@ -45,6 +53,23 @@ class TriggerEngine:
                 if await locator.count() == 0:
                     return False
                 return not await locator.first.is_visible()
+            case MediaPlaying():
+                # Element properties only — the playback signal that cannot freeze. No media
+                # elements → does not hold (resolved-only, like SelectorHidden). The duration
+                # gate is what tells content from an ad playing in the same element.
+                locator = self._resolver.frame_scope(trigger.frame_path).locator("video, audio")
+                readings = await locator.evaluate_all(
+                    "els => els.map((v) => ({ paused: !!v.paused, ended: !!v.ended,"
+                    " duration: Number.isFinite(v.duration) ? v.duration : null }))"
+                )
+                for m in readings:
+                    state_ok = (not m["paused"] and not m["ended"]) if trigger.playing else m["paused"]
+                    duration_ok = trigger.min_duration_s is None or (
+                        m["duration"] is not None and m["duration"] >= trigger.min_duration_s
+                    )
+                    if state_ok and duration_ok:
+                        return True
+                return False
         return False
 
     async def extract_value(self, source: "ParamSource", timeout_ms: int = 5000) -> str | None:

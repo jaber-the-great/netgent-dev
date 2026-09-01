@@ -52,6 +52,18 @@ _INTERRUPTION_TARGET_RE = re.compile(
 DWELL_SLICE_S = 1.0  # dwells compile to Repeat(wait 1s) so interrupt sweeps run between slices
 DWELL_MIN_SLICED_S = 3.0  # shorter waits stay a single atomic action
 
+# Media gating: a state whose capture-time reading showed the CONTENT playing gets a
+# media_playing(min_duration_s=…) condition, so a replay cannot spend its dwells/seeks on an
+# ad playing in the same element (measured: three +10s seeks no-op'd into a 90 s ad while
+# every selector condition held). The threshold is a heuristic ad/content separator:
+# half the content's duration, capped — most ads are <= 90 s; a parameterized replay may
+# play different content, so the gate must not demand the captured duration exactly.
+MEDIA_GATE_MIN_CONTENT_S = 30.0  # content shorter than this can't be told from an ad — no gate
+MEDIA_GATE_CAP_S = 120.0
+MEDIA_GATE_TIMEOUT_MS = 130_000  # a gated state may legitimately wait out an unskippable ad
+
+_MEDIA_READING_RE = re.compile(r"\b(video|audio) (PLAYING|PAUSED|ENDED) at (\d+):(\d{2})(?: / (\d+):(\d{2}))?")
+
 
 def _base_url(url: str) -> str:
     """URL without query/fragment — the stable part worth recognizing a state by."""
@@ -117,6 +129,46 @@ def _target_selector(action: Action) -> str | None:
     """The selector the action is about to act on, when it has one (click/fill/press-on-element/…)."""
     locator = getattr(action, "locator", None)
     return _locator_selector(locator) if locator else None
+
+
+def _media_readings(step) -> list[tuple[str, int | None]]:
+    """(state, duration_s) per media reading recorded on the step ("video PLAYING at 0:21 / 8:35")."""
+    if not getattr(step, "media", None):
+        return []
+    return [
+        (m.group(2), int(m.group(5)) * 60 + int(m.group(6)) if m.group(5) else None)
+        for m in _MEDIA_READING_RE.finditer(step.media)
+    ]
+
+
+def _gate_media_states(states: list[State], steps: list) -> None:
+    """Add media_playing gates to main-path states whose capture-time reading showed the
+    content playing.
+
+    A step's `media` is the reading taken just BEFORE it ran, i.e. it describes the step's
+    SOURCE state — states[i-1] for step i (states[0] is init, never gated). The content's
+    duration is the longest duration observed on the main path (ads playing in the same
+    element are shorter); states observed with the content PLAYING are gated on
+    "media at least min_duration_s long is playing", which an ad cannot satisfy. States
+    observed PAUSED (a pause phase) or during an ad are left ungated on purpose.
+    """
+    from netgent.schema.triggers import MediaPlaying
+
+    durations = [d for step in steps for _, d in _media_readings(step) if d is not None]
+    if not durations:
+        return
+    content_s = max(durations)
+    if content_s < MEDIA_GATE_MIN_CONTENT_S:
+        return  # content indistinguishable from an ad by length — an exact gate would overfit
+    threshold = min(round(content_s / 2), MEDIA_GATE_CAP_S)
+    for i, step in enumerate(steps, 1):
+        if i == 1:  # states[0] is init: pre-goto, nothing to gate
+            continue
+        if any(s == "PLAYING" and d is not None and d >= threshold for s, d in _media_readings(step)):
+            state = states[i - 1]
+            state.conditions = [*state.conditions, MediaPlaying(min_duration_s=float(threshold))]
+            # Recognition may legitimately have to wait out an unskippable ad.
+            state.timeout_ms = max(state.timeout_ms, MEDIA_GATE_TIMEOUT_MS)
 
 
 def is_interruption_step(step) -> bool:
@@ -209,6 +261,8 @@ def compile_trajectory(
         else:
             transitions.append(Transition(id=f"t{i}", source=states[-2].id, target=state_id, action=action))
             control.append(EdgeStep(edge=f"t{i}"))
+
+    _gate_media_states(states, steps)
 
     interrupts: list[Interrupt] = []
     for k, intr in enumerate(interruption_steps, 1):

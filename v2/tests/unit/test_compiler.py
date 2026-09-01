@@ -275,3 +275,60 @@ def test_params_bind_on_trajectories_with_interrupts_and_dwells():
     (fill_edge,) = [t for t in wf.transitions if t.action.type == "fill"]
     assert fill_edge.action.text == "${query}"
     assert not warnings
+
+
+def _media_traj() -> AgentTrajectory:
+    """A watch/seek/pause run with per-step media readings (the l-presses-into-the-ad shape)."""
+    video = [{"fn": "locator", "args": ["#movie_player video"]}]
+    return AgentTrajectory(
+        task="watch, fast-forward, pause",
+        success=True,
+        steps=[
+            AgentStep(n=1, kind="goto", reasoning="open", url="https://youtube.com/watch?v=x",
+                      action={"type": "goto", "url": "https://youtube.com/watch?v=x"}),
+            # reading BEFORE this press: the AD is playing (short duration) -> s1 stays ungated
+            AgentStep(n=2, kind="press", reasoning="mute", url="https://youtube.com/watch?v=x",
+                      media="video PLAYING at 0:03 / 1:30 [muted]",
+                      action={"type": "press", "keys": "m", "locator": video}),
+            # content playing before the dwell -> s2 (the dwell's source) is gated
+            AgentStep(n=3, kind="wait", reasoning="watch", url="https://youtube.com/watch?v=x",
+                      media="video PLAYING at 0:04 / 7:04 [muted]",
+                      action={"type": "wait", "seconds": 20.0}),
+            # content playing before the seek press -> s3 gated
+            AgentStep(n=4, kind="press", reasoning="fast forward", url="https://youtube.com/watch?v=x",
+                      media="video PLAYING at 0:24 / 7:04 [muted]",
+                      action={"type": "press", "keys": "l", "locator": video}),
+            # PAUSED before the pause dwell -> s4 NOT gated (a playing-gate would deadlock a pause)
+            AgentStep(n=5, kind="wait", reasoning="hold the pause", url="https://youtube.com/watch?v=x",
+                      media="video PAUSED at 0:34 / 7:04 [muted]",
+                      action={"type": "wait", "seconds": 10.0}),
+        ],
+    )
+
+
+def test_media_gates_playing_states_only_with_ad_proof_duration_threshold():
+    wf = compile_trajectory(_media_traj(), name="media")
+    threshold = min(round((7 * 60 + 4) / 2), 120)  # capped at 120s
+
+    def gates(sid):
+        return [c for c in wf.state(sid).conditions if c.type == "media_playing"]
+
+    assert gates("s1") == []  # the ad was playing here — its 90s duration is below threshold
+    (g2,) = gates("s2")
+    (g3,) = gates("s3")
+    assert g2.min_duration_s == g3.min_duration_s == float(threshold) and g2.playing
+    assert gates("s4") == []  # paused phase: a playing-gate would deadlock the pause dwell
+    # gated states may legitimately wait out an unskippable ad
+    assert wf.state("s2").timeout_ms >= 130_000
+    assert wf.state("s4").timeout_ms == 10_000
+
+
+def test_media_gate_absent_without_readings_or_for_short_content():
+    wf = compile_trajectory(_traj(), name="yt")  # no media readings anywhere
+    assert all(c.type != "media_playing" for s in wf.states for c in s.conditions)
+    short = _media_traj()
+    for s in short.steps:
+        if s.media:
+            s.media = s.media.replace("7:04", "0:25").replace("1:30", "0:20")
+    wf = compile_trajectory(short, name="short")  # 25s content: length can't tell it from an ad
+    assert all(c.type != "media_playing" for s in wf.states for c in s.conditions)

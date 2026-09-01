@@ -60,7 +60,25 @@ class DialogMatches(BaseModel):
     pattern: str  # regex, matched with re.search against "<type>: <message>"
 
 
+class MediaPlaying(BaseModel):
+    """A <video>/<audio> element in `frame_path` is in the given playback state.
+
+    Evaluated from the media element's own properties (paused/ended/duration) — the one
+    playback signal that cannot lie or freeze. `min_duration_s` is the ad gate: sites play
+    ads in the same media element as the content, so "a video is playing" is true during an
+    ad too — "a video at least this long is playing" is not (a 7-minute song vs a 90-second
+    ad). A replay whose seeks/dwells are gated this way waits out or skips an ad instead of
+    silently spending its watch time on it. Matches nothing → does not hold (same
+    resolved-only discipline as SelectorHidden).
+    """
+
+    type: Literal["media_playing"] = "media_playing"
+    playing: bool = True  # True: playing (not paused, not ended); False: paused
+    min_duration_s: float | None = None  # only media at least this long counts (filters ads)
+    frame_path: list[str] = Field(default_factory=list)
+
+
 Trigger = Annotated[
-    Union[UrlMatches, TitleContains, SelectorVisible, SelectorHidden, DialogMatches],
+    Union[UrlMatches, TitleContains, SelectorVisible, SelectorHidden, DialogMatches, MediaPlaying],
     Field(discriminator="type"),
 ]
