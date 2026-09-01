@@ -72,7 +72,7 @@ async def _watch_texts(
     deadline = asyncio.get_running_loop().time() + seconds
     while asyncio.get_running_loop().time() < deadline:
         try:
-            snap = await session.snapshot()
+            snap = await session.snapshot(drain_dialogs=False)  # peek: leave dialogs for observe()
             if frame_filter is not None:  # a sweep: ONLY this form's frame, never a neighbour's banner
                 snap = snap.scoped_to(frame_filter)
         except Exception:  # noqa: BLE001 — mid-navigation: try again on the next tick
