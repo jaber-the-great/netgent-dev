@@ -119,6 +119,10 @@ def format_observation(
             lines.append("POSITION: middle of page.")
         else:
             lines.append("POSITION: the whole page is listed. Nothing is hidden above or below.")
+    if snapshot.media:
+        # Playback truth from the element itself (see snapshot.js): the control-bar labels a
+        # player shows can freeze while the media plays, so the model gets this instead.
+        lines.append("MEDIA: " + " | ".join(m.line() for m in snapshot.media))
     fresh_texts = [t for t in snapshot.texts if t.text not in previous_texts] if previous_texts is not None else []
     if previous is not None:
         current = element_lines(snapshot)

@@ -5,7 +5,7 @@ Compile-time only — the observation feeds the explore agent; replay never call
 
 from netgent.browser.dialogs import DialogLog
 from netgent.browser.dom.closed_shadow import ClosedShadowObserver
-from netgent.browser.dom.models import DomElement, DomSnapshot, TextBlock
+from netgent.browser.dom.models import DomElement, DomSnapshot, MediaState, TextBlock
 from netgent.browser.dom.scripts import DOM_SNAPSHOT_JS, FRAME_CONTENT_ORIGIN_JS, FRAME_SELECTOR_JS
 from netgent.browser.pw import Frame, Page
 from netgent.core.logger import get_logger
@@ -69,6 +69,7 @@ class DomObserver:
         page = self._page
         elements: list[DomElement] = []
         texts: list[TextBlock] = []
+        media: list[MediaState] = []
         skipped: list[str] = []
         viewport_height = await page.evaluate("() => window.innerHeight")
         closed: dict[tuple[str, ...], dict] = {}
@@ -99,11 +100,15 @@ class DomObserver:
             for t in raw["texts"]:
                 t["frame_path"] = frame_path
                 texts.append(TextBlock.model_validate(t))
+            for m in raw.get("media") or []:
+                m["frame_path"] = frame_path
+                media.append(MediaState.model_validate(m))
         return DomSnapshot(
             url=page.url,
             title=await page.title(),
             elements=elements,
             texts=texts,
+            media=media,
             viewport_height=int(viewport_height),
             frames_skipped=len(skipped),
             skipped_frames=skipped,
