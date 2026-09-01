@@ -87,7 +87,8 @@ class ChatClaudeCode(BaseChatModel):
     - ``mcp_servers={}`` with ``strict_mcp_config=True``: no MCP servers —
       including the account's claude.ai-connected servers, which the CLI
       otherwise injects.
-    - ``max_turns=1``: no agentic loops.
+    - ``max_turns=3``: bounds the loop; with no tools, a turn can only be text or the
+      structured-output call (a JSON-schema answer sometimes takes two turns — one is too few).
     - ``--no-session-persistence`` and ``--disable-slash-commands``: no
       transcript on disk, no skills.
 
@@ -154,7 +155,7 @@ class ChatClaudeCode(BaseChatModel):
     """Only use MCP servers from ``mcp_servers``, ignoring every other source
     (project .mcp.json, user settings, claude.ai-connected servers)."""
 
-    max_turns: int | None = 1
+    max_turns: int | None = 3
     """Maximum conversation turns per call. 1 (default) forbids agentic
     loops. (Native structured output still works: the CLI's schema emission
     is not blocked by this limit.)"""
