@@ -220,6 +220,12 @@ class Executor:
 
         conditions = [ConditionCheck(type=t, met=met) for t, met in await self._session.condition_report(target_state)]
 
+        media = None
+        try:  # playback reading for the record — never allowed to fail an edge
+            media = await self._session.media_summary()
+        except Exception:  # noqa: BLE001 — including sessions/fakes without the probe
+            media = None
+
         screenshot_rel = None
         if self._run_dir is not None:
             screenshot_rel = f"screenshots/{transition.id}.png"
@@ -241,5 +247,6 @@ class Executor:
             conditions=conditions,
             url_after=self._session.page.url,
             screenshot=screenshot_rel,
+            media=media,
             error=error,
         )

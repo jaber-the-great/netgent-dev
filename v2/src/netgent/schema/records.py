@@ -38,6 +38,11 @@ class EdgeRecord(BaseModel):
     conditions: list[ConditionCheck] = Field(default_factory=list)  # which conjuncts held/failed
     url_after: str | None = None
     screenshot: str | None = None  # path (relative to the run dir) of the post-edge screenshot
+    # Playback state right after the edge ("video PLAYING at 0:29 / 7:56"), when the page has
+    # media. With started_at/duration_ms this makes a replay's timing fidelity auditable from
+    # the record alone: a seek edge must show a position jump, a dwell an advancing position —
+    # without it, seeks silently no-op'd into an ad and only a human watching noticed.
+    media: str | None = None
     error: str | None = None
 
 

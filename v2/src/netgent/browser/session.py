@@ -27,6 +27,21 @@ from netgent.schema.workflow import State
 
 __all__ = ["PATCHED_BROWSER", "BrowserSession"]
 
+# The same reading the walker's observeMedia takes (dom/scripts/snapshot.js), standalone so
+# a replay can take it without a DOM walk: element PROPERTIES only, which keep ticking while
+# a player's on-screen controls are hidden/frozen. Invisible-but-playing media (background
+# <audio>) is included; invisible paused media is not.
+_MEDIA_PROBE_JS = """() => [...document.querySelectorAll('video, audio')].flatMap((v) => {
+  try {
+    const r = v.getBoundingClientRect();
+    if (!(r.width > 0 || r.height > 0) && v.paused) return [];
+    return [{ tag: v.tagName.toLowerCase(),
+              current: Math.floor(v.currentTime || 0),
+              duration: Number.isFinite(v.duration) ? Math.floor(v.duration) : null,
+              paused: !!v.paused, ended: !!v.ended, muted: !!v.muted }];
+  } catch (e) { return []; }
+})"""
+
 
 class BrowserSession:
     def __init__(self, headless: bool = True, profile: BrowserProfile | None = None):
@@ -96,6 +111,27 @@ class BrowserSession:
     async def screenshot(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         await self.page.screenshot(path=str(path))
+
+    async def media_summary(self) -> str | None:
+        """Playback ground truth for the run record: every visible-or-audible <video>/<audio>
+        across frames as one compact string ('video PLAYING at 0:29 / 7:56'), or None.
+
+        Read-only property access per frame — safe at REPLAY time (zero-LLM: no model, no
+        DomObserver walk). This is what makes a replay's timing fidelity auditable after the
+        fact: a seek edge whose readings show no jump, or a dwell with a frozen position,
+        is visible in record.json instead of only to someone watching the browser.
+        """
+        from netgent.browser.dom.models import MediaState
+        from netgent.browser.dom.serializer import media_line
+
+        found: list[str] = []
+        for frame in self.page.frames:
+            try:
+                raw = await frame.evaluate(_MEDIA_PROBE_JS)
+            except Exception:  # noqa: BLE001 — a detached/mid-navigation frame is skipped
+                continue
+            found += [media_line(MediaState.model_validate(m)) for m in raw]
+        return "; ".join(found[:3]) if found else None
 
     # ── locator resolution ───────────────────────────────────────────────────────
 
