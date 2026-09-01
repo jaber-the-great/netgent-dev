@@ -1,0 +1,114 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "langchain-claude-code"
+description = "LangChain chat model backed by the Claude Code CLI via the Claude Agent SDK — locked down to a plain model by default"
+license = { text = "MIT" }
+readme = "README.md"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "claude-agent-sdk>=0.2.100,<0.3.0",
+    "langchain-core>=1.0.0,<2.0.0",
+    "pydantic>=2.7.4,<3.0.0",
+]
+
+[project.urls]
+Repository = "https://github.com/SNL-UCSB/netgent"
+
+[dependency-groups]
+test = [
+    "pytest>=8.0.0,<10.0.0",
+    "pytest-asyncio>=0.24.0,<2.0.0",
+    "langchain-tests>=1.0.0,<2.0.0",
+]
+lint = ["ruff>=0.9.0,<0.17.0"]
+typing = ["mypy>=1.12,<3.0.0"]
+
+[tool.mypy]
+strict = true
+warn_unreachable = true
+disallow_any_generics = false
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = 100
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",  # Messes with the formatter
+    "ISC001",  # Messes with the formatter
+    "PERF203", # Rarely useful
+    "SIM105",  # Rarely useful
+    "FIX",     # TODOs
+    "TD",      # TODOs
+    "C901",    # Complex functions
+    "PLR0912", # Too many branches
+    "PLR0913", # Too many arguments
+    "PLR0915", # Too many statements
+    "ARG001",
+    "PLR0911", # Too many return statements
+    "PLR2004", # Comparison to magic number
+    "ANN401",
+    "ARG002",
+    "BLE001",
+    "TC001",
+    "TC002",
+    "TC003",
+    "PLC0415", # `import` at top level — lazy imports are deliberate here
+    "TRY003",  # Long exception messages are the point of the loud errors
+    "EM101",   # String literal in exception
+    "EM102",   # f-string in exception
+    "CPY001",  # No copyright headers in this package
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+ignore-var-parameters = true
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/**/*.py" = [
+    "S101",   # Tests need assertions
+    "SLF001", # Private member access in tests
+    "D",      # Docstring checks in tests
+    "ANN",    # Type annotations in tests
+    "PLR2004",
+    "INP001",
+    "S108",   # /tmp paths in test fixtures
+    "RUF043",
+]
+"scripts/*.py" = [
+    "INP001", # Not a package
+    "T201",   # print is fine in scripts
+    "S311",   # Non-crypto random module names
+]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --strict-config --durations=5"
+asyncio_mode = "auto"
