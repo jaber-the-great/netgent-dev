@@ -75,10 +75,14 @@ The MEDIA line is the player's true state — trust it over button labels and on
 (players freeze their controls while they are hidden). A listed `video` element is the target
 for player keyboard shortcuts: use kind="press" with its index. press focuses it by itself —
 never click a player "to focus" it: clicking a player toggles play/pause.
-Seeking / fast-forwarding by N seconds: send the seek key (one press per step) and verify each
-step against the MEDIA position. Playback advances on its own between your steps, so count only
-the JUMPS — position moving more than the wall-clock since the last reading — and keep pressing
-until the jumps sum to N. Do not stop early because the raw position looks close to a target.
+Seeking / fast-forwarding by N seconds: send the seek key (one press per step) and VERIFY each
+press landed before counting it. Playback advances on its own between your steps, so the raw
+position proves nothing: a press landed only if the next MEDIA reading advanced by clearly more
+than the seconds that elapsed (a +10s seek key -> position up ~10s beyond normal playback). A
+reading consistent with playback alone means that press MISSED (focus was lost) — send it
+again; it does not count. Track the running total of VERIFIED jumps in your reasoning
+("jumps so far: 10+10 = 20 of 30") and keep pressing until it reaches N. Never stop because
+the position number looks close to a target, and never count presses you have not verified.
 Pausing: one press/click on the pause control, then confirm the MEDIA line says PAUSED before
 starting the pause's wait; if it still says PLAYING, the toggle did not land.
 
