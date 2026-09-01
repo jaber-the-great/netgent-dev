@@ -85,17 +85,22 @@
     (el.tagName === 'SELECT' ? '' : el.innerText) ||
     el.getAttribute('value') || ''
   );
+  // Machine-generated id signals (mirrors browser/locators.py _VOLATILE_ID): long digit/hex
+  // runs, framework prefixes, a colon (React useId, YouTube's per-mount `skip-button:2`), or
+  // a trailing counter. Such ids change per session/mount — a chain built on one can never
+  // replay, so the walker falls through to the structural path instead.
+  const VOLATILE_ID = /\d{4,}|[0-9a-f]{8,}|^(tw|ember|react)|:|[-_]?\d+$/;
   const cssPath = (el) => {
     // Structural path only: tag + nth-of-type. No class names — nth-of-type already makes
     // each hop unique among its siblings, and classes flip with STATE (measured: Quill drops
     // ql-blank on first input, so a class-bearing chain resolved to 0 right after the fill it
     // was captured for). An #id (when present and stable-looking) still short-circuits.
-    if (el.id) return `#${CSS.escape(el.id)}`;
+    if (el.id && !VOLATILE_ID.test(el.id)) return `#${CSS.escape(el.id)}`;
     const parts = [];
     let node = el;
     while (node && node.nodeType === 1 && parts.length < 6) {
       let sel = node.tagName.toLowerCase();
-      if (node.id && !/\d{4,}/.test(node.id)) { parts.unshift(`#${CSS.escape(node.id)}`); break; }
+      if (node.id && !VOLATILE_ID.test(node.id)) { parts.unshift(`#${CSS.escape(node.id)}`); break; }
       const parent = node.parentNode;
       if (parent) {
         const sibs = [...parent.children].filter(c => c.tagName === node.tagName);

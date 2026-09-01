@@ -13,6 +13,7 @@ import re
 from urllib.parse import quote_plus
 
 from netgent.agent.explorer.models import AgentTrajectory
+from netgent.browser.locators import is_volatile_selector
 from netgent.schema.actions import (
     Action,
     ClickAction,
@@ -212,6 +213,14 @@ def compile_trajectory(
     interrupts: list[Interrupt] = []
     for k, intr in enumerate(interruption_steps, 1):
         sel = _target_selector(intr.action)  # non-None by _is_interruption
+        if is_volatile_selector(sel) and warnings is not None:
+            # An interrupt exists to fire on a FUTURE instance of its overlay; a per-mount
+            # id (`#skip-button\:2`) can never match one. The capture ladder avoids these,
+            # so reaching here means no semantic candidate existed — say so loudly.
+            warnings.append(
+                f"interrupt int{k} is anchored on {sel!r}, which looks machine-generated "
+                "(per-session id) — it will likely never fire on replay"
+            )
         anchor_state = f"i{k}"
         done_state = f"i{k}_done"
         states.append(State(id=anchor_state, conditions=[{"type": "selector_visible", "selector": sel}]))
