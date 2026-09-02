@@ -38,7 +38,7 @@ from netgent.agent.explorer.memory import ExplorerMemory
 from netgent.agent.explorer.models import AgentStep, AgentTrajectory, StepRecord
 from netgent.agent.explorer.prompt import build_system_prompt
 from netgent.browser.dom import element_lines, format_observation, media_line
-from netgent.browser.locators import capture_locator, durable_locator
+from netgent.browser.locators import capture_ladder, durable_locator
 from netgent.browser.session import BrowserSession
 from netgent.core.errors import ExecutionError
 from netgent.core.logger import get_logger
@@ -253,6 +253,7 @@ async def act(state: AgentState, runtime: Runtime[ExplorerContext]) -> Command[L
         error = None
         action = None
         note = None
+        probe = None
         try:
             if item.kind not in ctx.allowed_kinds:
                 raise ValueError(
@@ -262,7 +263,7 @@ async def act(state: AgentState, runtime: Runtime[ExplorerContext]) -> Command[L
             upload = upload_path(ctx) if item.kind == "upload" else None
             # Verified per item, against the live page: items 2..k run after the page may
             # have re-rendered, so the R1/R4 check must not reuse item 1's probe.
-            locator_for, note = await _verified_locator(ctx.session, snapshot, item.index)
+            locator_for, note, probe = await _verified_locator(ctx.session, snapshot, item.index)
             action = to_action(item, snapshot, upload_path=upload, locator_for=locator_for)
             # Carry the closed-shadow capability flag from the chosen element onto the action,
             # so a plain-Playwright replayer refuses instead of timing out (R8).
@@ -302,6 +303,13 @@ async def act(state: AgentState, runtime: Runtime[ExplorerContext]) -> Command[L
         if error is None:
             step.action = action  # the compilable record of what actually ran
             step.locator_check = note
+            if probe is not None and getattr(action, "locator", None):
+                # M0: the whole ladder the element had, as the live page resolved it.
+                step.locator_candidates = list(probe.chains)
+                step.candidate_kinds = list(probe.kinds)
+                step.match_counts = list(probe.counts)
+                step.match_indices = list(probe.indices)
+                step.element = _element_identity(snapshot, item.index)
             step.dialogs = ctx.session.dialogs_since_last_action()  # THIS item's own dialogs (per item)
         await capture_screenshot(ctx, step)
         steps.append(step)
@@ -460,19 +468,29 @@ def _target_label(snapshot, index: int | None) -> str:
     return el.name or (f"{el.tag}[{el.type}]" if el.type else el.tag)
 
 
+def _element_identity(snapshot, index: int | None) -> dict:
+    """The acted element's identity for the record: tag, role, name, type, frame path."""
+    elems = snapshot.interactive()
+    if index is None or not (0 <= index < len(elems)):
+        return {}
+    el = elems[index]
+    return {"tag": el.tag, "role": el.role, "name": el.name, "type": el.type, "frame_path": list(el.frame_path)}
+
+
 async def _verified_locator(session: BrowserSession, snapshot, index: int | None):
-    """(locator builder, provenance note) for the chosen element, verified against the live
-    page: unique (R1) and cross-checked with Playwright's own generator (R4).
+    """(locator builder, provenance note, probed ladder) for the chosen element, verified
+    against the live page: unique (R1) and cross-checked with Playwright's own generator (R4).
 
     Resolution is async (it counts matches in the browser) while `to_action` is pure, so
     the chain is built here and handed in. Any failure falls back to the unverified chain.
+    The probe (every rung with its match count) is what the AgentStep records (M0).
     """
     elems = snapshot.interactive()
     if index is None or not (0 <= index < len(elems)):
-        return durable_locator, None
+        return durable_locator, None, None
     try:
-        chain, note = await capture_locator(session, elems[index])
+        chain, note, probe = await capture_ladder(session, elems[index])
     except Exception as exc:  # noqa: BLE001 — verification is best-effort; dispatch fails loudly
         logger.warning("locator verification failed for element %d: %s", index, exc)
-        return durable_locator, f"verification failed: {exc}"
-    return (lambda _el: chain), note
+        return durable_locator, f"verification failed: {exc}", None
+    return (lambda _el: chain), note, probe

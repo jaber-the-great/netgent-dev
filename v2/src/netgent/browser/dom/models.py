@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 
 class SelectorCandidate(BaseModel):
-    kind: str  # role | test_id | label | css
+    kind: str  # role | test_id | label | css | structural (the positional rung, see locators.py)
     role: str | None = None
     name: str | None = None
     value: str | None = None

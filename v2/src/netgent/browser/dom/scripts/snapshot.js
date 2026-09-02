@@ -164,6 +164,40 @@
     el.classList.contains('ng-invalid') || el.classList.contains('is-invalid')
     || el.getAttribute('aria-invalid') === 'true';
 
+  // The POSITIONAL rung: a css path anchored at the nearest REPEATED container — the first
+  // ancestor (or the element itself) with >= 2 same-tag siblings: a list item, a result card,
+  // a table row — and that container's parent. It deliberately carries no nth on the
+  // container, so it matches every item's counterpart and `nth(i)` picks by POSITION; inside
+  // the item the path is structural (tag, a stable #id, nth-of-type among same-tag siblings).
+  // Recorded as kind 'structural' (browser/locators.py appends it last, so it never wins the
+  // durability ladder on its own); the generator switches a title-keyed click to it when the
+  // task meant "the first result" and every run's index agrees (generator-agent.md §C.2.1).
+  const structuralPath = (el) => {
+    let container = el;
+    for (let hops = 0; hops < 8; hops++) {
+      const parent = container.parentElement;
+      if (!parent || parent === document.documentElement) return null;
+      const sibs = [...parent.children].filter(c => c.tagName === container.tagName);
+      if (sibs.length > 1) {
+        const inner = [];
+        let node = el;
+        let byId = false;
+        while (node && node !== container) {
+          const tag = node.tagName.toLowerCase();
+          if (node.id && !VOLATILE_ID.test(node.id)) { inner.unshift(`${tag}#${CSS.escape(node.id)}`); byId = true; break; }
+          const same = node.parentElement ? [...node.parentElement.children].filter(c => c.tagName === node.tagName) : [];
+          inner.unshift(same.length > 1 ? `${tag}:nth-of-type(${same.indexOf(node) + 1})` : tag);
+          node = node.parentElement;
+        }
+        const head = `${cssPath(parent)} > ${container.tagName.toLowerCase()}`;
+        if (!inner.length) return head;
+        return byId ? `${head} ${inner.join(' > ')}` : `${head} > ${inner.join(' > ')}`;
+      }
+      container = parent;
+    }
+    return null;
+  };
+
   const candidates = (el) => {
     const out = [];
     const role = roleOf(el);
@@ -173,6 +207,10 @@
     if (tid) out.push({ kind: 'test_id', value: tid });
     if (name && el.labels && el.labels.length) out.push({ kind: 'label', value: name });
     out.push({ kind: 'css', value: cssPath(el) });
+    try {
+      const structural = structuralPath(el);
+      if (structural) out.push({ kind: 'structural', value: structural });
+    } catch (e) { /* no positional rung for this element */ }
     return out;
   };
 
