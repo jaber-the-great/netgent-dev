@@ -72,14 +72,18 @@ def parse_structured_message(message: BaseMessage, schema: dict[str, Any] | type
 
 
 def _unwrap_envelope(data: Any) -> Any:
-    """Undo the CLI's ``{"$PARAMETER_VALUE": "<json text>"}`` envelope.
+    """Undo the CLI's ``{"$PARAMETER_NAME": …, "$PARAMETER_VALUE": "<json text>"}`` envelope.
 
     Measured (Claude Code 2.1.x, a schema with a ``dict[str, str]`` field): the validated
     object comes back wrapped in a single ``$PARAMETER_VALUE`` key whose value is the real
     JSON as a string. Validating that dict against a model with all-default fields used
     to "succeed" with an empty object — silently.
     """
-    if isinstance(data, dict) and len(data) == 1 and "$PARAMETER_VALUE" in data:
+    if (
+        isinstance(data, dict)
+        and "$PARAMETER_VALUE" in data
+        and all(str(k).startswith("$") for k in data)
+    ):
         inner = data["$PARAMETER_VALUE"]
         if isinstance(inner, str):
             try:

@@ -22,7 +22,8 @@ def test_parameter_value_envelope_is_unwrapped_and_foreign_objects_rejected():
         notes: list[str] = Field(default_factory=list)
 
     real = {"items": [{"text": "a", "values": {"q": "x"}}], "notes": []}
-    envelope = {"structured_output": {"$PARAMETER_VALUE": json.dumps(real)}}
+    wrapped_value = {"$PARAMETER_NAME": "plan", "$PARAMETER_VALUE": json.dumps(real)}
+    envelope = {"structured_output": wrapped_value}
     wrapped = AIMessage(content="", additional_kwargs=envelope)
     assert parse_structured_message(wrapped, Plan).items[0].values == {"q": "x"}
 
