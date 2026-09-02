@@ -20,6 +20,7 @@ Working notes derived from three design meetings (Eugene Vuong ↔ Manni Moghimi
 - [explorer-optimisation.md](explorer-optimisation.md) — what was implemented from the four above, with the A/B numbers (kept vs reverted).
 - [browser-agent-date-inputs.md](browser-agent-date-inputs.md) — date inputs and pickers: format signals, dispatch strategies, measured on the two failing sweep forms (implemented).
 - [trajectory-memory.md](trajectory-memory.md) — inducing one generalized workflow from N trajectories (ReUseIt corrected: no real merge; failures +8.7, fallbacks +20); the typed-key merge proposal and the runs-independence policy.
+- [media-platforms-eval.md](media-platforms-eval.md) — the media-watch pipeline on Vimeo/Twitch/Dailymotion/SoundCloud/Archive.org: 1 of 5 generalizes; root causes (trigger name truncation, detached Audio(), stream integrity block, no-input homepage) and the three fixes ranked by sites unblocked.
 - [agent-verification.md](agent-verification.md) — how agents verify task completion: judges vs deterministic oracles, feedback contracts; the NetGent verifier design.
 - [verification-papers.md](verification-papers.md) — the verification/judging literature, old and new (test oracles, LLM-as-judge limits, self-verification, replay determinism).
 - [stealth-after-patchright.md](stealth-after-patchright.md) — what Patchright covers, measured residuals, `BrowserProfile` verdict (implemented).
