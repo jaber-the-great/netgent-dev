@@ -74,19 +74,26 @@ def test_untranslatable_locators_get_no_anchor():
         steps=[
             AgentStep(n=1, kind="goto", reasoning="open", url="https://x.com/",
                       action={"type": "goto", "url": "https://x.com"}),
-            # multi-step chain: conservatively no anchor (open gate, never a wrong guard)
+            # multi-step chain with a filter: conservatively no anchor (open gate, never a wrong guard)
             AgentStep(n=2, kind="click", reasoning="click", url="https://x.com/",
                       action={"type": "click",
-                              "locator": [{"fn": "locator", "args": ["#a"]},
-                                          {"fn": "nth", "args": [0]}]}),
+                              "locator": [{"fn": "locator", "args": ["a"]},
+                                          {"fn": "filter", "args": [], "kwargs": {"has_text": "10:58"}}]}),
             # locator-less action: nothing to anchor on
             AgentStep(n=3, kind="press", reasoning="key", url="https://x.com/",
                       action={"type": "press", "keys": "l"}),
+            # the positional shape [locator(css), nth(i)] IS expressible: Playwright's `css >> nth=i`
+            AgentStep(n=4, kind="click", reasoning="click", url="https://x.com/",
+                      action={"type": "click",
+                              "locator": [{"fn": "locator", "args": ["#results > li > a"]},
+                                          {"fn": "nth", "args": [0]}]}),
         ],
     )
     wf = compile_trajectory(traj, name="x")
     assert all(c.type == "url_matches" for c in wf.state("s1").conditions)  # no anchor added
     assert wf.state("s2").conditions == []  # next action has no locator
+    (anchor,) = wf.state("s3").conditions
+    assert anchor.type == "selector_visible" and anchor.selector == "#results > li > a >> nth=0"
 
 
 def test_sample_values_become_params():

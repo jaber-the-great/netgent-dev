@@ -147,6 +147,8 @@ class LangChainLLM:
     `model` is a `provider:model` string handed to `init_chat_model`, or an already-built
     `BaseChatModel` (tests inject `GenericFakeChatModel` here)."""
 
+    _parent: "LangChainLLM | None" = None  # class default: instances built via __new__ (tests) are roots
+
     def __init__(self, model: "str | BaseChatModel" = DEFAULT_MODEL):
         if isinstance(model, str):
             ref = model_ref(model)
@@ -166,7 +168,7 @@ class LangChainLLM:
         else:
             self._chat = model
         self._structured: dict[tuple, object] = {}  # per (allowed kinds, max_actions)
-        self._parent: LangChainLLM | None = None  # set on a `scoped()` view: totals roll up to it
+        self._parent = None  # set on a `scoped()` view: totals roll up to it
         # Running totals across decide() calls — what an exploration cost (the evals under
         # `netgent eval stress` report these per run). `input_tokens` is the provider's total
         # (cache reads and writes included), so it stays comparable across layouts.

@@ -107,9 +107,17 @@ def _element_condition(action: Action) -> dict | None:
 def _locator_selector(locator: Locator) -> str | None:
     """A Playwright selector string equivalent to a locator chain, or None if inexpressible.
 
-    Conservative by design: only the two single-step shapes the explore agent emits today.
-    A chain we can't translate yields no guard (an open gate), never a wrong guard.
+    Conservative by design: the two single-step shapes the explore agent emits, plus the
+    positional shape the merge emits for "the N-th item" — `[locator(css), nth(i)]` as
+    Playwright's `css >> nth=i` chain, which resolves to exactly that element. A chain we
+    can't translate yields no guard (an open gate), never a wrong guard.
     """
+    if (
+        len(locator) == 2
+        and locator[0].fn == "locator" and len(locator[0].args) == 1 and not locator[0].kwargs
+        and locator[1].fn == "nth" and len(locator[1].args) == 1
+    ):
+        return f"{locator[0].args[0]} >> nth={int(locator[1].args[0])}"
     if len(locator) != 1:
         return None
     step = locator[0]

@@ -58,11 +58,57 @@ def test_merge_records_the_evidence_triage_needs():
     (click,) = [c for c in gen.columns if c.disposition == "target-varies" and c.action_type == "click"]
     assert click.transition == "t4" and sorted(click.targets_by_run) == [1, 2, 3]
     assert all(t.startswith("role=link") for t in click.targets_by_run.values())
-    (wait,) = [c for c in gen.columns if c.disposition == "value-diverges"]
-    assert wait.field == "seconds" and wait.values_by_run == {1: "20.0", 2: "5.0", 3: "15.0"}
+    # the initial watch: run 2's 5 s ad-wait no longer outbids its 25 s watch (value-aware alignment)
+    (watch,) = [c for c in gen.columns if c.param == "initial_watch_seconds"]
+    assert watch.disposition == "param" and watch.field == "seconds"
+    assert watch.values_by_run == {1: "20.0", 2: "25.0", 3: "15.0"}
+    assert sorted(p.name for p in gen.params) == [
+        "final_watch_seconds", "initial_watch_seconds", "pause_seconds", "search_query", "second_watch_seconds"]
     off_path = [c for c in gen.columns if c.disposition in ("dropped", "interrupt")]
-    assert len(off_path) == 8 and all(c.transition is None for c in off_path)
+    assert all(c.transition is None for c in off_path)
+    assert not [c for c in gen.columns if c.disposition == "value-diverges"]
     assert gen.hints == []  # no hints were proposed for this merge
+
+
+def _perturbed(runs: list[RunInput]) -> list[RunInput]:
+    """Run 2 planned a 40 s initial watch but waited 25 s: its dwell binds to nothing."""
+    out = [r.model_copy(deep=True) for r in runs]
+    out[1].values["initial_watch_seconds"] = "40s"
+    return out
+
+
+def test_unbound_value_episode_when_a_dwell_matches_no_planned_value():
+    runs, verdicts = _runs()
+    gen = merge_trajectories(_perturbed(runs), name="dt").generalized
+    (col,) = [c for c in gen.columns if c.disposition == "value-diverges"]
+    assert col.action_type == "wait" and col.field == "seconds"
+    episodes = triage(generalized=gen, replay=None, runs=_perturbed(runs), verdicts=verdicts)
+    (unbound,) = [e for e in episodes if e.kind == "unbound_value"]
+    # with nothing to bind run 2's 25 s watch to, its 5 s ad-wait pairs with the others again
+    assert unbound.column == col.index and unbound.observed == {1: "20.0", 2: "5.0", 3: "15.0"}
+    assert unbound.planned["initial_watch_seconds"] == {1: "20s", 2: "40s", 3: "15s"}
+
+
+def test_fold_hint_on_the_seek_presses_binds_the_count_by_a_factor_of_ten():
+    """Three / two / four `l` presses for planned 30s / 20s / 40s fast-forwards: the fold binds
+    the press COUNT (×10 s), spanning the stray scroll column a run made mid-gesture."""
+    from netgent.agent.generator.hints import GeneralizationHint, RepeatFold
+
+    runs, _ = _runs()
+    gen0 = merge_trajectories(runs, name="dt").generalized
+    seek = [c.index for c in gen0.columns if c.action_type == "press" and c.support == 3
+            and c.target and "video" in c.target]
+    hint = GeneralizationHint(column=seek[0], repeat_fold=RepeatFold(kind="press", count_param="fast_forward_seconds"))
+    out = merge_trajectories(runs, name="dt", hints=[hint])
+    (o,) = out.generalized.hints
+    assert o.status == "applied", o.reason
+    (p,) = [p for p in out.workflow.params if p.name == "fast_forward_seconds_count"]
+    assert p.default == "3" and "each press ≈ 10 of fast_forward_seconds" in p.description
+    assert next(p for p in out.generalized.params if p.name == "fast_forward_seconds_count").values_by_run == {
+        1: "3", 2: "2", 3: "4"}
+    (rep,) = [n for n in out.workflow.control if n.kind == "repeat" and n.body[0].edge.endswith("_rep")]
+    assert rep.count == "${fast_forward_seconds_count}" and rep.max_iterations >= 12
+    assert len([c for c in out.generalized.columns if c.disposition == "folded"]) == 4
 
 
 def test_triage_on_the_dream_theater_round():
@@ -77,11 +123,7 @@ def test_triage_on_the_dream_theater_round():
     assert pos.unmet == ["url_matches", "selector_visible"] and sorted(pos.observed) == [1, 2, 3]
     assert "search_query" in pos.planned and pos.planned["search_query"][2] == "Metallica - Master of Puppets"
 
-    (unbound,) = [e for e in episodes if e.kind == "unbound_value"]
-    assert unbound.action_type == "wait" and unbound.field == "seconds"
-    assert unbound.observed == {1: "20.0", 2: "5.0", 3: "15.0"}
-    assert unbound.planned["initial_watch_seconds"] == {1: "20s", 2: "25s", 3: "15s"}  # the near-miss
-
+    assert "unbound_value" not in kinds  # every dwell bound to a planned duration
     assert kinds.count("conditional_step") >= 2  # the k<N dismissal-shaped columns
     assert "flow_drift" not in kinds  # the failed edge's column already carries the positional episode
     assert "unpassable" not in kinds

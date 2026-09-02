@@ -44,7 +44,7 @@ from netgent.agent.generator.compiler import (
     compile_trajectory,
     is_interruption_step,
 )
-from netgent.agent.generator.hints import HintOutcome
+from netgent.agent.generator.hints import GeneralizationHint, HintOutcome
 from netgent.schema.actions import Action, GotoAction, LocatorStep, NoopAction, WaitAction
 from netgent.schema.control import Branch, BranchArm, ControlNode, EdgeStep, Interrupt, Param, Repeat
 from netgent.schema.workflow import State, Transition, Workflow
@@ -73,7 +73,8 @@ class ColumnReport(BaseModel):
     """One aligned column's disposition — the merge's evidence trail."""
 
     index: int
-    # aligned | param | param-target | interrupt | branch | dropped | value-diverges | target-varies
+    # aligned | param | param-target | positional | folded | interrupt | branch | dropped |
+    # value-diverges | target-varies
     disposition: str
     support: int
     runs: list[int]
@@ -94,6 +95,7 @@ class ParamReport(BaseModel):
     name: str
     default: str  # the spine run's value
     values_by_run: dict[int, str] = Field(default_factory=dict)
+    description: str = ""  # set when the param is derived (a fold's count with its per-press factor)
 
 
 class GeneralizedTrajectory(BaseModel):
@@ -188,10 +190,54 @@ def _step_effects(seqs: dict[int, list[AgentStep]]) -> dict[int, Effect]:
     return eff
 
 
-def _match_score(col: _Column, step: AgentStep, eff: dict[int, Effect]) -> int:
+Values = dict[int, dict[str, str]]  # run id -> planner name -> that run's value
+
+
+def _planned_name(step: AgentStep, values: dict[str, str]) -> str | None:
+    """The planner param a wait's duration corresponds to in its own run (exact, else within
+    the seconds tolerance), or None — what tells an initial-watch dwell from an ad-wait."""
+    if step.action is None or step.action.type != "wait":
+        return None
+    seconds = float(step.action.seconds)
+    exact = [n for n, v in sorted(values.items()) if (num := _number_in(v)) is not None and num == seconds]
+    if exact:
+        return exact[0]
+    close = [n for n, v in sorted(values.items())
+             if (num := _number_in(v)) is not None and abs(num - seconds) <= max(2.0, SECONDS_TOLERANCE * num)]
+    return close[0] if close else None
+
+
+def _gap_cost(step: AgentStep) -> int:
+    """A scroll is never a required step (it is dropped whatever its support), so leaving it
+    unpaired costs nothing — otherwise a scroll↔scroll pairing outbids the wait pairing the
+    planned values support (measured on the YouTube 3-run merge)."""
+    return 0 if step.action is not None and step.action.type == "scroll" else -1
+
+
+def _match_score(col: _Column, step: AgentStep, eff: dict[int, Effect], values_by_run: Values, rid: int) -> int:
     if _sig(step) in col.sigs():
+        if step.action.type == "wait" and values_by_run:
+            # Value-aware: two dwells that the planned values bind to the SAME param are the
+            # same phase (5); bound to different params they are different phases and never
+            # align (-10); one bound and one not is a weak pairing (1) — an ad-wait next to
+            # a watch dwell must not outbid the watch dwell two steps later.
+            mine = _planned_name(step, values_by_run.get(rid, {}))
+            theirs = {_planned_name(s, values_by_run.get(r, {})) for r, s in col.steps.items()}
+            if mine is not None and theirs == {mine}:
+                return 5
+            if mine is not None and any(t is not None and t != mine for t in theirs):
+                return -10
+            if mine is None and any(t is not None for t in theirs):
+                return 1
         return 3
     if step.action.type in col.types() and step.action.type in _SUBSTITUTABLE:
+        # A press IS its key: `l` (seek) and `m` (mute) are different intents, never a
+        # substitution (measured on the 3-run YouTube merge: run 2's `m` absorbed run 1's
+        # first `l` and the seek block could not fold).
+        if step.action.type == "press" and not any(
+            st.action.type == "press" and st.action.keys == step.action.keys for st in col.steps.values()
+        ):
+            return -10
         # Same intent aimed at a different element — a substitution column. Rank the pairing
         # by evidence: locator shape (both role=link, both css, …) and URL effect each count;
         # a pairing with neither is worth nothing and loses to any real partner.
@@ -206,31 +252,36 @@ def _match_score(col: _Column, step: AgentStep, eff: dict[int, Effect]) -> int:
     return -10  # never align across action types
 
 
-def _align_one(cols: list[_Column], rid: int, steps: list[AgentStep], eff: dict[int, Effect]) -> list[_Column]:
-    """Needleman-Wunsch of one run against the running column list (gap = -1)."""
-    gap = -1
+def _align_one(
+    cols: list[_Column], rid: int, steps: list[AgentStep], eff: dict[int, Effect], values_by_run: Values
+) -> list[_Column]:
+    """Needleman-Wunsch of one run against the running column list (gap = -1; a scroll gap is free)."""
     n, m = len(cols), len(steps)
+    col_gap = [_gap_cost(next(iter(c.steps.values()))) for c in cols]
+    step_gap = [_gap_cost(st) for st in steps]
     dp = [[0] * (m + 1) for _ in range(n + 1)]
     for i in range(1, n + 1):
-        dp[i][0] = i * gap
+        dp[i][0] = dp[i - 1][0] + col_gap[i - 1]
     for j in range(1, m + 1):
-        dp[0][j] = j * gap
+        dp[0][j] = dp[0][j - 1] + step_gap[j - 1]
     for i in range(1, n + 1):
         for j in range(1, m + 1):
             dp[i][j] = max(
-                dp[i - 1][j - 1] + _match_score(cols[i - 1], steps[j - 1], eff),
-                dp[i - 1][j] + gap,
-                dp[i][j - 1] + gap,
+                dp[i - 1][j - 1] + _match_score(cols[i - 1], steps[j - 1], eff, values_by_run, rid),
+                dp[i - 1][j] + col_gap[i - 1],
+                dp[i][j - 1] + step_gap[j - 1],
             )
     out: list[_Column] = []
     i, j = n, m
     while i > 0 or j > 0:
-        if i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + _match_score(cols[i - 1], steps[j - 1], eff):
+        if i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + _match_score(
+            cols[i - 1], steps[j - 1], eff, values_by_run, rid
+        ):
             col = cols[i - 1]
             col.steps[rid] = steps[j - 1]
             out.append(col)
             i, j = i - 1, j - 1
-        elif i > 0 and dp[i][j] == dp[i - 1][j] + gap:
+        elif i > 0 and dp[i][j] == dp[i - 1][j] + col_gap[i - 1]:
             out.append(cols[i - 1])
             i -= 1
         else:
@@ -240,12 +291,13 @@ def _align_one(cols: list[_Column], rid: int, steps: list[AgentStep], eff: dict[
     return out
 
 
-def _align(seqs: dict[int, list[AgentStep]]) -> list[_Column]:
+def _align(seqs: dict[int, list[AgentStep]], values_by_run: Values | None = None) -> list[_Column]:
     run_ids = sorted(seqs)
     eff = _step_effects(seqs)
+    values_by_run = values_by_run or {}
     cols = [_Column({run_ids[0]: s}) for s in seqs[run_ids[0]]]
     for rid in run_ids[1:]:
-        cols = _align_one(cols, rid, seqs[rid], eff)
+        cols = _align_one(cols, rid, seqs[rid], eff, values_by_run)
     return cols
 
 
@@ -295,13 +347,38 @@ def _confirm_param(col: _Column, field: str, values_by_run: dict[int, dict[str, 
     return None
 
 
+SECONDS_TOLERANCE = 0.25  # a dwell within ±25 % (≥ 2 s) of the planned duration still binds
+
+
+def _confirm_seconds_approx(col: _Column, values_by_run: dict[int, dict[str, str]]) -> str | None:
+    """The relaxed seconds rule: the observed dwell is WITHIN the planner's value for that run
+    (|observed − planned| ≤ max(2 s, 25 % of planned)) in every run, and the planned values
+    vary. An explorer waits 18 s for "watch 20 s" often enough that exact equality alone
+    left the column unbound (measured: the initial-watch column of the YouTube 3-run merge)."""
+    per_run = {rid: getattr(s.action, "seconds", None) for rid, s in col.steps.items()}
+    if any(v is None for v in per_run.values()):
+        return None
+    for name in sorted(values_by_run[min(values_by_run)]):
+        planned = {rid: _number_in(values_by_run[rid].get(name, "")) for rid in col.steps}
+        if any(n is None for n in planned.values()):
+            continue
+        if len({n for n in planned.values()}) < 2:
+            continue
+        if all(abs(float(per_run[rid]) - planned[rid]) <= max(2.0, SECONDS_TOLERANCE * planned[rid])  # type: ignore[arg-type]
+               for rid in col.steps):
+            return name
+    return None
+
+
 def _sub_value(text: str, value: str, name: str) -> str:
     for form in _run_value_forms(value):
         text = re.sub(re.escape(form), "${" + name + "}", text, flags=re.IGNORECASE)
     return text
 
 
-def _generalize_target(col: _Column, values_by_run: dict[int, dict[str, str]]) -> tuple[Action, str] | None:
+def _generalize_target(
+    col: _Column, values_by_run: dict[int, dict[str, str]], only: str | None = None
+) -> tuple[Action, str] | None:
     """A same-type column whose per-run targets are role locators with names that each
     CONTAIN that run's value of one varying param → get_by_role(role, name="${param}") + nth(0)
     ("the first <role> naming the value" — Playwright's role-name match is a case-insensitive
@@ -324,6 +401,8 @@ def _generalize_target(col: _Column, values_by_run: dict[int, dict[str, str]]) -
     if len(roles) != 1:
         return None
     for name in sorted(values_by_run[min(values_by_run)]):
+        if only is not None and name != only:
+            continue
         declared = {rid: values_by_run[rid].get(name, "") for rid in col.steps}
         if any(len(v) < 3 for v in declared.values()):
             continue
@@ -341,6 +420,39 @@ def _generalize_target(col: _Column, values_by_run: dict[int, dict[str, str]]) -
     return None
 
 
+def _positional_target(col: _Column, spine_rid: int) -> tuple[Action, int] | str:
+    """Switch a click column to its STRUCTURAL rung + nth(i) — "the i-th item" — when the
+    recordings prove it (generator-agent.md §C.4 V5, offline, no browser): every run's step
+    recorded a structural rung (M0), the rung is the same chain in every run, it resolved to
+    ≥ i+1 elements, and the acted element sat at the SAME index i in every run. Returns the
+    canonical action and the index, or the reason it cannot."""
+    chains: dict[int, list[LocatorStep]] = {}
+    indices: dict[int, int] = {}
+    for rid, step in sorted(col.steps.items()):
+        if step.action is None or step.action.type != "click":
+            return f"run {rid}: not a click"
+        k = next((i for i, kind in enumerate(step.candidate_kinds) if kind == "structural"), None)
+        if k is None or k >= len(step.locator_candidates):
+            return f"run {rid}: no structural rung recorded for the target (a pre-M0 record, or not a list item)"
+        count = step.match_counts[k] if k < len(step.match_counts) else -1
+        index = step.match_indices[k] if k < len(step.match_indices) else None
+        if index is None:
+            return f"run {rid}: the acted element's position in the structural rung was not recorded"
+        if count < index + 1:
+            return f"run {rid}: the structural rung resolved to {count} element(s), fewer than index {index} + 1"
+        chains[rid] = list(step.locator_candidates[k])
+        indices[rid] = int(index)
+    if len({json.dumps([st.model_dump() for st in c], sort_keys=True) for c in chains.values()}) != 1:
+        return "the structural rung differs across runs: " + "; ".join(
+            f"run {rid}: {c[-1].args[0]!r}" for rid, c in sorted(chains.items()))
+    if len(set(indices.values())) != 1:
+        return "the acted element sat at different positions across runs: " + ", ".join(
+            f"run {rid}: {i}" for rid, i in sorted(indices.items()))
+    index = indices[spine_rid]
+    chain = [*chains[spine_rid], LocatorStep(fn="nth", args=[index])]
+    return col.steps[spine_rid].action.model_copy(update={"locator": chain}), index
+
+
 # ── emit plan (columns/regions → an ordered program) ─────────────────────────
 
 
@@ -354,6 +466,11 @@ class _EmitStep:
         self.dwell_param = dwell_param  # a parameterized dwell: Repeat(count="${param}")
         self.dwell_bound = dwell_bound
         self.col_index = col_index  # which aligned column this emit came from (the evidence trail)
+        # A folded gesture (N identical presses → one Repeat): the constant count, or the
+        # param carrying it, plus the static red-line bound.
+        self.repeat_count: int | None = None
+        self.repeat_param: str | None = None
+        self.repeat_bound: int = 0
 
 
 class _EmitBranch:
@@ -382,13 +499,23 @@ def merge_trajectories(
     name: str,
     version: str = "1",
     warnings: list[str] | None = None,
+    hints: list[GeneralizationHint] | None = None,
 ) -> MergeOutcome:
     """The merge: achieved runs in, one generalized Workflow + its evidence trail out.
+
+    `hints` are the planner's typed generalization requests (generator/hints.py). Each is
+    applied ONLY if re-derivable from the recordings — positional: the structural rung and
+    the same index in every run's ladder; text_contains_param: every run's target name
+    contains that run's value; repeat_fold: contiguous identical presses in every run, the
+    counts explained by the planned values — else it is rejected with a reason, the draft
+    is unchanged, and the outcome is recorded in `generalized.hints` either way.
 
     With one achieved run this degrades to `compile_trajectory` with the planner's values as
     the literal-sweep params (today's single-run behaviour); with none it raises.
     """
     warnings = warnings if warnings is not None else []
+    hints = list(hints or [])
+    outcomes: list[HintOutcome] = []
     achieved = [r for r in runs if r.achieved]
     if not achieved:
         raise ValueError("no achieved runs to merge — nothing forms the spine")
@@ -403,6 +530,8 @@ def merge_trajectories(
             params=[ParamReport(name=p.name, default=p.default or "", values_by_run={achieved[0].run: p.default or ""})
                     for p in wf.params],
             warnings=list(warnings),
+            hints=[HintOutcome(hint=h, status="rejected", reason="only one achieved run: no cross-run evidence")
+                   for h in hints],
         )
         return MergeOutcome(workflow=wf, generalized=generalized)
 
@@ -419,10 +548,46 @@ def merge_trajectories(
                 interrupt_cands.append((r.run, s))
         mains[r.run] = [s for s in steps if not is_interruption_step(s)]
 
-    columns = _align(mains)
+    columns = _align(mains, values_by_run)
     reports: list[ColumnReport] = []
     confirmed: dict[str, ParamReport] = {}
     branches_report: list[dict] = []
+    hint_by_col: dict[int, GeneralizationHint] = {}
+    for h in hints:
+        hint_by_col.setdefault(h.column, h)
+    # Fold blocks first: a repeat_fold hint names ONE column of a run of identical presses;
+    # the block extends both ways over columns whose every step shares that signature.
+    # (a scroll-only gap column between two press columns does not break the block: a run
+    # scrolled to the player mid-gesture, and scrolls are dropped whatever their support).
+    folds: dict[int, tuple[int, GeneralizationHint, list[int]]] = {}  # start -> (end, hint, member columns)
+
+    def _skippable(col: _Column) -> bool:
+        return all(st.action.type == "scroll" for st in col.steps.values())
+
+    for c, h in sorted(hint_by_col.items()):
+        if h.repeat_fold is None or not (0 <= c < len(columns)):
+            continue
+        sig = next(iter(columns[c].sigs())) if len(columns[c].sigs()) == 1 else None
+        if sig is None or sig[0] != h.repeat_fold.kind:
+            outcomes.append(HintOutcome(hint=h, status="rejected",
+                                        reason=f"column {c} is not a single-signature {h.repeat_fold.kind} column"))
+            del hint_by_col[c]
+            continue
+        members = [c]
+        a = c
+        while a > 0 and (columns[a - 1].sigs() == {sig} or _skippable(columns[a - 1])):
+            a -= 1
+            if columns[a].sigs() == {sig}:
+                members.append(a)
+        while members[-1] != a:  # trailing skippable columns on the left are not part of the block
+            a += 1
+        b = c + 1
+        while b < len(columns) and (columns[b].sigs() == {sig} or _skippable(columns[b])):
+            if columns[b].sigs() == {sig}:
+                members.append(b)
+            b += 1
+        b = max(members) + 1
+        folds[a] = (b, h, sorted(members))
 
     def report(i: int, col: _Column, disposition: str, param: str | None = None, note: str = "",
                field: str | None = None) -> None:
@@ -450,8 +615,28 @@ def merge_trajectories(
     i = 0
     while i < len(columns):
         col = columns[i]
+        if i in folds:
+            end, h, members = folds[i]
+            folded = _make_fold([columns[m] for m in members], members, h, spine_rid, values_by_run, confirmed,
+                                confirm, report, warnings)
+            if isinstance(folded, _EmitStep):
+                emits.append(folded)
+                for k in range(i, end):
+                    if k not in members:
+                        report(k, columns[k], "dropped", note="scroll inside a folded gesture; removable")
+                outcomes.append(HintOutcome(
+                    hint=h, status="applied",
+                    reason=f"folded columns {', '.join(map(str, members))} into Repeat(count="
+                           f"{'${' + folded.repeat_param + '}' if folded.repeat_param else folded.repeat_count})",
+                ))
+                i = end
+                continue
+            outcomes.append(HintOutcome(hint=h, status="rejected", reason=folded))
+            warnings.append(f"hint repeat_fold at column {i} rejected: {folded}")
+            del hint_by_col[h.column]  # fall through: the block compiles column by column
         if _solid(col, n_runs):
-            emits.append(_make_emit(col, spine_rid, values_by_run, confirmed, confirm, report, warnings, i))
+            emits.append(_make_emit(col, spine_rid, values_by_run, confirmed, confirm, report, warnings, i,
+                                    hint=hint_by_col.get(i), outcomes=outcomes))
             i += 1
             continue
         # a non-solid region: [i, j)
@@ -479,7 +664,8 @@ def merge_trajectories(
         for k, c in enumerate(region):
             idx = i + k
             if len(c.steps) == n_runs:  # full support, targets differ (substitution column)
-                emits.append(_make_emit(c, spine_rid, values_by_run, confirmed, confirm, report, warnings, idx))
+                emits.append(_make_emit(c, spine_rid, values_by_run, confirmed, confirm, report, warnings, idx,
+                                        hint=hint_by_col.get(idx), outcomes=outcomes))
                 continue
             # a gap column: present in k < N runs
             some = c.steps[min(c.steps)]
@@ -510,6 +696,15 @@ def merge_trajectories(
     )
     for rep in reports:
         rep.transition = edge_by_col.get(rep.index)
+    judged = {id(o.hint) for o in outcomes}
+    for h in hints:
+        if id(h) not in judged:
+            outcomes.append(HintOutcome(hint=h, status="rejected",
+                                        reason=f"column {h.column} is not a main-path column of this merge"))
+    fold_start = {id(h): start for start, (_end, h, _members) in folds.items()}
+    for o in outcomes:
+        if o.status == "applied":
+            o.transition = edge_by_col.get(fold_start.get(id(o.hint), o.hint.column))
     generalized = GeneralizedTrajectory(
         task=task, runs=len(runs), achieved_runs=[r.run for r in achieved],
         params=sorted(confirmed.values(), key=lambda p: p.name),
@@ -520,15 +715,111 @@ def merge_trajectories(
         ],
         branches=branches_report,
         warnings=list(warnings),
+        hints=outcomes,
     )
     return MergeOutcome(workflow=wf, generalized=generalized)
 
 
-def _make_emit(col, spine_rid, values_by_run, confirmed, confirm, report, warnings, idx) -> _EmitStep:
+def _make_fold(block, members, hint, spine_rid, values_by_run, confirmed, confirm, report, warnings) -> _EmitStep | str:
+    """Fold a block of identical-press columns into ONE emit (generator-agent.md §C.4 V7):
+    every achieved run must press in the block; the per-run press counts bind to
+    `count_param` when they equal the planned numbers, or the planned numbers divided by one
+    constant integer factor (10 s per press) — the artifact's Param is then the COUNT. With
+    no `count_param`, the counts must agree (a constant Repeat). Returns the emit, or why not."""
+    rids = sorted(values_by_run)
+    counts = {rid: sum(1 for col in block for r in col.steps if r == rid) for rid in rids}
+    if any(n == 0 for n in counts.values()):
+        return "not every run has the press in the block: counts " + str(counts)
+    spine_col = next((c for c in block if spine_rid in c.steps), block[0])
+    action = spine_col.steps[spine_rid].action
+    fold = hint.repeat_fold
+    pname: str | None = None
+    factor: float | None = None
+    if fold.count_param is not None:
+        planned = {rid: _number_in(values_by_run[rid].get(fold.count_param, "")) for rid in rids}
+        if any(v is None for v in planned.values()):
+            return f"{fold.count_param} has no numeric value in every run"
+        if all(planned[rid] == counts[rid] for rid in rids):
+            pname, factor = fold.count_param, 1.0
+        else:
+            ratios = {planned[rid] / counts[rid] for rid in rids}
+            if len(ratios) == 1 and (ratio := ratios.pop()) == int(ratio) and ratio >= 1:
+                pname, factor = f"{fold.count_param}_count", ratio
+            else:
+                return (f"per-run press counts {counts} do not match the planned {fold.count_param} values "
+                        f"{planned} exactly or by one constant factor")
+        if len({counts[rid] for rid in rids}) < 2:
+            return f"press counts are constant across runs ({counts}): not a parameter, just a count"
+    elif len({counts[rid] for rid in rids}) != 1:
+        return f"press counts differ across runs ({counts}) and no count_param was named"
+    for k, col in zip(members, block, strict=True):
+        report(k, col, "folded", param=pname,
+               note=f"press folded into one Repeat ({len(block)} columns; counts {counts})")
+    emit = _EmitStep(action, spine_col, anchor_ok=True, param=pname, col_index=members[0])
+    emit.repeat_bound = max(10, 3 * max(counts.values()))
+    if pname is None:
+        emit.repeat_count = counts[spine_rid]
+        return emit
+    if pname not in confirmed:
+        confirmed[pname] = ParamReport(name=pname, default=str(counts[spine_rid]),
+                                       values_by_run={rid: str(counts[rid]) for rid in rids})
+    if factor != 1.0:
+        confirmed[pname].description = (
+            f"iteration count of the folded {action.keys!r} presses; each press ≈ {int(factor)} of "
+            f"{fold.count_param} (planned {fold.count_param}: "
+            + ", ".join(f"run {rid}: {values_by_run[rid].get(fold.count_param, '')!r}" for rid in rids) + ")"
+        )
+    emit.repeat_param = pname
+    return emit
+
+
+def _make_emit(col, spine_rid, values_by_run, confirmed, confirm, report, warnings, idx,
+               hint: GeneralizationHint | None = None, outcomes: list[HintOutcome] | None = None) -> _EmitStep:
     """Classify one full-support column: aligned / param / param-target / value-diverges /
-    target-varies — and build its canonical action (spine's, with ${param} substituted)."""
+    target-varies — and build its canonical action (spine's, with ${param} substituted).
+    A hint for this column is tried first and applied only when the recordings prove it."""
     spine_step = col.steps.get(spine_rid) or col.steps[min(col.steps)]
     action = spine_step.action
+    outcomes = outcomes if outcomes is not None else []
+    if hint is not None and hint.repeat_fold is None:
+        if hint.intent == "positional":
+            if action.type != "click":
+                outcomes.append(HintOutcome(hint=hint, status="rejected", reason=f"column {idx} is a {action.type}"))
+            else:
+                got = _positional_target(col, spine_rid)
+                if isinstance(got, str):
+                    outcomes.append(HintOutcome(hint=hint, status="rejected", reason=got))
+                    warnings.append(f"hint positional at column {idx} rejected: {got}")
+                else:
+                    action, index = got
+                    rung = action.locator[-2].args[0]
+                    outcomes.append(HintOutcome(hint=hint, status="applied",
+                                                reason=f"structural rung {rung!r} + nth({index})"))
+                    report(idx, col, "positional",
+                           note=f"switched to the structural rung + nth({index}): the same position in every run")
+                    return _EmitStep(action, col, anchor_ok=True, col_index=idx)
+        elif hint.intent == "text_contains_param":
+            if hint.param_name is None:
+                outcomes.append(HintOutcome(hint=hint, status="rejected",
+                                            reason="text_contains_param needs param_name"))
+            else:
+                generalized = _generalize_target(col, values_by_run, only=hint.param_name)
+                if generalized is None:
+                    reason = (f"not every run's target name contains that run's {hint.param_name} value "
+                              f"(or the targets are not same-role name locators)")
+                    outcomes.append(HintOutcome(hint=hint, status="rejected", reason=reason))
+                    warnings.append(f"hint text_contains_param at column {idx} rejected: {reason}")
+                else:
+                    action, pname = generalized
+                    confirm(pname, col)
+                    outcomes.append(HintOutcome(hint=hint, status="applied",
+                                                reason=f"get_by_role(name=${{{pname}}}) + nth(0)"))
+                    report(idx, col, "param-target", param=pname,
+                           note="role-name targets each contain that run's value; rewrote to name=${%s} + nth(0)"
+                           % pname)
+                    return _EmitStep(action, col, anchor_ok=True, param=pname, col_index=idx)
+        else:  # instance: keep the recorded target — nothing to re-derive
+            outcomes.append(HintOutcome(hint=hint, status="applied", reason="kept the recorded target"))
     if len(col.sigs()) > 1:
         generalized = _generalize_target(col, values_by_run)
         if generalized is not None:
@@ -549,6 +840,13 @@ def _make_emit(col, spine_rid, values_by_run, confirmed, confirm, report, warnin
         if any(v is None for v in per_run.values()) or len({str(v).lower() for v in per_run.values()}) < 2:
             continue
         pname = _confirm_param(col, field, values_by_run)
+        if pname is None and field == "seconds":
+            pname = _confirm_seconds_approx(col, values_by_run)
+            if pname is not None:
+                warnings.append(
+                    f"column {idx}: wait.seconds ({sorted(set(map(str, per_run.values())))}) bound to "
+                    f"${{{pname}}} approximately (within {int(SECONDS_TOLERANCE * 100)}% of the planned values)"
+                )
         if pname is None:
             report(idx, col, "value-diverges", field=field,
                    note=f"{field} differs across runs and matches no planned value; kept run 1's")
@@ -740,7 +1038,20 @@ def _compile_emits(
         action = emit_step.action
         if isinstance(action, GotoAction) and action.timeout_ms < NAVIGATION_TIMEOUT_MS:
             action = action.model_copy(update={"timeout_ms": NAVIGATION_TIMEOUT_MS})
-        if emit_step.dwell_param is not None:
+        if emit_step.repeat_param is not None or emit_step.repeat_count is not None:
+            # A folded gesture: a noop edge enters the state, then the press repeats as a
+            # self-loop `count` times (a param, or the constant every run agreed on) — the
+            # same shape as the parameterized dwell, so `state_signature` collapses it and a
+            # different count does not change the state sequence (generator-agent.md §D.5).
+            transitions.append(Transition(id=f"t{ti}", source=states[-2].id, target=state_id, action=NoopAction()))
+            control.append(EdgeStep(edge=f"t{ti}"))
+            transitions.append(Transition(id=f"t{ti}_rep", source=state_id, target=state_id, action=action))
+            control.append(Repeat(
+                body=[EdgeStep(edge=f"t{ti}_rep")],
+                count="${" + emit_step.repeat_param + "}" if emit_step.repeat_param else emit_step.repeat_count,
+                max_iterations=emit_step.repeat_bound,
+            ))
+        elif emit_step.dwell_param is not None:
             # Parameterized dwell: a noop edge enters the state, then Repeat 1 s wait slices
             # count="${param}" times (interrupt sweeps run between slices). max_iterations is
             # the static red-line bound; a larger runtime value is truncated to it.
@@ -800,7 +1111,8 @@ def _compile_emits(
     uses_program = bool(interrupts) or any(isinstance(n, (Repeat, Branch)) for n in control)
     params = [
         Param(name=p.name, default=p.default,
-              description=f"inferred from {n_runs} runs; observed: "
+              description=(p.description + "; " if p.description else "")
+              + f"inferred from {n_runs} runs; observed: "
               + ", ".join(f"run {rid}: {v!r}" for rid, v in sorted(p.values_by_run.items())))
         for p in sorted(confirmed.values(), key=lambda p: p.name)
     ]
