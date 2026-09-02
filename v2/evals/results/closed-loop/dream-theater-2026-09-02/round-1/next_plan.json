@@ -1,0 +1,64 @@
+{
+  "next_variations": [
+    {
+      "task_text": "Go to youtube.com search for Iron Maiden - The Trooper and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 30s fast forward for 30s and then watch for 10s then pause the video for 20s and the play for another 15s. If at any point any pop-ups happen dismiss them.",
+      "values": {
+        "search_query": "Iron Maiden - The Trooper",
+        "watch_time_1": "30s",
+        "fast_forward_time": "30s",
+        "watch_time_2": "10s",
+        "pause_time": "20s",
+        "play_time_2": "15s"
+      }
+    },
+    {
+      "task_text": "Go to youtube.com search for Led Zeppelin - Stairway to Heaven and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 10s fast forward for 50s and then watch for 25s then pause the video for 5s and the play for another 20s. If at any point any pop-ups happen dismiss them.",
+      "values": {
+        "search_query": "Led Zeppelin - Stairway to Heaven",
+        "watch_time_1": "10s",
+        "fast_forward_time": "50s",
+        "watch_time_2": "25s",
+        "pause_time": "5s",
+        "play_time_2": "20s"
+      }
+    }
+  ],
+  "scoped_subtasks": [
+    {
+      "task_text": "Go to youtube.com, search for Queen - Bohemian Rhapsody, and open the first video result that appears in the search results list.",
+      "start_url": "https://www.youtube.com",
+      "values": {
+        "search_query": "Queen - Bohemian Rhapsody"
+      }
+    }
+  ],
+  "generalization_hints": [
+    {
+      "column": 5,
+      "intent": "positional",
+      "param_name": null,
+      "repeat_fold": null,
+      "why": "task text says 'play the first video that pops up'; replay FAILED at t4 for runs 2 and 3 because run 1's literal title selector was kept instead of a position-based match — episode explicitly flags this as list-like/positional"
+    },
+    {
+      "column": 7,
+      "intent": "instance",
+      "param_name": null,
+      "repeat_fold": null,
+      "why": "same ad-skip/dismiss selector recorded identically in runs 2 and 3, a stable dismissal-shaped interrupt target"
+    },
+    {
+      "column": 9,
+      "intent": "instance",
+      "param_name": null,
+      "repeat_fold": null,
+      "why": "same ad-skip/dismiss selector as column 7 but occurring at a different point in run 1's trajectory; keep as the recorded interrupt target"
+    }
+  ],
+  "notes": [
+    "Biggest issue this round: replay failed for 2 of 3 param sets at t4 because column 5 (first search-result click) kept run 1's exact video-title selector rather than a position-based rule; positional hint should fix this — new variations use fresh search queries (Iron Maiden, Led Zeppelin, and scoped Queen subtask) so the first-result title differs again and the fix can be replay-confirmed.",
+    "fast_forward_time and watch_time_2 never surfaced as confirmed param columns (all the candidate columns 11,14-19 were dropped as inconsistent press/wait actions present in only 1-2/3 runs) — the fast-forward gesture (repeated key presses vs. a single wait) was not stable across runs. Chose fast_forward_time values that are still round multiples of a plausible seek-key step (10s: 30/50) hoping consistent per-run press counts let the merge fold them into a repeat_fold; if it still doesn't stabilize, may need a dedicated scoped subtask isolating just the fast-forward gesture.",
+    "Columns 2,4,6,11,15,16,18 (misc clicks/presses on the video player) were dropped as present in only 1-2/3 runs; kept unaddressed since no consistent hint intent applies yet — more runs may resolve whether these are real conditional steps or noise.",
+    "judge_unmet note (video not muted for ~12s after ad skip on run 3) had no contradicting passing replay; not actionable via typed hints, left as-is for now."
+  ]
+}

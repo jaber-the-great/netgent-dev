@@ -17,7 +17,13 @@ from langgraph.types import Command
 from netgent.agent.explorer.actions import to_action
 from netgent.agent.explorer.context import ExplorerContext
 from netgent.agent.explorer.decision import AgentAction
-from netgent.agent.explorer.graph import _target_label, _verified_locator, capture_screenshot, upload_path
+from netgent.agent.explorer.graph import (
+    _target_label,
+    _verified_locator,
+    capture_screenshot,
+    record_ladder,
+    upload_path,
+)
 from netgent.agent.explorer.models import AgentStep, StepRecord
 from netgent.agent.explorer_v2.state import ExplorerV2State
 from netgent.core.errors import ExecutionError
@@ -55,13 +61,14 @@ async def _execute(runtime: Runtime, item: AgentAction, reasoning: str) -> Comma
         error: str | None = None
         action: Any = None
         note = None
+        probe = None
         try:
             if item.kind not in ctx.allowed_kinds:
                 raise ValueError(
                     f"{item.kind} is not available in this task; use one of {', '.join(sorted(ctx.allowed_kinds))}"
                 )
             upload = upload_path(ctx) if item.kind == "upload" else None
-            locator_for, note = await _verified_locator(session, snapshot, item.index)
+            locator_for, note, probe = await _verified_locator(session, snapshot, item.index)
             action = to_action(item, snapshot, upload_path=upload, locator_for=locator_for)
             elems = snapshot.interactive()
             if item.index is not None and 0 <= item.index < len(elems):
@@ -76,6 +83,7 @@ async def _execute(runtime: Runtime, item: AgentAction, reasoning: str) -> Comma
             step.action = action
             step.locator_check = note
             step.dialogs = session.dialogs_since_last_action()
+            record_ladder(step, probe, snapshot, item.index)
         await capture_screenshot(ctx, step)
         record = StepRecord(
             n=n, kind=item.kind or "", index=item.index, target=_target_label(snapshot, item.index),

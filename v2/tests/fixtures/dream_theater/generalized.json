@@ -1,0 +1,393 @@
+{
+  "task": "Go to youtube.com search for Dream Theater - Under a glass moon and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 20s fast forward for 30s and then watch for 15s then pause the video for 10s and the play for another 5s. If at any point any pop-ups happen dismiss them.\n\nPARAMETERS: ${search_query} = 'Dream Theater - Under a glass moon'; ${initial_watch_seconds} = '20s'; ${fast_forward_seconds} = '30s'; ${second_watch_seconds} = '15s'; ${pause_seconds} = '10s'; ${final_watch_seconds} = '5s'\nWhere the task refers to one of these, type or pick the value above exactly as given.\n\nA previous attempt was judged NOT achieved from the page evidence. Unmet: Fast-forward amount does not match ${fast_forward_seconds}='30s': computing position-advance-beyond-wallclock across the 4 consecutive 'l' presses (steps10-13, readings t+63s pos0:39 to t+97s pos1:53) gives a wall-clock elapsed of 34s but a position elapsed of 74s, i.e. an excess/fast-forward of 40s (four 10s skips), not the specified 30s. This is a full extra 10-second skip (one extra 'l' press), not a small tolerance drift.; Pause duration does not match ${pause_seconds}='10s': the action log dispatches TWO separate 10-second waits while paused (steps16 and 17), and the MEDIA TIMELINE shows the video frozen PAUSED at 2:23 across both waits (t+128s through t+142s, i.e. at least 14s frozen by the second reading, with the pause only lifted at step18 around t+157s) — the actual paused dwell time is roughly double (~20s) the requested 10s, not the specified value.. Make sure the page visibly shows each requirement before declaring done.",
+  "runs": 3,
+  "achieved_runs": [
+    1,
+    2,
+    3
+  ],
+  "params": [
+    {
+      "name": "final_watch_seconds",
+      "default": "5",
+      "values_by_run": {
+        "1": "5",
+        "2": "8",
+        "3": "10"
+      }
+    },
+    {
+      "name": "pause_seconds",
+      "default": "10",
+      "values_by_run": {
+        "1": "10",
+        "2": "15",
+        "3": "5"
+      }
+    },
+    {
+      "name": "search_query",
+      "default": "Dream Theater - Under a glass moon",
+      "values_by_run": {
+        "1": "Dream Theater - Under a glass moon",
+        "2": "Metallica - Master of Puppets",
+        "3": "Pink Floyd - Comfortably Numb"
+      }
+    },
+    {
+      "name": "second_watch_seconds",
+      "default": "15",
+      "values_by_run": {
+        "1": "15",
+        "2": "10",
+        "3": "20"
+      }
+    }
+  ],
+  "columns": [
+    {
+      "index": 0,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "goto",
+      "target": null,
+      "param": null,
+      "note": ""
+    },
+    {
+      "index": 1,
+      "disposition": "param",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "fill",
+      "target": "role=combobox[name=\"Search\" i]",
+      "param": "search_query",
+      "note": "text varies with search_query"
+    },
+    {
+      "index": 2,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "press",
+      "target": "role=combobox[name=\"Search\" i]",
+      "param": null,
+      "note": ""
+    },
+    {
+      "index": 3,
+      "disposition": "dropped",
+      "support": 2,
+      "runs": [
+        2,
+        3
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": null,
+      "note": "present in 2/3 runs, removable"
+    },
+    {
+      "index": 4,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        1
+      ],
+      "action_type": "scroll",
+      "target": "#start ytd-topbar-logo-renderer",
+      "param": null,
+      "note": "present in 1/3 runs, removable"
+    },
+    {
+      "index": 5,
+      "disposition": "target-varies",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "click",
+      "target": "role=link[name=\"Under a Glass Moon 7 minutes, 4 seconds\" i]",
+      "param": null,
+      "note": "same action, different targets; kept run 1's"
+    },
+    {
+      "index": 6,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "click",
+      "target": "#movie_player > div:nth-of-type(7) > button",
+      "param": null,
+      "note": ""
+    },
+    {
+      "index": 7,
+      "disposition": "interrupt",
+      "support": 2,
+      "runs": [
+        1,
+        3
+      ],
+      "action_type": "click",
+      "target": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "param": null,
+      "note": "present in 2/3 runs, dismissal-shaped"
+    },
+    {
+      "index": 8,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        3
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "present in 1/3 runs, removable"
+    },
+    {
+      "index": 9,
+      "disposition": "interrupt",
+      "support": 2,
+      "runs": [
+        1,
+        2
+      ],
+      "action_type": "click",
+      "target": "role=button[name=\"Mute (m)\" i]",
+      "param": null,
+      "note": "present in 2/3 runs, dismissal-shaped"
+    },
+    {
+      "index": 10,
+      "disposition": "value-diverges",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": null,
+      "note": "seconds differs across runs and matches no planned value; kept run 1's"
+    },
+    {
+      "index": 11,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        3
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "present in 1/3 runs, removable"
+    },
+    {
+      "index": 12,
+      "disposition": "dropped",
+      "support": 2,
+      "runs": [
+        1,
+        2
+      ],
+      "action_type": "scroll",
+      "target": "#player-full-bleed-container #thumbnail",
+      "param": null,
+      "note": "present in 2/3 runs, removable"
+    },
+    {
+      "index": 13,
+      "disposition": "target-varies",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "same action, different targets; kept run 1's"
+    },
+    {
+      "index": 14,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        2
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": null,
+      "note": "present in 1/3 runs, removable"
+    },
+    {
+      "index": 15,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": ""
+    },
+    {
+      "index": 16,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": ""
+    },
+    {
+      "index": 17,
+      "disposition": "param",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": "second_watch_seconds",
+      "note": "dwell parameterized: Repeat(count=\"${second_watch_seconds}\")"
+    },
+    {
+      "index": 18,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": ""
+    },
+    {
+      "index": 19,
+      "disposition": "param",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": "pause_seconds",
+      "note": "dwell parameterized: Repeat(count=\"${pause_seconds}\")"
+    },
+    {
+      "index": 20,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": ""
+    },
+    {
+      "index": 21,
+      "disposition": "param",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": "final_watch_seconds",
+      "note": "dwell parameterized: Repeat(count=\"${final_watch_seconds}\")"
+    }
+  ],
+  "interrupts": [
+    {
+      "selector": "role=button[name=\"No thanks\" i]",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "selector": "role=button[name=\"Close\" i]",
+      "support": 1,
+      "runs": [
+        3
+      ]
+    },
+    {
+      "selector": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "support": 2,
+      "runs": [
+        1,
+        3
+      ]
+    },
+    {
+      "selector": "role=button[name=\"Mute (m)\" i]",
+      "support": 1,
+      "runs": [
+        1
+      ]
+    },
+    {
+      "selector": "role=button[name=\"Play (k)\" i]",
+      "support": 1,
+      "runs": [
+        2
+      ]
+    }
+  ],
+  "branches": [],
+  "warnings": [
+    "column 5: click targets differ across runs and match no planned value — kept run 1's selector; replay with other values may not find it",
+    "column 8: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 10: wait.seconds differs across runs (['15.0', '20.0', '5.0']) and matches no planned value — kept run 1's",
+    "column 11: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 13: press targets differ across runs and match no planned value — kept run 1's selector; replay with other values may not find it"
+  ]
+}

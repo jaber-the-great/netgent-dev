@@ -86,21 +86,38 @@ def test_multi_step_locators_anchor_on_the_same_chain():
         steps=[
             AgentStep(n=1, kind="goto", reasoning="open", url="https://x.com/",
                       action={"type": "goto", "url": "https://x.com"}),
-            # multi-step chain (nth-disambiguated): anchored on the chain as a whole — there
-            # is no translation step that could get it wrong
+            # multi-step chain (nth-disambiguated or filtered): anchored on the chain as a
+            # whole — the anchor IS the action's chain, so no translation step can get it wrong
             AgentStep(n=2, kind="click", reasoning="click", url="https://x.com/",
                       action={"type": "click",
-                              "locator": [{"fn": "locator", "args": ["#a"]},
-                                          {"fn": "nth", "args": [0]}]}),
+                              "locator": [{"fn": "locator", "args": ["a"]},
+                                          {"fn": "filter", "args": [], "kwargs": {"has_text": "10:58"}}]}),
             # locator-less action: nothing to anchor on
             AgentStep(n=3, kind="press", reasoning="key", url="https://x.com/",
                       action={"type": "press", "keys": "l"}),
+            # the positional shape [locator(css), nth(i)] IS expressible: Playwright's `css >> nth=i`
+            AgentStep(n=4, kind="click", reasoning="click", url="https://x.com/",
+                      action={"type": "click",
+                              "locator": [{"fn": "locator", "args": ["#results > li > a"]},
+                                          {"fn": "nth", "args": [0]}]}),
         ],
     )
     wf = compile_trajectory(traj, name="x")
+    # Every anchor carries the NEXT edge's chain verbatim and is resolved by the same
+    # LocatorResolver the action uses — so a filter chain anchors as safely as an nth one.
     _, anchor = wf.state("s1").conditions
-    assert anchor.locator == [LocatorStep(fn="locator", args=["#a"]), LocatorStep(fn="nth", args=[0])]
+    assert anchor.locator == [
+        LocatorStep(fn="locator", args=["a"]),
+        LocatorStep(fn="filter", args=[], kwargs={"has_text": "10:58"}),
+    ]
+    assert anchor.selector is None  # the chain, never a rendered selector string
     assert wf.state("s2").conditions == []  # next action has no locator
+    (anchor,) = wf.state("s3").conditions
+    assert anchor.type == "selector_visible" and anchor.selector is None
+    assert anchor.locator == [
+        LocatorStep(fn="locator", args=["#results > li > a"]),
+        LocatorStep(fn="nth", args=[0]),
+    ]
 
 
 def test_sample_values_become_params():

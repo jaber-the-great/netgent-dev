@@ -14,16 +14,30 @@ build_planner_content), `context.py` (PlannerContext, passed as LangGraph `Runti
 
 from netgent.agent.planner.agent import PlannerAgent
 from netgent.agent.planner.context import MAX_PLAN_STEPS, PlannerContext
-from netgent.agent.planner.models import Plan, PlanStep, TaskVariation, VariationPlan, normalize_variation_plan
+from netgent.agent.planner.models import (
+    NextRoundPlan,
+    Plan,
+    PlanStep,
+    ScopedSubtask,
+    TaskVariation,
+    VariationPlan,
+    normalize_next_round_plan,
+    normalize_variation_plan,
+)
 from netgent.agent.planner.prompt import (
+    NEXT_ROUND_SYSTEM,
     PLANNER_SYSTEM,
     VARIATIONS_SYSTEM,
+    build_next_round_content,
     build_planner_content,
     build_variations_content,
 )
 
 __all__ = [
     "MAX_PLAN_STEPS",
+    "NEXT_ROUND_PLANNER",
+    "NEXT_ROUND_SYSTEM",
+    "NextRoundPlan",
     "PLANNER",
     "PLANNER_SYSTEM",
     "VARIATIONS_SYSTEM",
@@ -32,18 +46,26 @@ __all__ = [
     "PlanStep",
     "PlannerAgent",
     "PlannerContext",
+    "ScopedSubtask",
     "TaskVariation",
     "VariationPlan",
+    "build_next_round_content",
     "build_planner_content",
     "build_variations_content",
+    "create_next_round_planner",
     "create_planner_agent",
     "create_variation_planner",
+    "normalize_next_round_plan",
     "normalize_variation_plan",
     "plan",
+    "plan_next",
     "plan_variations",
 ]
 
-_LAZY = {"PLANNER", "VARIATION_PLANNER", "create_planner_agent", "create_variation_planner", "plan", "plan_variations"}
+_LAZY = {
+    "NEXT_ROUND_PLANNER", "PLANNER", "VARIATION_PLANNER", "create_next_round_planner", "create_planner_agent",
+    "create_variation_planner", "plan", "plan_next", "plan_variations",
+}
 
 
 def __getattr__(name: str):  # PEP 562: the graph module imports langgraph

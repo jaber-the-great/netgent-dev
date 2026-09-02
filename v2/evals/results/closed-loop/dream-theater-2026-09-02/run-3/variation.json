@@ -1,0 +1,13 @@
+{
+  "task_text": "Go to youtube.com search for Pink Floyd - Comfortably Numb and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 25s fast forward for 40s and then watch for 20s then pause the video for 15s and the play for another 8s. If at any point any pop-ups happen dismiss them.",
+  "values": {
+    "search_query": "Pink Floyd - Comfortably Numb",
+    "watch_time_1": "25s",
+    "fast_forward_time": "40s",
+    "watch_time_2": "20s",
+    "pause_time": "15s",
+    "play_time_2": "8s"
+  },
+  "round": 1,
+  "scoped": false
+}

@@ -91,3 +91,14 @@ def test_graph_runs_through_the_llm_seam():
     assert "N: 3" in llm.judged[0][0]["text"]
     with pytest.raises(ValueError, match="n must be"):
         asyncio.run(plan_variations(BASE, llm=llm, n=0))
+
+
+def test_empty_plan_is_asked_once_more_before_padding():
+    """A plan with no variations costs a whole round of identical runs: re-ask once, naming the
+    shape; only then pad with the base task (measured on the claude-code route)."""
+    llm = FakeLLM([], verdicts=[VariationPlan(), DRAFT])
+    plan = asyncio.run(plan_variations(BASE, llm=llm, n=3))
+    assert len(llm.judged) == 2 and "contained no variations" in llm.judged[1][-1]["text"]
+    assert plan.variations[1].values["video_query"] == "cat video"
+    single = FakeLLM([], verdicts=[VariationPlan()])
+    assert len(asyncio.run(plan_variations(BASE, llm=single, n=1)).variations) == 1 and len(single.judged) == 1

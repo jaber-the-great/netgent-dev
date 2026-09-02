@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from netgent.schema.actions import Action
+from netgent.schema.actions import Action, LocatorStep
 
 
 class StepRecord(BaseModel):
@@ -72,6 +72,21 @@ class AgentStep(BaseModel):
     # How the action's locator was cross-checked at capture time (R4): whether Playwright's
     # own generator agreed, and which chain was kept. Compile-time provenance, not replayed.
     locator_check: str | None = None
+    # The candidate ladder the browser layer computed for the acted element, as the live page
+    # resolved it at capture time (browser/locators.py::probe_ladder) — M0 of the generator
+    # agent design (docs/research/generator-agent.md §C.2.1). Every rung, not just the one the
+    # action kept, so a later compile can choose a different rung (the positional one) and
+    # check it against the recording without re-exploring. Parallel lists, one entry per rung:
+    # the chain, its kind (id/role/test_id/label/css/structural), how many elements it
+    # resolved to (-1: unresolvable), and the acted element's index among its matches where
+    # that was computed. Compile-time provenance; never replayed. Empty for page-level actions.
+    locator_candidates: list[list[LocatorStep]] = Field(default_factory=list)
+    candidate_kinds: list[str] = Field(default_factory=list)
+    match_counts: list[int] = Field(default_factory=list)
+    match_indices: list[int | None] = Field(default_factory=list)
+    # The acted DomElement's identity (tag, role, name, type, frame_path) — the zero-LLM
+    # signal browser-use's variable detector keys on; a check on a param claim, never a proposer.
+    element: dict = Field(default_factory=dict)
     # The model's working memory at this step (AgentDecision fields), kept as provenance so
     # a bad compile can be read back; the compiler ignores them.
     evaluation: str = ""

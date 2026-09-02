@@ -55,6 +55,18 @@ class LLM(Protocol):
     async def judge(self, system: str, content: list[dict], schema: type) -> object: ...
 
 
+def _fresh_usage() -> dict[str, int]:
+    return {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_creation_tokens": 0,
+        "observation_chars": 0,
+        "history_chars": 0,
+    }
+
+
 def render_history(history: list[StepRecord]) -> str:
     if not history:
         return "(none yet)"
@@ -135,6 +147,8 @@ class LangChainLLM:
     `model` is a `provider:model` string handed to `init_chat_model`, or an already-built
     `BaseChatModel` (tests inject `GenericFakeChatModel` here)."""
 
+    _parent: "LangChainLLM | None" = None  # class default: instances built via __new__ (tests) are roots
+
     def __init__(self, model: "str | BaseChatModel" = DEFAULT_MODEL):
         if isinstance(model, str):
             ref = model_ref(model)
@@ -154,20 +168,26 @@ class LangChainLLM:
         else:
             self._chat = model
         self._structured: dict[tuple, object] = {}  # per (allowed kinds, max_actions)
+        self._parent = None  # set on a `scoped()` view: totals roll up to it
         # Running totals across decide() calls — what an exploration cost (the evals under
         # `netgent eval stress` report these per run). `input_tokens` is the provider's total
         # (cache reads and writes included), so it stays comparable across layouts.
-        self.usage: dict[str, int] = {
-            "calls": 0,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cache_read_tokens": 0,
-            "cache_creation_tokens": 0,
-            "observation_chars": 0,
-            "history_chars": 0,
-        }
+        self.usage: dict[str, int] = _fresh_usage()
         # Per-call usage, in order — the per-step numbers the optimisation doc tables.
         self.calls: list[dict[str, int]] = []
+
+    def scoped(self) -> "LangChainLLM":
+        """A view of this model with its OWN usage counters — one per parallel run, so tokens
+        stay attributable when `--parallel > 1` interleaves explore_run tasks on one model
+        (eval-framework.md §2.2 stage 2). Shares the chat model and the structured-output
+        cache; every call it records also rolls up into this (the parent's) totals."""
+        view = object.__new__(LangChainLLM)
+        view._chat = self._chat
+        view._structured = self._structured
+        view._parent = self
+        view.usage = _fresh_usage()
+        view.calls = []
+        return view
 
     def _messages(self, system: str, task: str, observation: str, history: list[StepRecord]) -> list:
         from langchain_core.messages import HumanMessage, SystemMessage
@@ -197,6 +217,11 @@ class LangChainLLM:
         self.usage["calls"] += 1
         for k, v in call.items():
             self.usage[k] += v
+        if self._parent is not None:  # a scoped view: the parent keeps the grand total
+            self._parent.calls.append(call)
+            self._parent.usage["calls"] += 1
+            for k, v in call.items():
+                self._parent.usage[k] += v
 
     async def decide(
         self,
@@ -229,6 +254,8 @@ class LangChainLLM:
             else:
                 last_error = str(result.get("parsing_error"))
             self.usage["parse_retries"] = self.usage.get("parse_retries", 0) + 1
+            if self._parent is not None:
+                self._parent.usage["parse_retries"] = self._parent.usage.get("parse_retries", 0) + 1
             messages = [
                 *messages,
                 HumanMessage(content=f"Your response was invalid: {last_error[:600]}\nReturn a valid decision."),
@@ -268,6 +295,11 @@ class FakeLLM:
         self._verdicts = list(verdicts or [])
         self.judged: list[list[dict]] = []  # the content each judge() call received (tests inspect it)
 
+    def scoped(self) -> "FakeLLM":
+        """The script is one ordered list: a scoped view is the same object (its usage is not
+        measured — nothing to attribute)."""
+        return self
+
     async def judge(self, system, content, schema):
         self.judged.append(content)
         if self._verdicts:
@@ -280,6 +312,18 @@ class FakeLLM:
         decision = self._script[self._i]
         self._i += 1
         return decision
+
+
+def scoped_llm(llm: LLM) -> LLM:
+    """`llm.scoped()` when the seam offers per-run usage views, else the llm itself."""
+    scoped = getattr(llm, "scoped", None)
+    return scoped() if callable(scoped) else llm
+
+
+def usage_of(llm: object) -> dict[str, int] | None:
+    """The seam's usage counters as a plain dict (None for seams that do not count)."""
+    usage = getattr(llm, "usage", None)
+    return dict(usage) if isinstance(usage, dict) else None
 
 
 def make_llm(model: "str | BaseChatModel") -> LLM:

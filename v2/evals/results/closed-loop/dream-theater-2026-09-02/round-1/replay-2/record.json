@@ -1,0 +1,97 @@
+{
+  "workflow_name": "dream-theater",
+  "workflow_version": "1",
+  "started_at": "2026-09-02T22:43:38.467115Z",
+  "finished_at": "2026-09-02T22:44:19.213526Z",
+  "success": false,
+  "edges": [
+    {
+      "transition_id": "t1",
+      "source": "init",
+      "target": "s1",
+      "action_type": "goto",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:43:38.467217Z",
+      "duration_ms": 2148.281959001906,
+      "trigger_latency_ms": 57.84629099071026,
+      "conditions": [
+        {
+          "type": "url_matches",
+          "met": true
+        },
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/t1.png",
+      "media": null,
+      "error": null
+    },
+    {
+      "transition_id": "t2",
+      "source": "s1",
+      "target": "s2",
+      "action_type": "fill",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:43:40.615563Z",
+      "duration_ms": 126.02408300153911,
+      "trigger_latency_ms": 6.033875048160553,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/t2.png",
+      "media": null,
+      "error": null
+    },
+    {
+      "transition_id": "t3",
+      "source": "s2",
+      "target": "s3",
+      "action_type": "click",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:43:40.741636Z",
+      "duration_ms": 188.0796659970656,
+      "trigger_latency_ms": 0.390209024772048,
+      "conditions": [
+        {
+          "type": "url_matches",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/results?search_query=Pink+Floyd+-+Comfortably+Numb",
+      "screenshot": "screenshots/t3.png",
+      "media": null,
+      "error": null
+    },
+    {
+      "transition_id": "t4",
+      "source": "s3",
+      "target": "s4",
+      "action_type": "click",
+      "outcome": "action_error",
+      "started_at": "2026-09-02T22:43:40.929790Z",
+      "duration_ms": 38283.33704092074,
+      "trigger_latency_ms": null,
+      "conditions": [
+        {
+          "type": "url_matches",
+          "met": false
+        },
+        {
+          "type": "selector_visible",
+          "met": false
+        }
+      ],
+      "url_after": "https://www.youtube.com/results?search_query=Pink+Floyd+-+Comfortably+Numb",
+      "screenshot": "screenshots/t4.png",
+      "media": "video ENDED at 0:30 / 0:30 [muted]",
+      "error": "click failed via mouse (Locator.click: Timeout 5000ms exceeded.) and via JS dispatch: Locator.evaluate: Timeout 3000ms exceeded.\nCall log:\n  - waiting for get_by_role(\"link\", name=\"Under a Glass Moon 7 minutes, 4 seconds\", exact=True).first\n"
+    }
+  ]
+}

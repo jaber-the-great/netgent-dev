@@ -1,0 +1,85 @@
+{
+ "workflow_name": "dream-theater",
+ "workflow_version": "1",
+ "started_at": "2026-09-02T20:40:28.582007Z",
+ "finished_at": "2026-09-02T20:41:09.255328Z",
+ "success": false,
+ "edges": [
+  {
+   "transition_id": "t1",
+   "source": "init",
+   "target": "s1",
+   "action_type": "goto",
+   "outcome": "ok",
+   "started_at": "2026-09-02T20:40:28.582097Z",
+   "duration_ms": 2083.2642500754446,
+   "conditions": [
+    {
+     "type": "url_matches",
+     "met": true
+    },
+    {
+     "type": "selector_visible",
+     "met": true
+    }
+   ],
+   "url_after": "https://www.youtube.com/",
+   "error": null
+  },
+  {
+   "transition_id": "t2",
+   "source": "s1",
+   "target": "s2",
+   "action_type": "fill",
+   "outcome": "ok",
+   "started_at": "2026-09-02T20:40:30.665448Z",
+   "duration_ms": 108.16441697534174,
+   "conditions": [
+    {
+     "type": "selector_visible",
+     "met": true
+    }
+   ],
+   "url_after": "https://www.youtube.com/",
+   "error": null
+  },
+  {
+   "transition_id": "t3",
+   "source": "s2",
+   "target": "s3",
+   "action_type": "press",
+   "outcome": "ok",
+   "started_at": "2026-09-02T20:40:30.773701Z",
+   "duration_ms": 114.65354193933308,
+   "conditions": [
+    {
+     "type": "url_matches",
+     "met": true
+    }
+   ],
+   "url_after": "https://www.youtube.com/results?search_query=Metallica+-+Master+of+Puppets",
+   "error": null
+  },
+  {
+   "transition_id": "t4",
+   "source": "s3",
+   "target": "s4",
+   "action_type": "click",
+   "outcome": "action_error",
+   "started_at": "2026-09-02T20:40:30.888399Z",
+   "duration_ms": 38366.464915918186,
+   "conditions": [
+    {
+     "type": "url_matches",
+     "met": false
+    },
+    {
+     "type": "selector_visible",
+     "met": false
+    }
+   ],
+   "url_after": "https://www.youtube.com/results?search_query=Metallica+-+Master+of+Puppets",
+   "error": "click failed via mouse (Locator.click: Timeout 5000ms exceeded.) and via JS dispatch: Locator.evaluate: Timeout 3000ms exceeded.\nCall log:\n  - waiting for get_by_role(\"link\", name=\"Under a Glass Moon 7 minutes, 4 seconds\", exact=True).first\n"
+  }
+ ]
+}

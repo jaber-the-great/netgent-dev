@@ -1,0 +1,8 @@
+{
+  "task_text": "Go to youtube.com, search for Queen - Bohemian Rhapsody, and open the first video result that appears in the search results list.",
+  "values": {
+    "search_query": "Queen - Bohemian Rhapsody"
+  },
+  "round": 2,
+  "scoped": true
+}

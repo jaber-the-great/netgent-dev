@@ -1,0 +1,588 @@
+{
+  "task": "Go to youtube.com search for Dream Theater - Under a glass moon and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 20s fast forward for 30s and then watch for 15s then pause the video for 10s and the play for another 5s. If at any point any pop-ups happen dismiss them.\n\nPARAMETERS: ${search_query} = 'Dream Theater - Under a glass moon'; ${watch_time_1} = '20s'; ${fast_forward_time} = '30s'; ${watch_time_2} = '15s'; ${pause_time} = '10s'; ${play_time_2} = '5s'\nWhere the task refers to one of these, type or pick the value above exactly as given.",
+  "runs": 3,
+  "achieved_runs": [
+    1,
+    2,
+    3
+  ],
+  "params": [
+    {
+      "name": "pause_time",
+      "default": "10",
+      "values_by_run": {
+        "1": "10",
+        "2": "5",
+        "3": "15"
+      },
+      "description": ""
+    },
+    {
+      "name": "play_time_2",
+      "default": "5",
+      "values_by_run": {
+        "1": "5",
+        "2": "10",
+        "3": "8"
+      },
+      "description": ""
+    },
+    {
+      "name": "search_query",
+      "default": "Dream Theater - Under a glass moon",
+      "values_by_run": {
+        "1": "Dream Theater - Under a glass moon",
+        "2": "Metallica - Master of Puppets",
+        "3": "Pink Floyd - Comfortably Numb"
+      },
+      "description": ""
+    },
+    {
+      "name": "watch_time_1",
+      "default": "20",
+      "values_by_run": {
+        "1": "20",
+        "2": "15",
+        "3": "25"
+      },
+      "description": ""
+    }
+  ],
+  "columns": [
+    {
+      "index": 0,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "goto",
+      "target": null,
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "",
+        "2": "",
+        "3": ""
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t1"
+    },
+    {
+      "index": 1,
+      "disposition": "param",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "fill",
+      "target": "role=combobox[name=\"Search\" i]",
+      "param": "search_query",
+      "note": "text varies with search_query",
+      "targets_by_run": {
+        "1": "role=combobox[name=\"Search\" i]",
+        "2": "role=combobox[name=\"Search\" i]",
+        "3": "role=combobox[name=\"Search\" i]"
+      },
+      "field": "text",
+      "values_by_run": {
+        "1": "Dream Theater - Under a glass moon",
+        "2": "Metallica - Master of Puppets",
+        "3": "Pink Floyd - Comfortably Numb"
+      },
+      "transition": "t2"
+    },
+    {
+      "index": 2,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        3
+      ],
+      "action_type": "click",
+      "target": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+      "param": null,
+      "note": "present in 1/3 runs, removable",
+      "targets_by_run": {
+        "3": "#center > yt-searchbox > div:nth-of-type(1) > div > button"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 3,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "click",
+      "target": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+        "2": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+        "3": "#center > yt-searchbox > div:nth-of-type(1) > div > button"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t3"
+    },
+    {
+      "index": 4,
+      "disposition": "dropped",
+      "support": 2,
+      "runs": [
+        1,
+        2
+      ],
+      "action_type": "press",
+      "target": "role=combobox[name=\"Search\" i]",
+      "param": null,
+      "note": "present in 2/3 runs, removable",
+      "targets_by_run": {
+        "1": "role=combobox[name=\"Search\" i]",
+        "2": "role=combobox[name=\"Search\" i]"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 5,
+      "disposition": "target-varies",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "click",
+      "target": "role=link[name=\"Under a Glass Moon 7 minutes, 4 seconds\" i]",
+      "param": null,
+      "note": "same action, different targets; kept run 1's",
+      "targets_by_run": {
+        "1": "role=link[name=\"Under a Glass Moon 7 minutes, 4 seconds\" i]",
+        "2": "role=link[name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\" i]",
+        "3": "role=link[name=\"Pink Floyd - Comfortably numb 6 minutes, 55 seconds\" i]"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t4"
+    },
+    {
+      "index": 6,
+      "disposition": "dropped",
+      "support": 2,
+      "runs": [
+        2,
+        3
+      ],
+      "action_type": "click",
+      "target": "#movie_player > div:nth-of-type(7) > button",
+      "param": null,
+      "note": "present in 2/3 runs, removable",
+      "targets_by_run": {
+        "2": "#movie_player > div:nth-of-type(7) > button",
+        "3": "#movie_player > div:nth-of-type(7) > button"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 7,
+      "disposition": "interrupt",
+      "support": 2,
+      "runs": [
+        2,
+        3
+      ],
+      "action_type": "click",
+      "target": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "param": null,
+      "note": "present in 2/3 runs, dismissal-shaped",
+      "targets_by_run": {
+        "2": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+        "3": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 8,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "2": "#movie_player > div:nth-of-type(1) > video",
+        "3": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t5"
+    },
+    {
+      "index": 9,
+      "disposition": "interrupt",
+      "support": 1,
+      "runs": [
+        1
+      ],
+      "action_type": "click",
+      "target": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "param": null,
+      "note": "present in 1/3 runs, dismissal-shaped",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 10,
+      "disposition": "param",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": "watch_time_1",
+      "note": "dwell parameterized: Repeat(count=\"${watch_time_1}\")",
+      "targets_by_run": {
+        "1": "",
+        "2": "",
+        "3": ""
+      },
+      "field": "seconds",
+      "values_by_run": {
+        "1": "20.0",
+        "2": "15.0",
+        "3": "25.0"
+      },
+      "transition": "t6"
+    },
+    {
+      "index": 11,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        3
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "present in 1/3 runs, removable",
+      "targets_by_run": {
+        "3": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 12,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "2": "#movie_player > div:nth-of-type(1) > video",
+        "3": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t7"
+    },
+    {
+      "index": 13,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "2": "#movie_player > div:nth-of-type(1) > video",
+        "3": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t8"
+    },
+    {
+      "index": 14,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        2
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": null,
+      "note": "present in 1/3 runs, removable",
+      "targets_by_run": {
+        "2": ""
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 15,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        2
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "present in 1/3 runs, removable",
+      "targets_by_run": {
+        "2": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 16,
+      "disposition": "dropped",
+      "support": 2,
+      "runs": [
+        1,
+        3
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "present in 2/3 runs, removable",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "3": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 17,
+      "disposition": "dropped",
+      "support": 2,
+      "runs": [
+        1,
+        3
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": null,
+      "note": "present in 2/3 runs, removable",
+      "targets_by_run": {
+        "1": "",
+        "3": ""
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 18,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        3
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "present in 1/3 runs, removable",
+      "targets_by_run": {
+        "3": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 19,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        1
+      ],
+      "action_type": "click",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "present in 1/3 runs, removable",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 20,
+      "disposition": "param",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": "pause_time",
+      "note": "dwell parameterized: Repeat(count=\"${pause_time}\")",
+      "targets_by_run": {
+        "1": "",
+        "2": "",
+        "3": ""
+      },
+      "field": "seconds",
+      "values_by_run": {
+        "1": "10.0",
+        "2": "5.0",
+        "3": "15.0"
+      },
+      "transition": "t9"
+    },
+    {
+      "index": 21,
+      "disposition": "dropped",
+      "support": 2,
+      "runs": [
+        2,
+        3
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "present in 2/3 runs, removable",
+      "targets_by_run": {
+        "2": "#movie_player > div:nth-of-type(1) > video",
+        "3": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 22,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        1
+      ],
+      "action_type": "click",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "present in 1/3 runs, removable",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 23,
+      "disposition": "param",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": "play_time_2",
+      "note": "dwell parameterized: Repeat(count=\"${play_time_2}\")",
+      "targets_by_run": {
+        "1": "",
+        "2": "",
+        "3": ""
+      },
+      "field": "seconds",
+      "values_by_run": {
+        "1": "5.0",
+        "2": "10.0",
+        "3": "8.0"
+      },
+      "transition": "t10"
+    }
+  ],
+  "interrupts": [
+    {
+      "selector": "role=button[name=\"No thanks\" i]",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "selector": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        3
+      ]
+    }
+  ],
+  "branches": [],
+  "warnings": [
+    "column 2: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 4: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 5: click targets differ across runs and match no planned value — kept run 1's selector; replay with other values may not find it",
+    "column 6: click present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 11: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 15: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 16: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 18: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 19: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 21: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 22: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)"
+  ],
+  "hints": []
+}

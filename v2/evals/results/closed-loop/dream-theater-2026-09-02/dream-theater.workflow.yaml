@@ -1,0 +1,358 @@
+name: dream-theater
+version: '1'
+start_state: init
+states:
+- id: init
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s1
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/
+  - type: selector_visible
+    selector: role=combobox[name="Search" i]
+    frame_path: []
+  timeout_ms: 10000
+- id: s2
+  description: ''
+  conditions:
+  - type: selector_visible
+    selector: '#center > yt-searchbox > div:nth-of-type(1) > div > button'
+    frame_path: []
+  timeout_ms: 10000
+- id: s3
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/results
+  - type: selector_visible
+    selector: '#dismissible > div > div a#video-title >> nth=0'
+    frame_path: []
+  timeout_ms: 10000
+- id: s4
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/watch
+  - type: selector_visible
+    selector: '#movie_player > div:nth-of-type(1) > video'
+    frame_path: []
+  timeout_ms: 10000
+- id: s5
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s6
+  description: ''
+  conditions:
+  - type: selector_visible
+    selector: '#movie_player > div:nth-of-type(1) > video'
+    frame_path: []
+  timeout_ms: 10000
+- id: s7
+  description: ''
+  conditions:
+  - type: selector_visible
+    selector: '#movie_player > div:nth-of-type(1) > video'
+    frame_path: []
+  timeout_ms: 10000
+- id: s8
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s9
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s10
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: i1
+  description: ''
+  conditions:
+  - type: selector_visible
+    selector: role=button[name="No thanks" i]
+    frame_path: []
+  timeout_ms: 10000
+- id: i1_done
+  description: ''
+  conditions:
+  - type: selector_hidden
+    selector: role=button[name="No thanks" i]
+    frame_path: []
+  timeout_ms: 10000
+- id: i2
+  description: ''
+  conditions:
+  - type: selector_visible
+    selector: '#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div
+      > button'
+    frame_path: []
+  timeout_ms: 10000
+- id: i2_done
+  description: ''
+  conditions:
+  - type: selector_hidden
+    selector: '#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div
+      > button'
+    frame_path: []
+  timeout_ms: 10000
+transitions:
+- id: t1
+  source: init
+  target: s1
+  action:
+    timeout_ms: 30000
+    requires_closed_shadow: false
+    type: goto
+    url: https://www.youtube.com
+- id: t2
+  source: s1
+  target: s2
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: fill
+    locator:
+    - fn: get_by_role
+      args:
+      - combobox
+      kwargs:
+        name: Search
+    text: ${search_query}
+- id: t3
+  source: s2
+  target: s3
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: click
+    locator:
+    - fn: locator
+      args:
+      - '#center > yt-searchbox > div:nth-of-type(1) > div > button'
+      kwargs: {}
+- id: t4
+  source: s3
+  target: s4
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: click
+    locator:
+    - fn: locator
+      args:
+      - '#dismissible > div > div a#video-title'
+      kwargs: {}
+    - fn: nth
+      args:
+      - 0
+      kwargs: {}
+- id: t5
+  source: s4
+  target: s5
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: press
+    keys: m
+    locator:
+    - fn: locator
+      args:
+      - '#movie_player > div:nth-of-type(1) > video'
+      kwargs: {}
+- id: t6
+  source: s5
+  target: s6
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: noop
+- id: t6_dwell
+  source: s6
+  target: s6
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: wait
+    seconds: 1.0
+- id: t7
+  source: s6
+  target: s7
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: press
+    keys: l
+    locator:
+    - fn: locator
+      args:
+      - '#movie_player > div:nth-of-type(1) > video'
+      kwargs: {}
+- id: t8
+  source: s7
+  target: s8
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: press
+    keys: l
+    locator:
+    - fn: locator
+      args:
+      - '#movie_player > div:nth-of-type(1) > video'
+      kwargs: {}
+- id: t9
+  source: s8
+  target: s9
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: noop
+- id: t9_dwell
+  source: s9
+  target: s9
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: wait
+    seconds: 1.0
+- id: t10
+  source: s9
+  target: s10
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: noop
+- id: t10_dwell
+  source: s10
+  target: s10
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: wait
+    seconds: 1.0
+- id: ti1
+  source: i1
+  target: i1_done
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: No thanks
+- id: ti2
+  source: i2
+  target: i2_done
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: click
+    locator:
+    - fn: locator
+      args:
+      - '#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button'
+      kwargs: {}
+params:
+- name: pause_time
+  description: 'inferred from 3 runs; observed: run 1: ''10'', run 2: ''5'', run 3:
+    ''15'''
+  required: true
+  default: '10'
+  secret: false
+- name: play_time_2
+  description: 'inferred from 3 runs; observed: run 1: ''5'', run 2: ''10'', run 3:
+    ''8'''
+  required: true
+  default: '5'
+  secret: false
+- name: search_query
+  description: 'inferred from 3 runs; observed: run 1: ''Dream Theater - Under a glass
+    moon'', run 2: ''Metallica - Master of Puppets'', run 3: ''Pink Floyd - Comfortably
+    Numb'''
+  required: true
+  default: Dream Theater - Under a glass moon
+  secret: false
+- name: watch_time_1
+  description: 'inferred from 3 runs; observed: run 1: ''20'', run 2: ''15'', run
+    3: ''25'''
+  required: true
+  default: '20'
+  secret: false
+control:
+- kind: edge
+  edge: t1
+- kind: edge
+  edge: t2
+- kind: edge
+  edge: t3
+- kind: edge
+  edge: t4
+- kind: edge
+  edge: t5
+- kind: edge
+  edge: t6
+- kind: repeat
+  body:
+  - kind: edge
+    edge: t6_dwell
+  max_iterations: 75
+  count: ${watch_time_1}
+- kind: edge
+  edge: t7
+- kind: edge
+  edge: t8
+- kind: edge
+  edge: t9
+- kind: repeat
+  body:
+  - kind: edge
+    edge: t9_dwell
+  max_iterations: 60
+  count: ${pause_time}
+- kind: edge
+  edge: t10
+- kind: repeat
+  body:
+  - kind: edge
+    edge: t10_dwell
+  max_iterations: 60
+  count: ${play_time_2}
+accept_states: []
+milestones: []
+interrupts:
+- id: int1
+  description: ''
+  state: i1
+  resolve:
+  - ti1
+  scope:
+  - s4
+  - s5
+  - s6
+  - s7
+  - s8
+  - s9
+  - s10
+  max_fires: 3
+- id: int2
+  description: ''
+  state: i2
+  resolve:
+  - ti2
+  scope:
+  - s4
+  - s5
+  - s6
+  - s7
+  - s8
+  - s9
+  - s10
+  max_fires: 3

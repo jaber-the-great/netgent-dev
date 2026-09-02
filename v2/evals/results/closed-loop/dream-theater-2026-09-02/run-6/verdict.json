@@ -1,0 +1,18 @@
+{
+  "achieved": true,
+  "attempts": 1,
+  "verdict": {
+    "achieved": true,
+    "confidence": "high",
+    "unmet": [],
+    "evidence": [
+      "Action log step 0: goto 'https://www.youtube.com' \u2014 confirmed by first screenshot showing YouTube home page.",
+      "Action log step 1: fill 'Search' = 'Queen - Bohemian Rhapsody' \u2014 search box shows exact text 'Queen - Bohemian Rhapsody' in all three screenshots.",
+      "Second screenshot (search results) shows the first organic (non-ad) video result titled 'Queen \u2013 Bohemian Rhapsody (Official Video Remastered)' with 6:00 duration, 2B views, Queen Official channel \u2014 matching the query directly (the item above it is a Sponsored ad for 'Andrea Bocelli Live', not an organic video result).",
+      "Action log step 4: click 'Queen \u2013 Bohemian Rhapsody (Official Video Remastered) 6 minutes' matches this result.",
+      "FINAL OBSERVATION TITLE: 'Queen \u2013 Bohemian Rhapsody (Official Video Remastered) - YouTube' and visible text confirms the same video is now loaded, with channel 'Queen Official', 14M likes, description mentioning 'REMASTERED IN HD TO CELEBRATE ONE BILLION VIEWS! Taken from A Night At The Opera, 1975.'",
+      "MEDIA TIMELINE and final observation show 'video PLAYING at 0:08 / 0:43' confirming the video opened and is actively playing.",
+      "Third screenshot shows a video player loaded on the watch page consistent with the video being open."
+    ]
+  }
+}

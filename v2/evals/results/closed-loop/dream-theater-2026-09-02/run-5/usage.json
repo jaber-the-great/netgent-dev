@@ -1,0 +1,9 @@
+{
+  "calls": 34,
+  "input_tokens": 270006,
+  "output_tokens": 24594,
+  "cache_read_tokens": 142611,
+  "cache_creation_tokens": 127327,
+  "observation_chars": 112185,
+  "history_chars": 40173
+}

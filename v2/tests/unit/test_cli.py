@@ -65,9 +65,9 @@ def test_generate_parses_runs_and_variation(monkeypatch, tmp_path):
     result = runner.invoke(cli_app, [
         "generate", "watch a video", "--url", "https://youtube.com",
         "--out", str(tmp_path / "yt.yaml"), "--runs", "3",
-        "--variation", "watch_time=10", "--variation", "video_query=cats",
+        "--variation", "watch_time=10", "--variation", "video_query=cats", "--rounds", "2",
     ])
     assert result.exit_code == 1 and "stubbed" in result.output
     req = captured["req"]
-    assert req.runs == 3
+    assert req.runs == 3 and req.max_rounds == 2
     assert req.variation == {"watch_time": "10", "video_query": "cats"}

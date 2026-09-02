@@ -1,0 +1,22 @@
+{
+  "achieved": true,
+  "attempts": 1,
+  "verdict": {
+    "achieved": true,
+    "confidence": "high",
+    "unmet": [],
+    "evidence": [
+      "Search field shows exact query 'Dream Theater - Under a glass moon' (INTERACTIVE ELEMENTS: [4] input[text] 'Search' value='Dream Theater - Under a glass moon')",
+      "Step 4: clicked 'Under a Glass Moon 7 minutes, 4 seconds' immediately after search; final page TITLE 'Under a Glass Moon - YouTube' confirms correct video loaded",
+      "Two sequential pre-roll ads (durations 2:13 and 0:30) appeared before main 7:03 video began; step 6 clicked the skip-ad button and step 7's reading shows main content at 0:01/7:03 confirming ad was skipped",
+      "Mute: first ad already [muted], second ad shows unmuted at t+13s then step5 press 'm' results in [muted] state by t+29s; main video stays [muted] through the entire remaining timeline including final observation",
+      "Popup: 'No thanks' clicked on YouTube Music promo (TEXTS SEEN: 'Into music? We are too.', 'No thanks'); no dialogs remain (DIALOGS: none)",
+      "Watch 20s: position advanced from 0:12(t+51s) to 0:39(t+78s), a 27s gain over 27s wall-clock \u2014 normal continuous playback satisfying watch_time_1",
+      "Fast-forward 30s: three 'l' presses each added ~10s extra beyond wall-clock (0:39\u21920:56 over 8s, 0:56\u21921:17 over 11s, 1:17\u21921:47 over 20s), totaling +30s extra matching fast_forward_time",
+      "Watch 15s: position 1:47(t+117s)\u21922:23(t+153s) tracks wall-clock 1:1, confirming normal continued playback for watch_time_2",
+      "Pause 10s: click at step13 paused playback; step14/15 readings show video PAUSED frozen at 2:32 for 16s wall-clock (\u2265 pause_time)",
+      "Play 5s: click at step15 resumes PLAYING at 2:32; step16 wait then step17 'done' shows position advancing to 2:44 while PLAYING, confirming resumed playback for play_time_2",
+      "Final observation confirms correct video still playing muted at 2:50/7:03 with no unresolved dialogs or pop-ups"
+    ]
+  }
+}

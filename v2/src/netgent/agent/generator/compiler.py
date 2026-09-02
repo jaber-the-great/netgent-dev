@@ -103,11 +103,25 @@ def _hidden(action: Action) -> dict:
 
 
 def _locator_selector(locator: Locator) -> str | None:
-    """A readable selector-string rendering of a single-step chain, or None — for CLASSIFYING
-    and REPORTING a target (interrupt detection, volatile-id warnings, merge keys), never for
-    evaluating one: the `role=` form is only a label (its name match is exact where
-    get_by_role's is substring), which is why anchors carry the chain itself (`_anchor`).
+    """A Playwright selector-string rendering of a locator chain, or None if inexpressible.
+
+    Conservative by design: the two single-step shapes the explore agent emits, plus the
+    positional shape the merge emits for "the N-th item" — `[locator(css), nth(i)]` as
+    Playwright's `css >> nth=i`, which resolves to exactly that element. A chain we cannot
+    translate yields no guard (an open gate), never a wrong guard.
+
+    Used for CLASSIFYING and REPORTING a target (interrupt detection, volatile-id warnings,
+    merge keys) and for guards whose rendering is exact; anchors carry the chain itself
+    (`_anchor`) because the `role=` form's name match is exact where `get_by_role`'s is a
+    substring — rendering an anchor through it is what made a compiled state unrecognizable
+    on replay (docs/research/media-platforms-eval.md).
     """
+    if (
+        len(locator) == 2
+        and locator[0].fn == "locator" and len(locator[0].args) == 1 and not locator[0].kwargs
+        and locator[1].fn == "nth" and len(locator[1].args) == 1
+    ):
+        return f"{locator[0].args[0]} >> nth={int(locator[1].args[0])}"
     if len(locator) != 1:
         return None
     step = locator[0]

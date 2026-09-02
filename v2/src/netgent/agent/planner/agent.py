@@ -4,7 +4,7 @@ Holds the LLM and the step cap; `run()` delegates to `graph.plan()`."""
 from typing import TYPE_CHECKING
 
 from netgent.agent.planner.context import MAX_PLAN_STEPS, PlannerContext
-from netgent.agent.planner.models import Plan, VariationPlan
+from netgent.agent.planner.models import NextRoundPlan, Plan, VariationPlan
 
 if TYPE_CHECKING:
     from netgent.agent.llm import LLM
@@ -29,3 +29,9 @@ class PlannerAgent:
         from netgent.agent.planner.graph import plan_variations  # lazy: langgraph
 
         return await plan_variations(task, llm=self.llm, n=n, url=url, pinned=pinned)
+
+    async def next_round(self, context) -> NextRoundPlan:
+        """The closed loop's planner: a RoundContext in, the next round's plan out."""
+        from netgent.agent.planner.graph import plan_next  # lazy: langgraph
+
+        return await plan_next(context, llm=self.llm)

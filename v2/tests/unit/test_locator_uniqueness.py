@@ -87,3 +87,66 @@ def test_machine_generated_ids_never_lead_the_ladder():
         assert is_volatile_selector(vid), vid
     assert not is_volatile_selector("#email")
     assert not is_volatile_selector("#main-content")
+
+
+# ── M0: the structural (positional) rung and the probed ladder ──────────────────────────
+
+
+def _list_link(**kw) -> DomElement:
+    base = dict(
+        tag="a", role=None, name="Cat video A", type=None, bbox=BBox(x=40, y=120, w=200, h=20),
+        candidates=[
+            SelectorCandidate(kind="role", role="link", name="Cat video A"),
+            SelectorCandidate(kind="css", value="#results > li:nth-of-type(1) > a"),
+            SelectorCandidate(kind="structural", value="#results > li > a"),
+        ],
+    )
+    base.update(kw)
+    return DomElement(**base)
+
+
+def test_structural_rung_is_last_and_kinds_are_named():
+    """The positional rung (a css path anchored at the repeated container) closes the ladder
+    and is labelled, so a compile can find it without re-deriving it from the selector text."""
+    from netgent.browser.locators import ladder
+
+    rungs = ladder(_list_link())
+    assert [k for k, _ in rungs] == ["role", "css", "structural"]
+    assert rungs[-1][1][-1].args == ["#results > li > a"]
+    assert locator_candidates(_list_link()) == [c for _, c in rungs]
+
+
+def test_probe_ladder_counts_every_rung_and_indexes_the_structural_one():
+    from netgent.browser.locators import probe_ladder
+
+    session = FakeSession(
+        {"get_by_role:link": 1, "locator:#results > li:nth-of-type(1) > a": 1, "locator:#results > li > a": 3},
+        index=0,
+    )
+    probe = asyncio.run(probe_ladder(session, _list_link()))
+    assert probe.kinds == ["role", "css", "structural"]
+    assert probe.counts == [1, 1, 3]
+    assert probe.indices == [None, None, 0]  # only the structural rung was ambiguous
+    assert probe.rung("structural") == 2 and probe.rung("id") is None
+    # the unique winner is unchanged: the role rung, with the probe reused (no extra counts)
+    counted_before = len(session.counted)
+    chain = asyncio.run(unique_locator_for(session, _list_link(), probe))
+    assert [s.fn for s in chain] == ["get_by_role"] and len(session.counted) == counted_before
+
+
+def test_probe_ladder_marks_unresolvable_rungs_and_indexes_the_first_ambiguous():
+    from netgent.browser.locators import probe_ladder
+
+    class Raising(FakeSession):
+        async def count(self, chain):
+            if chain[-1].args[0] == "#results > li > a":
+                raise RuntimeError("bad selector")
+            return await super().count(chain)
+
+    session = Raising({"get_by_role:link": 2, "locator:#results > li:nth-of-type(1) > a": 2}, index=1)
+    el = _list_link()
+    probe = asyncio.run(probe_ladder(session, el))
+    assert probe.counts == [2, 2, -1]
+    assert probe.indices == [1, None, None]  # first ambiguous rung only; the broken rung stays unknown
+    chain = asyncio.run(unique_locator_for(session, el, probe))
+    assert [(s.fn, s.args) for s in chain][-1] == ("nth", [1])  # disambiguated from the probe's index

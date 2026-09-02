@@ -1,0 +1,1086 @@
+{
+  "workflow_name": "dream-theater",
+  "workflow_version": "1",
+  "started_at": "2026-09-02T22:55:33.428373Z",
+  "finished_at": "2026-09-02T22:57:06.667040Z",
+  "success": true,
+  "edges": [
+    {
+      "transition_id": "t1",
+      "source": "init",
+      "target": "s1",
+      "action_type": "goto",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:55:33.428447Z",
+      "duration_ms": 3652.492666966282,
+      "trigger_latency_ms": 45.94624997116625,
+      "conditions": [
+        {
+          "type": "url_matches",
+          "met": true
+        },
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/t1.png",
+      "media": null,
+      "error": null
+    },
+    {
+      "transition_id": "t2",
+      "source": "s1",
+      "target": "s2",
+      "action_type": "fill",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:55:37.081047Z",
+      "duration_ms": 242.72291699890047,
+      "trigger_latency_ms": 10.101583087816834,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/t2.png",
+      "media": null,
+      "error": null
+    },
+    {
+      "transition_id": "t3",
+      "source": "s2",
+      "target": "s3",
+      "action_type": "click",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:55:37.323828Z",
+      "duration_ms": 1876.649040961638,
+      "trigger_latency_ms": 1630.0938329659402,
+      "conditions": [
+        {
+          "type": "url_matches",
+          "met": true
+        },
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/results?search_query=Pink+Floyd+-+Comfortably+Numb",
+      "screenshot": "screenshots/t3.png",
+      "media": "video PLAYING at 0:00 / 0:16 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t4",
+      "source": "s3",
+      "target": "s4",
+      "action_type": "click",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:55:39.200524Z",
+      "duration_ms": 798.3242920599878,
+      "trigger_latency_ms": 544.1395830130205,
+      "conditions": [
+        {
+          "type": "url_matches",
+          "met": true
+        },
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t4.png",
+      "media": "video PAUSED at 0:00",
+      "error": null
+    },
+    {
+      "transition_id": "t5",
+      "source": "s4",
+      "target": "s5",
+      "action_type": "press",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:55:40.115758Z",
+      "duration_ms": 540.8951670397073,
+      "trigger_latency_ms": 0.0034999102354049683,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t5.png",
+      "media": "video PLAYING at 0:00 / 0:06 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6",
+      "source": "s5",
+      "target": "s6",
+      "action_type": "noop",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:55:41.835690Z",
+      "duration_ms": 193.45008302479982,
+      "trigger_latency_ms": 7.920625037513673,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6.png",
+      "media": "video PLAYING at 0:01 / 0:06 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:55:42.543246Z",
+      "duration_ms": 1142.1108749927953,
+      "trigger_latency_ms": 7.0585840148851275,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:03 / 0:06 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:55:43.911213Z",
+      "duration_ms": 1109.2085839482024,
+      "trigger_latency_ms": 5.525624961592257,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:04 / 0:06 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:55:45.218319Z",
+      "duration_ms": 1096.6369590023533,
+      "trigger_latency_ms": 4.795333021320403,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:05 / 0:06 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:55:46.574984Z",
+      "duration_ms": 1160.9060419723392,
+      "trigger_latency_ms": 5.449124961160123,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:00 / 2:07 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "ti1",
+      "source": "i1",
+      "target": "i1_done",
+      "action_type": "click",
+      "outcome": "recovered",
+      "started_at": "2026-09-02T22:55:47.753956Z",
+      "duration_ms": 10566.744875046425,
+      "trigger_latency_ms": null,
+      "conditions": [
+        {
+          "type": "selector_hidden",
+          "met": false
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/ti1.png",
+      "media": "video PLAYING at 0:11 / 2:07 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": "state 'i1_done' not recognized within 10000ms; unmet conditions: ['selector_hidden']"
+    },
+    {
+      "transition_id": "ti2",
+      "source": "i2",
+      "target": "i2_done",
+      "action_type": "click",
+      "outcome": "recovered",
+      "started_at": "2026-09-02T22:55:58.429771Z",
+      "duration_ms": 10518.729500006884,
+      "trigger_latency_ms": null,
+      "conditions": [
+        {
+          "type": "selector_hidden",
+          "met": false
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/ti2.png",
+      "media": "video PLAYING at 0:10 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": "state 'i2_done' not recognized within 10000ms; unmet conditions: ['selector_hidden']"
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:09.027892Z",
+      "duration_ms": 1089.6817920729518,
+      "trigger_latency_ms": 4.128749947994947,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:11 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:10.280660Z",
+      "duration_ms": 1066.7713329894468,
+      "trigger_latency_ms": 4.110708017833531,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:12 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:11.507231Z",
+      "duration_ms": 1090.0096249533817,
+      "trigger_latency_ms": 10.801333002746105,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:13 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:12.756744Z",
+      "duration_ms": 1075.7917079608887,
+      "trigger_latency_ms": 8.386834058910608,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:14 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:13.997062Z",
+      "duration_ms": 1102.5750829139724,
+      "trigger_latency_ms": 6.09095802064985,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:16 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:15.286939Z",
+      "duration_ms": 1116.5821669856086,
+      "trigger_latency_ms": 13.519291998818517,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:17 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:16.587965Z",
+      "duration_ms": 1095.3796249814332,
+      "trigger_latency_ms": 8.495500078424811,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:18 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:17.843868Z",
+      "duration_ms": 1069.5453339722008,
+      "trigger_latency_ms": 4.500833107158542,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:20 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:19.077897Z",
+      "duration_ms": 1069.5484580937773,
+      "trigger_latency_ms": 4.81562502682209,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:21 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:20.314915Z",
+      "duration_ms": 1104.2281249538064,
+      "trigger_latency_ms": 4.934875061735511,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:22 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:21.602410Z",
+      "duration_ms": 1135.5949169956148,
+      "trigger_latency_ms": 7.369333994574845,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:23 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:22.928599Z",
+      "duration_ms": 1113.8202500296757,
+      "trigger_latency_ms": 5.775499972514808,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:25 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:24.417828Z",
+      "duration_ms": 1099.2204579524696,
+      "trigger_latency_ms": 5.613042041659355,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:26 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:25.716203Z",
+      "duration_ms": 1088.6722080176696,
+      "trigger_latency_ms": 4.715916933491826,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:27 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:27.001299Z",
+      "duration_ms": 1085.1355829508975,
+      "trigger_latency_ms": 7.0876250974833965,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:29 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:28.266007Z",
+      "duration_ms": 1290.8138750353828,
+      "trigger_latency_ms": 134.84700000844896,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:30 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:29.747271Z",
+      "duration_ms": 1103.4543750574812,
+      "trigger_latency_ms": 5.9780830051749945,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:31 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:31.030451Z",
+      "duration_ms": 1087.6119160093367,
+      "trigger_latency_ms": 5.439957953058183,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:33 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:32.322377Z",
+      "duration_ms": 1096.4199169538915,
+      "trigger_latency_ms": 5.815042066387832,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:34 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:33.594311Z",
+      "duration_ms": 1089.5437090657651,
+      "trigger_latency_ms": 4.191084066405892,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:35 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_dwell",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:34.858431Z",
+      "duration_ms": 1092.7203330211341,
+      "trigger_latency_ms": 5.116083077155054,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t6_dwell.png",
+      "media": "video PLAYING at 0:37 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t7",
+      "source": "s6",
+      "target": "s7",
+      "action_type": "press",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:36.123652Z",
+      "duration_ms": 226.22420801781118,
+      "trigger_latency_ms": 16.082833986729383,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t7.png",
+      "media": "video PLAYING at 0:47 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t8",
+      "source": "s7",
+      "target": "s8",
+      "action_type": "press",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:36.557667Z",
+      "duration_ms": 193.41654202435166,
+      "trigger_latency_ms": 0.002749962732195854,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t8.png",
+      "media": "video PLAYING at 0:57 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9",
+      "source": "s8",
+      "target": "s9",
+      "action_type": "noop",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:36.930143Z",
+      "duration_ms": 104.68333307653666,
+      "trigger_latency_ms": 0.0017919810488820076,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9.png",
+      "media": "video PLAYING at 0:57 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:37.386994Z",
+      "duration_ms": 1096.9716670224443,
+      "trigger_latency_ms": 0.006499933078885078,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 0:59 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:38.663944Z",
+      "duration_ms": 1070.9825409576297,
+      "trigger_latency_ms": 0.006375019438564777,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 1:00 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:39.929679Z",
+      "duration_ms": 1088.2142920745537,
+      "trigger_latency_ms": 0.004666042514145374,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 1:01 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:41.195986Z",
+      "duration_ms": 1071.1834999965504,
+      "trigger_latency_ms": 0.006500049494206905,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 1:03 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:42.454181Z",
+      "duration_ms": 1078.2074999297038,
+      "trigger_latency_ms": 0.00300002284348011,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 1:04 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:43.695974Z",
+      "duration_ms": 1085.1887919707224,
+      "trigger_latency_ms": 0.0037919962778687477,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 1:05 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:44.976551Z",
+      "duration_ms": 1074.203124968335,
+      "trigger_latency_ms": 0.003334018401801586,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 1:07 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:46.250493Z",
+      "duration_ms": 1083.3663329249248,
+      "trigger_latency_ms": 0.006334041245281696,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 1:08 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:47.509138Z",
+      "duration_ms": 1077.150790952146,
+      "trigger_latency_ms": 0.004332978278398514,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 1:09 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:48.764526Z",
+      "duration_ms": 1082.6637499267235,
+      "trigger_latency_ms": 0.004791072569787502,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 1:10 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:50.026494Z",
+      "duration_ms": 1094.2590410122648,
+      "trigger_latency_ms": 0.008584000170230865,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 1:12 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:51.279981Z",
+      "duration_ms": 1087.2462500119582,
+      "trigger_latency_ms": 0.01908303238451481,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 1:13 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:52.523931Z",
+      "duration_ms": 1078.7366670556366,
+      "trigger_latency_ms": 0.007916940376162529,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 1:14 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:53.773989Z",
+      "duration_ms": 1092.4777500331402,
+      "trigger_latency_ms": 0.008999952115118504,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 1:15 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t9_dwell",
+      "source": "s9",
+      "target": "s9",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:55.065154Z",
+      "duration_ms": 1107.972750090994,
+      "trigger_latency_ms": 0.006542075425386429,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t9_dwell.png",
+      "media": "video PLAYING at 1:17 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t10",
+      "source": "s9",
+      "target": "s10",
+      "action_type": "noop",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:56.351497Z",
+      "duration_ms": 77.59195810649544,
+      "trigger_latency_ms": 0.002166023477911949,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t10.png",
+      "media": "video PLAYING at 1:17 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t10_dwell",
+      "source": "s10",
+      "target": "s10",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:56.758648Z",
+      "duration_ms": 1074.81329201255,
+      "trigger_latency_ms": 0.005041947588324547,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t10_dwell.png",
+      "media": "video PLAYING at 1:18 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t10_dwell",
+      "source": "s10",
+      "target": "s10",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:57.995114Z",
+      "duration_ms": 1071.7467080103233,
+      "trigger_latency_ms": 0.0037080608308315277,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t10_dwell.png",
+      "media": "video PLAYING at 1:20 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t10_dwell",
+      "source": "s10",
+      "target": "s10",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:56:59.230810Z",
+      "duration_ms": 1084.937333012931,
+      "trigger_latency_ms": 0.0029579969123005867,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t10_dwell.png",
+      "media": "video PLAYING at 1:21 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t10_dwell",
+      "source": "s10",
+      "target": "s10",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:57:00.491328Z",
+      "duration_ms": 1088.931042002514,
+      "trigger_latency_ms": 0.008082948625087738,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t10_dwell.png",
+      "media": "video PLAYING at 1:22 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t10_dwell",
+      "source": "s10",
+      "target": "s10",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:57:01.759864Z",
+      "duration_ms": 1109.424208989367,
+      "trigger_latency_ms": 0.011750031262636185,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t10_dwell.png",
+      "media": "video PLAYING at 1:23 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t10_dwell",
+      "source": "s10",
+      "target": "s10",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:57:03.044833Z",
+      "duration_ms": 1107.209249981679,
+      "trigger_latency_ms": 0.00925001222640276,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t10_dwell.png",
+      "media": "video PLAYING at 1:25 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t10_dwell",
+      "source": "s10",
+      "target": "s10",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:57:04.327173Z",
+      "duration_ms": 1076.8219999736175,
+      "trigger_latency_ms": 0.00466697383671999,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t10_dwell.png",
+      "media": "video PLAYING at 1:26 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t10_dwell",
+      "source": "s10",
+      "target": "s10",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-02T22:57:05.589898Z",
+      "duration_ms": 1077.0358750596642,
+      "trigger_latency_ms": 0.004500034265220165,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/watch?v=_FrOQC-zEog&list=RD_FrOQC-zEog&start_radio=1",
+      "screenshot": "screenshots/t10_dwell.png",
+      "media": "video PLAYING at 1:27 / 6:54 [muted]; video PAUSED at 0:00 / 6:54 [muted]",
+      "error": null
+    }
+  ]
+}

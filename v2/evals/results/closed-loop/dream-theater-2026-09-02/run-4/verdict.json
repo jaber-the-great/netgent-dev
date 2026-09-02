@@ -1,0 +1,21 @@
+{
+  "achieved": false,
+  "attempts": 2,
+  "verdict": {
+    "achieved": false,
+    "confidence": "high",
+    "unmet": [
+      "Fast-forward for 30s: only a single 'l' keypress occurred (step 9), which is YouTube's standard 10-second seek, not a 30-second fast-forward. Timeline shows position only jumping ~10s extra (0:51\u21921:09 over 7s wall-clock \u2248 +11s seek), well short of the requested 30s.",
+      "Dismiss pop-ups: the 'Into music? We are too.' YouTube Music promo pop-up (with 'No thanks'/'Check it out' buttons) is visible in all three screenshots including the final one \u2014 it was never dismissed despite the task explicitly requiring pop-ups to be dismissed.",
+      "Watch-then-pause-then-play sequence has minor timing looseness (e.g., watch_time_2 gap was ~41s wall-clock instead of ~10s, and pause lasted ~27s not exactly 20s), which is within normal drift tolerance and not counted as a hard failure, but is noted for completeness."
+    ],
+    "evidence": [
+      "Navigated to youtube.com and searched 'Iron Maiden - The Trooper' \u2014 search box shows exact query, results list includes the clicked title.",
+      "Clicked 'Iron Maiden - The Trooper (Official Video) 4 minutes, 24 seconds' and it became the playing video (final title/URL match).",
+      "Ad detected (duration 19:14 mismatch) at t+0s and skipped via click at step 5; subsequent video shows correct 4:23 duration \u2014 ad-skip achieved.",
+      "video stays [muted] throughout the timeline from step 7 onward \u2014 mute achieved.",
+      "Position froze at 2:00/4:23 across steps 12-15 (t+136s to t+193s) while paused \u2014 20s pause achieved.",
+      "Final reading at t+225s shows video PLAYING at 2:31/4:23 after the k-press resumed it at step 15 \u2014 final 15s play phase achieved."
+    ]
+  }
+}
