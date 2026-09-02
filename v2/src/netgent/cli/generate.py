@@ -39,8 +39,12 @@ def generate(
     ] = True,
     runs: Annotated[
         int, typer.Option("--runs", min=1, help="Explore N planned task variations independently and merge "
-                          "them into one generalized workflow (params inferred; zero-LLM replay check).")
-    ] = 1,
+                          "them into one generalized workflow (params inferred; zero-LLM replay check). "
+                          "--runs 1 = a single exploration, compiled as-is.")
+    ] = 5,
+    parallel: Annotated[
+        int, typer.Option("--parallel", min=1, help="How many explorations run at once (one browser each).")
+    ] = 5,
     variation: Annotated[
         list[str] | None,
         typer.Option("--variation", help="Pin one variation's value as name=value (repeatable; needs --runs > 1)."),
@@ -70,6 +74,7 @@ def generate(
         trajectory_dir=trajectory_dir,
         judge=judge,
         runs=runs,
+        parallel=parallel,
         variation=dict(v.split("=", 1) for v in (variation or [])),
     )
     llm = make_llm(model or get_settings().generator_model)

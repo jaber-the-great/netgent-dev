@@ -22,9 +22,10 @@ verifier retry's task suffix stays inside its own run.
 orchestrator is the only place that knows the order they run in.
 """
 
+import operator
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -64,8 +65,12 @@ class GenerateRequest(BaseModel):
     # Multi-run exploration (`--runs N`): the planner drafts N same-family task variations,
     # each explored independently (fresh memory), judged per run; the achieved runs are merged
     # by the typed-key merge into ONE generalized workflow, then replay-checked with zero LLM.
-    # runs=1 keeps the single-run pipeline above, byte-for-byte.
+    # runs=1 keeps the single-run pipeline above, byte-for-byte. The CLI defaults to 5 runs.
     runs: int = Field(default=1, ge=1)
+    # How many explorations run at once (each in its own browser). Runs are independent
+    # samples by design (trajectory-memory.md §C.4), so they can fan out with LangGraph `Send`;
+    # 1 = sequential (what the FakeLLM tests need: a scripted LLM is consumed in order).
+    parallel: int = Field(default=1, ge=1)
     variation: dict[str, str] = Field(default_factory=dict)  # pin one variation's values (--variation)
 
 
@@ -207,9 +212,9 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
 
 class MultiRunState(TypedDict, total=False):
     plan: Any  # the planner's VariationPlan
-    k: int  # 1-based index of the NEXT run to explore
-    inputs: list  # merge RunInput per finished run (achieved or not)
-    reports: list  # per-run summary dicts
+    k: int  # this run's 1-based index (a Send payload key; each explore_run task gets its own)
+    inputs: Annotated[list, operator.add]  # merge RunInput per finished run (achieved or not) — fan-in
+    reports: Annotated[list, operator.add]  # per-run summary dicts — fan-in
     workflow: Any
     generalized: Any
     replay: Any
@@ -268,7 +273,7 @@ def _variation_task(variation, hints: str, suffix: str) -> str:
 def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener | None = None):
     """Compile plan → explore_run (×N) → merge → replay, bound to one request."""
     from langgraph.graph import END, START, StateGraph
-    from langgraph.types import Command
+    from langgraph.types import Command, Send
 
     from netgent.agent.explorer.decision import DEFAULT_KINDS
     from netgent.agent.explorer.graph import EXPLORER
@@ -288,7 +293,7 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
 
     store = TrajectoryStore(_store_root(req))
 
-    async def plan(state: MultiRunState) -> Command[Literal["explore_run"]]:
+    async def plan(state: MultiRunState) -> Command[Literal["explore_run"]]:  # goto is a list of Send
         emit("plan", f"planning {req.runs} task variations")
         variation_plan = await run_variation_planner(
             req.task, llm=llm, n=req.runs, url=req.url, pinned=req.variation or None, graph=VARIATION_PLANNER
@@ -303,14 +308,19 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
             emit("plan", f"variation {i}: {v.task_text} [{vals}]")
         for note in variation_plan.notes:
             emit("plan", f"note: {note}")
-        return Command(update={"plan": variation_plan, "k": 1}, goto="explore_run")
+        # Fan out: one explore_run task per variation, in parallel up to `req.parallel`
+        # (top-level RunnableConfig `max_concurrency`, set in orchestrate()). The runs are
+        # independent samples, so nothing is lost by not sequencing them — the read-only
+        # HINTS block is the one thing sequencing gave, and it was context, never a step.
+        sends = [Send("explore_run", {"plan": variation_plan, "k": k}) for k in range(1, req.runs + 1)]
+        return Command(update={"plan": variation_plan}, goto=sends)
 
-    async def explore_run(state: MultiRunState) -> Command[Literal["explore_run", "merge"]]:
-        k = state.get("k", 1)
+    async def explore_run(state: MultiRunState) -> dict:
+        k = state["k"]
         variation = state["plan"].variations[k - 1]
         run_dir = store.run_dir(k)
         store.save_variation(k, variation)
-        hints = _site_hints([i.trajectory for i in state.get("inputs", [])])
+        hints = ""  # parallel runs have no earlier runs to learn overlay anchors from
         max_attempts = 1 + (req.verify_retries if req.judge else 0)
         attempts, achieved, verdict, traj, suffix = 0, False, None, None, ""
         while True:
@@ -352,18 +362,17 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
             store.stash_failed_attempt(k, attempts)
             emit("verify", f"run {k}: re-exploring with the unmet points (private to this run)")
         store.save_verdict(k, verdict, achieved, attempts)
-        inputs = [*state.get("inputs", []),
-                  RunInput(run=k, trajectory=traj, values=dict(variation.values), achieved=achieved)]
-        reports = [*state.get("reports", []),
-                   {"run": k, "task": variation.task_text, "values": dict(variation.values),
-                    "achieved": achieved, "attempts": attempts}]
-        return Command(
-            update={"k": k + 1, "inputs": inputs, "reports": reports},
-            goto="explore_run" if k < req.runs else "merge",
-        )
+        # Fan-in: the list reducers on MultiRunState append this run's results; `merge` runs
+        # once, after every explore_run task of the superstep has finished (the START→plan→
+        # Send→explore_run→merge edge), and sorts inputs by run number.
+        return {
+            "inputs": [RunInput(run=k, trajectory=traj, values=dict(variation.values), achieved=achieved)],
+            "reports": [{"run": k, "task": variation.task_text, "values": dict(variation.values),
+                         "achieved": achieved, "attempts": attempts}],
+        }
 
     async def merge(state: MultiRunState) -> Command[Literal["replay", "__end__"]]:
-        inputs = state["inputs"]
+        inputs = sorted(state["inputs"], key=lambda i: i.run)  # fan-in arrives in completion order
         achieved = [i for i in inputs if i.achieved]
         if not achieved:
             return Command(update={"error": "no run achieved the task — nothing to merge"}, goto=END)
@@ -418,6 +427,7 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
         .add_node("merge", merge)
         .add_node("replay", replay)
         .add_edge(START, "plan")
+        .add_edge("explore_run", "merge")
         .compile()
     )
 
@@ -435,7 +445,9 @@ async def orchestrate(req: GenerateRequest, llm: LLM, listen: Listener | None = 
             error=final.get("error"),
         )
     graph = build_multi_orchestration_graph(req, llm, listen)
-    final = await graph.ainvoke({}, config={"recursion_limit": 4 * req.runs + 16})
+    # `max_concurrency` is a TOP-LEVEL config key (pregel reads it there, not from
+    # `configurable`); it bounds how many explore_run Send tasks — browsers — run at once.
+    final = await graph.ainvoke({}, config={"recursion_limit": 4 * req.runs + 16, "max_concurrency": req.parallel})
     inputs = final.get("inputs") or []
     spine = next((i.trajectory for i in inputs if i.achieved), None)
     return GenerateResult(
