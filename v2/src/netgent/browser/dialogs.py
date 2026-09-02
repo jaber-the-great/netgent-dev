@@ -74,6 +74,10 @@ class DialogLog:
         self._history.append(entry)
         logger.info("file chooser opened by a click (recorded for the observation)")
 
+    def pending(self) -> list[str]:
+        """Dialogs queued since the last drain, WITHOUT clearing them (a peek)."""
+        return list(self._pending)
+
     def drain(self) -> list[str]:
         """Dialogs seen since the last drain (oldest first); clears the queue.
 

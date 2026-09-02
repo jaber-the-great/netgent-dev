@@ -57,7 +57,7 @@ class DomObserver:
         cache[frame] = (parent_path + [selector], px + left, py + top)
         return cache[frame]
 
-    async def snapshot(self) -> DomSnapshot:
+    async def snapshot(self, *, drain_dialogs: bool = True) -> DomSnapshot:
         """Observe interactive elements + text across ALL frames (same- and cross-origin).
 
         The DOM walk runs inside each frame's own context (Playwright evaluates it there
@@ -115,5 +115,8 @@ class DomObserver:
             viewport_height=int(viewport_height),
             frames_skipped=len(skipped),
             skipped_frames=skipped,
-            dialogs=self._dialogs.drain() if self._dialogs is not None else [],
+            # A dialog is shown ONCE, in the observation that drains it. Peeking snapshots (the
+            # settle watcher) must not consume it, or the agent never sees its own submit's alert.
+            dialogs=(self._dialogs.drain() if drain_dialogs else list(self._dialogs.pending()))
+            if self._dialogs is not None else [],
         )

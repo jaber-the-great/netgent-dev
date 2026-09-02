@@ -129,3 +129,26 @@ def test_file_chooser_opened_by_a_click_is_reported(serve):
     dialogs, obs = asyncio.run(_run())
     assert dialogs and dialogs[0].startswith("filechooser:")
     assert "upload action" in obs
+
+
+def test_peeking_snapshot_leaves_the_dialog_for_the_next_real_observation(serve):
+    """The settle watcher snapshots right after an action; it must PEEK (drain_dialogs=False),
+    otherwise it consumes the submit's alert and the agent never sees its own success
+    message (measured: re-submit loops on the vanilla stress form)."""
+    srv = serve({"/": ALERT_FORM})
+
+    async def _run():
+        async with BrowserSession(headless=True) as s:
+            await s.page.goto(srv.url("/"), wait_until="networkidle")
+            await s.page.locator("#email").fill("a@b.co")
+            await s.page.locator("#go").click()
+            await s.page.wait_for_timeout(200)
+            peek1 = await s.snapshot(drain_dialogs=False)
+            peek2 = await s.snapshot(drain_dialogs=False)
+            real = await s.snapshot()
+            after = await s.snapshot()
+            return peek1.dialogs, peek2.dialogs, real.dialogs, after.dialogs
+
+    peek1, peek2, real, after = asyncio.run(_run())
+    assert peek1 and peek1 == peek2 == real  # visible to peeks and to the draining observation
+    assert after == []  # shown once

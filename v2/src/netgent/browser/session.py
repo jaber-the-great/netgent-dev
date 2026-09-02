@@ -94,8 +94,8 @@ class BrowserSession:
 
     # ── observation ──────────────────────────────────────────────────────────────
 
-    async def snapshot(self) -> DomSnapshot:
-        return await self._dom.snapshot()
+    async def snapshot(self, *, drain_dialogs: bool = True) -> DomSnapshot:
+        return await self._dom.snapshot(drain_dialogs=drain_dialogs)
 
     def dialogs_since_last_action(self) -> list[str]:
         """Dialogs raised by the most recently dispatched action (browser/dialogs.py)."""
