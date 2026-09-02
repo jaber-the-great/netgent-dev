@@ -61,12 +61,50 @@ def parse_structured_message(message: BaseMessage, schema: dict[str, Any] | type
                 "No structured_output in the CLI result and the message text is "
                 f"not valid JSON: {exc}"
             ) from exc
+    data = _unwrap_envelope(data)
     if isinstance(schema, type) and issubclass(schema, BaseModel):
+        _reject_foreign_object(data, schema)
         try:
             return schema.model_validate(data)
         except Exception as exc:
             raise OutputParserException(f"Structured output failed validation: {exc}") from exc
     return data
+
+
+def _unwrap_envelope(data: Any) -> Any:
+    """Undo the CLI's ``{"$PARAMETER_VALUE": "<json text>"}`` envelope.
+
+    Measured (Claude Code 2.1.x, a schema with a ``dict[str, str]`` field): the validated
+    object comes back wrapped in a single ``$PARAMETER_VALUE`` key whose value is the real
+    JSON as a string. Validating that dict against a model with all-default fields used
+    to "succeed" with an empty object — silently.
+    """
+    if isinstance(data, dict) and len(data) == 1 and "$PARAMETER_VALUE" in data:
+        inner = data["$PARAMETER_VALUE"]
+        if isinstance(inner, str):
+            try:
+                return json.loads(inner)
+            except json.JSONDecodeError as exc:
+                raise OutputParserException(
+                    f"$PARAMETER_VALUE envelope is not valid JSON: {exc}"
+                ) from exc
+        return inner
+    return data
+
+
+def _reject_foreign_object(data: Any, schema: type[BaseModel]) -> None:
+    """Reject a non-empty object that shares no field name with ``schema``.
+
+    A model whose fields all have defaults would otherwise validate it into an
+    empty instance — silently.
+    """
+    if isinstance(data, dict) and data and schema.model_fields:
+        fields = schema.model_fields
+        names = set(fields) | {f.alias for f in fields.values() if f.alias}
+        if not (set(data) & names):
+            raise OutputParserException(
+                f"Structured output has none of {sorted(names)}; got keys {sorted(data)[:6]}"
+            )
 
 
 def make_structured_output_parser(schema: dict[str, Any] | type) -> RunnableLambda[Any, Any]:
