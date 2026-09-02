@@ -5,6 +5,11 @@ import pytest
 
 from netgent.agent.explorer.models import AgentStep, AgentTrajectory
 from netgent.agent.generator.compiler import compile_trajectory
+from netgent.schema.actions import LocatorStep
+
+
+def _css(sel):
+    return [LocatorStep(fn="locator", args=[sel])]
 
 
 def _traj() -> AgentTrajectory:
@@ -35,7 +40,7 @@ def test_actions_become_transitions_and_urls_become_conditions():
     # step 2 stayed on the same page -> no url condition, but it IS anchored on the next
     # edge's target element (t3 presses Enter on input#q)
     (anchor,) = wf.state("s2").conditions
-    assert anchor.type == "selector_visible" and anchor.selector == "input#q"
+    assert anchor.type == "selector_visible" and anchor.locator == _css("input#q") and anchor.selector is None
     # step 3 moved -> url condition; final state has no next edge -> no anchor
     (cond,) = wf.state("s3").conditions
     assert cond.pattern == "https://youtube\\.com/results"  # query stripped, regex-escaped
@@ -46,10 +51,15 @@ def test_states_anchor_on_next_edges_target_element():
     # s1 (after goto): url condition AND the anchor for t2's fill target
     url_cond, anchor = wf.state("s1").conditions
     assert url_cond.type == "url_matches"
-    assert anchor.type == "selector_visible" and anchor.selector == "input#q"
+    assert anchor.type == "selector_visible" and anchor.locator == _css("input#q")
 
 
-def test_get_by_role_locator_becomes_role_selector_anchor():
+def test_anchor_is_the_next_actions_own_locator_chain():
+    """The anchor carries the chain itself, never a selector-string rendering: Playwright's
+    public `role=` engine matches `[name="…" i]` EXACTLY while get_by_role matches by
+    SUBSTRING, so an anchor rendered from a name Playwright's generator had shortened to a
+    30-char prefix ("Web icon An illustration of a") matched nothing on replay while the
+    click it guarded matched one element (archive.org, media-platforms-eval.md)."""
     traj = AgentTrajectory(
         task="t",
         success=True,
@@ -64,17 +74,20 @@ def test_get_by_role_locator_becomes_role_selector_anchor():
     )
     wf = compile_trajectory(traj, name="x")
     _, anchor = wf.state("s1").conditions
-    assert anchor.selector == 'role=button[name="Search" i]'
+    assert anchor.type == "selector_visible" and anchor.selector is None
+    assert anchor.locator == [LocatorStep(fn="get_by_role", args=["button"], kwargs={"name": "Search"})]
+    assert anchor.locator == wf.transition("t2").action.locator  # byte-for-byte the action's chain
 
 
-def test_untranslatable_locators_get_no_anchor():
+def test_multi_step_locators_anchor_on_the_same_chain():
     traj = AgentTrajectory(
         task="t",
         success=True,
         steps=[
             AgentStep(n=1, kind="goto", reasoning="open", url="https://x.com/",
                       action={"type": "goto", "url": "https://x.com"}),
-            # multi-step chain: conservatively no anchor (open gate, never a wrong guard)
+            # multi-step chain (nth-disambiguated): anchored on the chain as a whole — there
+            # is no translation step that could get it wrong
             AgentStep(n=2, kind="click", reasoning="click", url="https://x.com/",
                       action={"type": "click",
                               "locator": [{"fn": "locator", "args": ["#a"]},
@@ -85,7 +98,8 @@ def test_untranslatable_locators_get_no_anchor():
         ],
     )
     wf = compile_trajectory(traj, name="x")
-    assert all(c.type == "url_matches" for c in wf.state("s1").conditions)  # no anchor added
+    _, anchor = wf.state("s1").conditions
+    assert anchor.locator == [LocatorStep(fn="locator", args=["#a"]), LocatorStep(fn="nth", args=[0])]
     assert wf.state("s2").conditions == []  # next action has no locator
 
 
@@ -103,9 +117,9 @@ def test_empty_trajectory_rejected():
         compile_trajectory(AgentTrajectory(task="t"), name="empty")
 
 
-def test_compiler_anchors_states_on_the_next_steps_element_with_frame_path():
+def test_compiler_anchors_states_on_the_next_steps_element_inside_its_frame():
     """R2: a state is guarded by the visibility of the element the next transition acts on,
-    evaluated in that element's iframe (frame_locator steps → frame_path)."""
+    evaluated in that element's iframe — the chain's own frame_locator steps carry the frame."""
     from netgent.agent.explorer.models import AgentStep, AgentTrajectory
     from netgent.schema.actions import ClickAction, FillAction, GotoAction, LocatorStep, UploadFileAction
 
@@ -120,14 +134,13 @@ def test_compiler_anchors_states_on_the_next_steps_element_with_frame_path():
                       action=FillAction(locator=[frame, LocatorStep(fn="locator", args=["#card"])], text="4242")),
             AgentStep(n=2, kind="click", reasoning="", url="http://shop/checkout",
                       action=ClickAction(locator=[frame, LocatorStep(fn="locator", args=["#pay"])])),
-            # nth-disambiguated chains are not expressible as a CSS trigger; uploads are
-            # deliberately not anchored → no derived condition. Top-frame single-step
-            # targets ARE anchored (selector_visible, no frame_path).
             AgentStep(n=3, kind="click", reasoning="", url="http://shop/done",
                       action=ClickAction(locator=[frame, LocatorStep(fn="locator", args=["#dup"]),
                                                   LocatorStep(fn="nth", args=[1])])),
             AgentStep(n=4, kind="click", reasoning="", url="http://shop/done",
                       action=ClickAction(locator=[LocatorStep(fn="locator", args=["#top-level"])])),
+            # uploads are deliberately not anchored: set_input_files works on HIDDEN file
+            # inputs, which custom upload widgets hide on purpose
             AgentStep(n=5, kind="upload", reasoning="", url="http://shop/done",
                       action=UploadFileAction(locator=[frame, LocatorStep(fn="locator", args=["#file"])],
                                               paths=["/tmp/x"])),
@@ -135,37 +148,24 @@ def test_compiler_anchors_states_on_the_next_steps_element_with_frame_path():
     )
     wf = compile_trajectory(traj, name="pay")
     by_id = {s.id: s for s in wf.states}
-    # s1 (after goto): next step fills #card inside the frame
-    s1 = [c.model_dump() for c in by_id["s1"].conditions]
-    assert {"type": "selector_visible", "selector": "#card", "frame_path": ['iframe[name="payframe"]']} in s1
-    assert s1[0]["type"] == "url_matches"
+
+    def anchors(sid):
+        return [c.locator for c in by_id[sid].conditions if c.type == "selector_visible"]
+
+    # s1 (after goto): url, then the next step's fill target inside the frame
+    assert [c.type for c in by_id["s1"].conditions] == ["url_matches", "selector_visible"]
+    assert anchors("s1") == [[frame, LocatorStep(fn="locator", args=["#card"])]]
     # s2 (after fill): next step clicks #pay inside the frame
-    assert [c.model_dump() for c in by_id["s2"].conditions] == [
-        {"type": "selector_visible", "selector": "#pay", "frame_path": ['iframe[name="payframe"]']}
-    ]
-    assert by_id["s3"].conditions == []  # next: nth chain
-    # next: top-frame click — anchored by _target_selector (merged behavior), frame-free
-    s4 = [c.model_dump() for c in by_id["s4"].conditions]
-    assert [c["type"] for c in s4] == ["url_matches", "selector_visible"]
-    assert s4[1]["selector"] == "#top-level" and not s4[1].get("frame_path")
-    assert by_id["s5"].conditions == []  # next: upload
+    assert anchors("s2") == [[frame, LocatorStep(fn="locator", args=["#pay"])]]
+    # s3: next is the nth-disambiguated in-frame chain — anchored as is
+    assert anchors("s3") == [[frame, LocatorStep(fn="locator", args=["#dup"]), LocatorStep(fn="nth", args=[1])]]
+    # s4: next is a top-frame click — a frame-free chain
+    assert anchors("s4") == [[LocatorStep(fn="locator", args=["#top-level"])]]
+    assert anchors("s5") == []  # next: upload
     assert by_id["s6"].conditions == []  # last state
-
-
-def test_compiler_folds_a_frame_nth_step_into_the_frame_path():
-    from netgent.agent.explorer.models import AgentStep, AgentTrajectory
-    from netgent.agent.generator.compiler import _element_condition
-    from netgent.schema.actions import ClickAction, GotoAction, LocatorStep
-
-    chain = [LocatorStep(fn="frame_locator", args=["iframe.two"]), LocatorStep(fn="nth", args=[1]),
-             LocatorStep(fn="locator", args=["#go"])]
-    assert _element_condition(ClickAction(locator=chain))["frame_path"] == ["iframe.two >> nth=1"]
-    traj = AgentTrajectory(task="t", steps=[
-        AgentStep(n=0, kind="goto", reasoning="", url="http://x/", action=GotoAction(url="http://x/")),
-        AgentStep(n=1, kind="click", reasoning="", url="http://x/", action=ClickAction(locator=chain)),
-    ])
-    wf = compile_trajectory(traj, name="n")
-    assert wf.states[1].conditions[1].frame_path == ["iframe.two >> nth=1"]
+    # every anchor evaluates the exact chain its edge dispatches
+    for sid, tid in (("s1", "t2"), ("s2", "t3"), ("s3", "t4"), ("s4", "t5")):
+        assert anchors(sid) == [wf.transition(tid).action.locator]
 
 
 def test_step_dialog_becomes_a_dialog_matches_condition():
@@ -214,12 +214,12 @@ def test_interruption_clicks_become_scoped_interrupts():
     # ...and became an interrupt anchored on the skip button, scoped to watch-page states.
     (intr,) = wf.interrupts
     (anchor_cond,) = wf.state(intr.state).conditions
-    assert anchor_cond.type == "selector_visible" and anchor_cond.selector == "#skip-ad"
+    assert anchor_cond.type == "selector_visible" and anchor_cond.locator == _css("#skip-ad")
     assert intr.max_fires == 3 and intr.resolve == ["ti1"]
     assert set(intr.scope) <= {s.id for s in wf.states}
-    # resolution edge verifies the pop-up went away
+    # resolution edge verifies the pop-up went away — same chain, hidden
     (done_cond,) = wf.state(wf.transition("ti1").target).conditions
-    assert done_cond.type == "selector_hidden"
+    assert done_cond.type == "selector_hidden" and done_cond.locator == _css("#skip-ad")
 
 
 def test_dwells_compile_to_bounded_repeats():

@@ -384,3 +384,27 @@ def test_executor_refires_interrupt_when_popup_chains():
     assert skips_dispatched == ["#skip", "#skip"]  # both ads skipped, then the word ran
     skip_edges = [e for e in record.edges if e.transition_id == "t_skip"]
     assert [e.outcome for e in skip_edges] == ["recovered", "ok"]
+
+
+def test_element_triggers_take_exactly_one_of_selector_or_locator():
+    """An anchor names its element by a locator chain (the compiler's form — the very chain
+    the guarded edge dispatches) OR by a selector string in a frame path; never both, never
+    neither, and a chain carries its own frame steps."""
+    from netgent.schema.actions import LocatorStep
+    from netgent.schema.triggers import SelectorHidden, SelectorVisible
+
+    chain = [LocatorStep(fn="frame_locator", args=["iframe"]),
+             LocatorStep(fn="get_by_role", args=["link"], kwargs={"name": "Web icon An illustration of a"})]
+    assert SelectorVisible(locator=chain).locator == chain
+    assert SelectorHidden(selector="#x", frame_path=["iframe"]).frame_path == ["iframe"]
+    with pytest.raises(ValueError, match="exactly one"):
+        SelectorVisible()
+    with pytest.raises(ValueError, match="exactly one"):
+        SelectorVisible(selector="#x", locator=chain)
+    with pytest.raises(ValueError, match="frame_path"):
+        SelectorVisible(locator=chain, frame_path=["iframe"])
+    with pytest.raises(ValueError):  # the chain is type-checked like an action's
+        SelectorVisible(locator=[LocatorStep(fn="frame_locator", args=["iframe"])])
+    # round-trips through the artifact form
+    dumped = SelectorVisible(locator=chain).model_dump(mode="json")
+    assert SelectorVisible.model_validate(dumped).locator == chain

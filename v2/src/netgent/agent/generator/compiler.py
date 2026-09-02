@@ -22,6 +22,7 @@ from netgent.schema.actions import (
     HoverAction,
     Locator,
     SelectAction,
+    UploadFileAction,
     WaitAction,
 )
 from netgent.schema.control import ControlNode, EdgeStep, Interrupt, Repeat
@@ -70,45 +71,38 @@ def _base_url(url: str) -> str:
     return url.split("#", 1)[0].split("?", 1)[0]
 
 
-def _element_condition(action: Action) -> dict | None:
-    """A selector_visible condition for the IN-IFRAME element `action` targets, with its frame path.
+def _anchor(action: Action) -> dict | None:
+    """A selector_visible condition on the very locator chain `action` resolves — the anchor a
+    state carries for the edge that acts next.
 
-    A URL recognizes the top document only; an embedded document (payment, login, consent
-    widgets) loads on its own schedule, so a state whose next action lives in an iframe is
-    anchored on that element being visible *inside the frame* — the frame_locator steps become
-    the trigger's `frame_path` (the frame-blind trigger bug, research doc "Where NetGent stands"
-    #1). Top-frame elements get no such guard on purpose: a missing top-frame element should
-    surface as the action's error (UI drift), not as a state never recognized (flow drift).
-    Only a chain of the shape [frame_locator+, locator(css)] is expressible as a CSS trigger;
-    role/label chains and nth-disambiguated chains (where `.first` would be a different
-    element) yield nothing.
+    The chain itself is the condition (schema/triggers.py `_ElementTrigger.locator`): the
+    trigger engine resolves it through the same `LocatorResolver` the action uses, so the
+    anchor holds exactly when the edge's element is there — role/name matching, `exact`,
+    frame steps and `nth` included. Rendering the chain to a selector string cannot promise
+    that: Playwright's public `role=` engine matches `[name="…" i]` exactly, `get_by_role`
+    by substring, and Playwright's own selector generator shortens names to a ≤30-character
+    word prefix that only substring matching satisfies (archive.org replay failed on its
+    first edge this way; docs/research/media-platforms-eval.md).
+
+    Uploads are not anchored: `set_input_files` works on hidden file inputs, and custom upload
+    widgets hide the real input on purpose — "its element is visible" is not a sound guard.
     """
-    if not isinstance(action, _VISIBILITY_GATED):
+    locator = getattr(action, "locator", None)
+    if not locator or isinstance(action, UploadFileAction):
         return None
-    chain = action.locator
-    if len(chain) < 2 or chain[-1].fn != "locator" or chain[-1].kwargs:
-        return None
-    frame_path: list[str] = []
-    for step in chain[:-1]:
-        if step.fn == "frame_locator" and len(step.args) == 1:
-            frame_path.append(str(step.args[0]))
-        elif step.fn == "nth" and frame_path and len(step.args) == 1:
-            # a disambiguated frame step: the same thing as a selector string (Playwright's
-            # `>> nth=N` chaining), which is what frame_path carries
-            frame_path[-1] = f"{frame_path[-1]} >> nth={int(step.args[0])}"
-        else:
-            return None
-    selector = chain[-1].args[0] if len(chain[-1].args) == 1 else None
-    if not isinstance(selector, str):
-        return None
-    return {"type": "selector_visible", "selector": selector, "frame_path": frame_path}
+    return {"type": "selector_visible", "locator": [step.model_dump(mode="json") for step in locator]}
+
+
+def _hidden(action: Action) -> dict:
+    """selector_hidden on the same chain — an interrupt's resolution state (the overlay is gone)."""
+    return {"type": "selector_hidden", "locator": [step.model_dump(mode="json") for step in action.locator]}
 
 
 def _locator_selector(locator: Locator) -> str | None:
-    """A Playwright selector string equivalent to a locator chain, or None if inexpressible.
-
-    Conservative by design: only the two single-step shapes the explore agent emits today.
-    A chain we can't translate yields no guard (an open gate), never a wrong guard.
+    """A readable selector-string rendering of a single-step chain, or None — for CLASSIFYING
+    and REPORTING a target (interrupt detection, volatile-id warnings, merge keys), never for
+    evaluating one: the `role=` form is only a label (its name match is exact where
+    get_by_role's is substring), which is why anchors carry the chain itself (`_anchor`).
     """
     if len(locator) != 1:
         return None
@@ -121,12 +115,12 @@ def _locator_selector(locator: Locator) -> str | None:
         if name is None:
             return f"role={role}"
         escaped = str(name).replace('"', '\\"')
-        return f'role={role}[name="{escaped}" i]'  # `i`: get_by_role's name match is case-insensitive
+        return f'role={role}[name="{escaped}" i]'
     return None
 
 
 def _target_selector(action: Action) -> str | None:
-    """The selector the action is about to act on, when it has one (click/fill/press-on-element/…)."""
+    """The selector label of the element the action acts on, when it has one (see `_locator_selector`)."""
     locator = getattr(action, "locator", None)
     return _locator_selector(locator) if locator else None
 
@@ -218,18 +212,13 @@ def compile_trajectory(
         # Recognize the state by its URL only when the action moved somewhere new;
         # same-page steps (fills, same-page clicks) get an unconditioned state.
         conditions = [{"type": "url_matches", "pattern": re.escape(base)}] if base != prev_base else []
-        # Anchor the state on the in-iframe element the NEXT step acts on (when it has a
-        # CSS chain): the embedded document being ready is not expressible by the URL.
-        if i < len(steps):
-            element_condition = _element_condition(steps[i].action)
-            if element_condition is not None:
-                conditions.append(element_condition)
-            # Anchor the state on the NEXT edge's target element: recognition (up to the
-            # state's timeout) then gates that edge on the page being ready for it, replacing
-            # blind sleeps and races. docs/browser-layer-design.md §3: every fixed sleep is a
-            # trigger that couldn't be expressed — this expresses it.
-            elif (sel := _target_selector(steps[i].action)) is not None:
-                conditions.append({"type": "selector_visible", "selector": sel})
+        # Anchor the state on the NEXT edge's target element (its very locator chain, frame
+        # steps included — an embedded document being ready is not expressible by the URL):
+        # recognition (up to the state's timeout) then gates that edge on the page being ready
+        # for it, replacing blind sleeps and races. docs/browser-layer-design.md §3: every
+        # fixed sleep is a trigger that couldn't be expressed — this expresses it.
+        if i < len(steps) and (anchor := _anchor(steps[i].action)) is not None:
+            conditions.append(anchor)
         # A dialog raised by THIS step's action is the page's own confirmation — often the
         # ONLY one (alert-only forms leave URL and DOM unchanged). Anchor the state the
         # action lands in on it; replay evaluates it against dialogs raised since the last
@@ -266,7 +255,7 @@ def compile_trajectory(
 
     interrupts: list[Interrupt] = []
     for k, intr in enumerate(interruption_steps, 1):
-        sel = _target_selector(intr.action)  # non-None by _is_interruption
+        sel = _target_selector(intr.action)  # non-None by is_interruption_step
         if is_volatile_selector(sel) and warnings is not None:
             # An interrupt exists to fire on a FUTURE instance of its overlay; a per-mount
             # id (`#skip-button\:2`) can never match one. The capture ladder avoids these,
@@ -277,8 +266,8 @@ def compile_trajectory(
             )
         anchor_state = f"i{k}"
         done_state = f"i{k}_done"
-        states.append(State(id=anchor_state, conditions=[{"type": "selector_visible", "selector": sel}]))
-        states.append(State(id=done_state, conditions=[{"type": "selector_hidden", "selector": sel}]))
+        states.append(State(id=anchor_state, conditions=[_anchor(intr.action)]))
+        states.append(State(id=done_state, conditions=[_hidden(intr.action)]))
         transitions.append(Transition(id=f"ti{k}", source=anchor_state, target=done_state, action=intr.action))
         base = _base_url(intr.url)
         scope = [sid for sid, b in state_base.items() if b == base]

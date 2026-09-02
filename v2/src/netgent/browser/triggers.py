@@ -5,7 +5,7 @@ import re
 import time
 
 from netgent.browser.dialogs import DialogLog
-from netgent.browser.pw import Page
+from netgent.browser.pw import Locator, Page
 from netgent.browser.resolution import LocatorResolver
 from netgent.core.errors import TriggerTimeoutError
 from netgent.schema.control import ParamSource
@@ -31,6 +31,15 @@ class TriggerEngine:
         self._resolver = resolver
         self._dialogs = dialogs
 
+    def _element(self, trigger: SelectorVisible | SelectorHidden) -> Locator:
+        """The Locator an element trigger is evaluated on: its locator chain through the SAME
+        resolver actions use (so an anchor on an edge's target holds exactly when the edge's
+        element resolves — never a hand-rendered selector with different name semantics), or
+        its selector string in its frame scope."""
+        if trigger.locator is not None:
+            return self._resolver.resolve(trigger.locator)
+        return self._resolver.frame_scope(trigger.frame_path).locator(trigger.selector)
+
     async def holds(self, trigger: Trigger) -> bool:
         match trigger:
             case UrlMatches():
@@ -38,8 +47,7 @@ class TriggerEngine:
             case TitleContains():
                 return trigger.text in await self._page.title()
             case SelectorVisible():
-                locator = self._resolver.frame_scope(trigger.frame_path).locator(trigger.selector)
-                return await locator.first.is_visible()
+                return await self._element(trigger).first.is_visible()
             case DialogMatches():
                 # Only dialogs raised since the last dispatched action count: the dialog is
                 # the edge's own feedback, not ambient page state (browser/dialogs.py).
@@ -49,7 +57,7 @@ class TriggerEngine:
             case SelectorHidden():
                 # Resolved-and-hidden only: a selector matching nothing must not hold, or a
                 # typo'd selector would "recognize" every state (research doc, R2).
-                locator = self._resolver.frame_scope(trigger.frame_path).locator(trigger.selector)
+                locator = self._element(trigger)
                 if await locator.count() == 0:
                     return False
                 return not await locator.first.is_visible()

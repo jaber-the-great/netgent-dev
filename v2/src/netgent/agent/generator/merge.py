@@ -38,8 +38,9 @@ from netgent.agent.generator.compiler import (
     DWELL_MIN_SLICED_S,
     DWELL_SLICE_S,
     NAVIGATION_TIMEOUT_MS,
+    _anchor,
     _base_url,
-    _element_condition,
+    _hidden,
     _target_selector,
     compile_trajectory,
     is_interruption_step,
@@ -345,8 +346,8 @@ class _EmitStep:
 
 
 class _EmitBranch:
-    def __init__(self, arms: list[tuple[str, list[AgentStep]]], runs_by_arm: list[list[int]]):
-        self.arms = arms  # (guard selector, that continuation's steps)
+    def __init__(self, arms: list[tuple[dict, list[AgentStep]]], runs_by_arm: list[list[int]]):
+        self.arms = arms  # (guard condition — selector_visible on the arm's first target, that continuation's steps)
         self.runs_by_arm = runs_by_arm
 
 
@@ -584,15 +585,16 @@ def _try_branch(region: list[_Column], n_runs: int, run_ids: list[int]) -> _Emit
         groups.setdefault(tuple(_sig(s) for s in steps), []).append(rid)
     if len(groups) < 2:
         return None
-    arms: list[tuple[str, list[AgentStep]]] = []
+    arms: list[tuple[dict, list[AgentStep]]] = []
     runs_by_arm: list[list[int]] = []
     guards: set[str] = set()
     for _sig_seq, rids in sorted(groups.items(), key=lambda kv: kv[1][0]):
         steps = per_run[rids[0]]
-        guard = _target_selector(steps[0].action)
-        if guard is None or guard in guards:
+        guard = _anchor(steps[0].action)
+        key = _canonical_locator(steps[0].action)
+        if guard is None or key in guards:
             return None
-        guards.add(guard)
+        guards.add(key)
         arms.append((guard, steps))
         runs_by_arm.append(rids)
     return _EmitBranch(arms, runs_by_arm)
@@ -636,13 +638,7 @@ def _next_anchor(emits: list, pos: int) -> dict | None:
             return None  # the branch guards do the distinguishing
         if not isinstance(nxt, _EmitStep):
             continue
-        if not nxt.anchor_ok:
-            return None
-        cond = _element_condition(nxt.action)
-        if cond is not None:
-            return cond
-        sel = _target_selector(nxt.action)
-        return {"type": "selector_visible", "selector": sel} if sel is not None else None
+        return _anchor(nxt.action) if nxt.anchor_ok else None
     return None
 
 
@@ -671,19 +667,15 @@ def _compile_emits(
             pre_state = states[-1].id
             conv_id = f"m{bi}"
             arms: list[BranchArm] = []
-            for aj, (guard_sel, steps) in enumerate(emit.arms, 1):
+            for aj, (guard, steps) in enumerate(emit.arms, 1):
                 guard_id = f"g{bi}a{aj}"
-                states.append(State(id=guard_id, conditions=[{"type": "selector_visible", "selector": guard_sel}]))
+                states.append(State(id=guard_id, conditions=[guard]))
                 then: list[ControlNode] = []
                 at = pre_state
                 for q, step in enumerate(steps, 1):
                     target = conv_id if q == len(steps) else f"b{bi}a{aj}s{q}"
                     if target != conv_id:
-                        anchor = None
-                        if q < len(steps):
-                            nxt_sel = _target_selector(steps[q].action)
-                            anchor = ({"type": "selector_visible", "selector": nxt_sel}
-                                      if nxt_sel is not None else None)
+                        anchor = _anchor(steps[q].action) if q < len(steps) else None
                         states.append(State(id=target, conditions=[anchor] if anchor else []))
                     edge_id = f"b{bi}a{aj}t{q}"
                     transitions.append(Transition(id=edge_id, source=at, target=target, action=step.action))
@@ -744,21 +736,19 @@ def _compile_emits(
             transitions.append(Transition(id=f"t{ti}", source=states[-2].id, target=state_id, action=action))
             control.append(EdgeStep(edge=f"t{ti}"))
 
-    # Interrupts: deduped by anchor selector; scoped to the states on the page they fired on.
+    # Interrupts: deduped by anchor target; scoped to the states on the page they fired on.
     interrupts: list[Interrupt] = []
     seen_sel: dict[str, Interrupt] = {}
     k = 0
     for _rid, intr in interrupt_cands:
-        sel = _target_selector(intr.action)
-        if sel is None:
-            continue
-        if sel in seen_sel:
+        sel = _canonical_locator(intr.action)
+        if not sel or sel in seen_sel:
             continue
         k += 1
         anchor_state = f"i{k}"
         done_state = f"i{k}_done"
-        states.append(State(id=anchor_state, conditions=[{"type": "selector_visible", "selector": sel}]))
-        states.append(State(id=done_state, conditions=[{"type": "selector_hidden", "selector": sel}]))
+        states.append(State(id=anchor_state, conditions=[_anchor(intr.action)]))
+        states.append(State(id=done_state, conditions=[_hidden(intr.action)]))
         transitions.append(Transition(id=f"ti{k}", source=anchor_state, target=done_state, action=intr.action))
         base = _base_url(intr.url)
         scope = [sid for sid, b in state_base.items() if b == base]
@@ -799,8 +789,8 @@ def _compile_emits(
 def _interrupt_summary(cands: list[tuple[int, AgentStep]]) -> dict[str, tuple[int, set[int]]]:
     out: dict[str, tuple[int, set[int]]] = {}
     for rid, step in cands:
-        sel = _target_selector(step.action)
-        if sel is None:
+        sel = _canonical_locator(step.action)
+        if not sel:
             continue
         support, rids = out.get(sel, (0, set()))
         rids.add(rid)

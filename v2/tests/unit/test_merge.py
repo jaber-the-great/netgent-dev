@@ -7,6 +7,11 @@ import pytest
 
 from netgent.agent.explorer.models import AgentStep, AgentTrajectory
 from netgent.agent.generator.merge import GeneralizedTrajectory, RunInput, merge_trajectories
+from netgent.schema.actions import LocatorStep
+
+
+def _css(sel):
+    return [LocatorStep(fn="locator", args=[sel])]
 
 
 def _step(n, kind, url, action, reasoning="", dialogs=None, error=None):
@@ -105,7 +110,7 @@ def test_trigger_intersection_keeps_shared_anchor_and_accept_state():
     ]
     wf = merge_trajectories(runs, name="s").workflow
     # s1 (after goto): anchored on the fill target that held in both runs
-    assert any(c.type == "selector_visible" and c.selector == "#q" for c in wf.state("s1").conditions)
+    assert any(c.type == "selector_visible" and c.locator == _css("#q") for c in wf.state("s1").conditions)
     # final state: both runs ended on /results -> url condition -> accept state
     (cond,) = wf.state("s3").conditions
     assert cond.type == "url_matches" and "results" in cond.pattern
@@ -127,7 +132,7 @@ def test_interrupt_candidate_from_cross_run_presence():
     wf = out.workflow
     (intr,) = wf.interrupts
     anchor = wf.state(intr.state)
-    assert anchor.conditions[0].selector == "#overlay-close"
+    assert anchor.conditions[0].locator == _css("#overlay-close")
     assert intr.max_fires == 3
     assert [t.id for t in wf.transitions if t.id.startswith("t") and not t.id.startswith("ti")] == ["t1", "t2", "t3"]
     assert any(c.disposition == "interrupt" for c in out.generalized.columns)
@@ -157,7 +162,7 @@ def test_branch_from_downstream_divergence():
     branches = [n for n in wf.control if n.kind == "branch"]
     (br,) = branches
     assert len(br.arms) == 2 and br.else_ is None  # no arm matched = new territory, never a skip
-    guard_selectors = {wf.state(arm.when).conditions[0].selector for arm in br.arms}
+    guard_selectors = {wf.state(arm.when).conditions[0].locator[0].args[0] for arm in br.arms}
     assert guard_selectors == {"#username", "#continue-as-guest"}
     # both arms converge on the same state, and the word continues to #finish from there
     arm_last_edges = [arm.then[-1].edge for arm in br.arms]
