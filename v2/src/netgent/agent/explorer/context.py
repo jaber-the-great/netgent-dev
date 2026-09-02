@@ -15,7 +15,7 @@ from netgent.browser.session import BrowserSession
 class ExplorerContext:
     # Run dependencies — LangGraph's own words for this slot (langgraph/runtime.py:199-201).
     session: BrowserSession
-    llm: Any  # an `LLM` (the seam, v1) or a chat model (explorer_v2); Any so pydantic can build tool schemas
+    llm: Any  # an `LLM` (the seam); Any so pydantic can build tool schemas
     memory: ExplorerMemory
     task: str
     # Knobs.

@@ -122,7 +122,6 @@ async def run_sweep(
     usage = result.usage or getattr(llm, "usage", None)
     return {
         "kind": "sweep",
-        "explorer": __import__("netgent.evals.sweep", fromlist=["explorer_arm"]).explorer_arm(),
         "backend": backend,
         "model": model,
         "max_steps_per_form": max_steps,
