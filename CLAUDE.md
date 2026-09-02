@@ -19,10 +19,17 @@ atomic steps. Control flow is a bounded regular expression (`control_sequence`, 
 ## The pipeline
 
 ```
-netgent generate "<task>" --url … -p name=sample [--runs N --variation name=value]
-   explore (LLM agent, N runs)  →  verify (LLM judge, advisory)  →  synthesize (pure code: one NFA)
+netgent generate "<task>" --url … -p name=sample [--runs N --parallel P --rounds R --variation name=value]
+   plan (LLM: N variations) → explore ×N (LLM agent, parallel) → verify (LLM judge, advisory)
+   → merge (pure code: typed-key alignment of ALL runs → one NFA; typed hints applied only where the
+     recordings prove them) → replay (zero-LLM metamorphic check per value set) → triage (pure code →
+     typed Episodes) → END if the replay passed on ≥ 2 unseen value sets, else plan_next (ONE LLM
+     call → next variations + generalization hints) → another round, up to --rounds (default 3)
 netgent run workflow.yaml --param name=value        # deterministic, zero LLM
 ```
+
+The exit is replay-decided; the judge never grades the artifact. Each round's evidence lives in
+`<name>.trajectories/` (`run-k/`, `round-r/{generalized,episodes,next_plan}.json`, `context.json`).
 
 ### Hard rules
 
@@ -43,7 +50,7 @@ netgent run workflow.yaml --param name=value        # deterministic, zero LLM
 | `schema/` | pydantic artifact models: workflow, actions, triggers, control (`Branch`/`Repeat`/`Interrupt`/`Param`), records |
 | `browser/` | the Playwright layer, split by role: `pw.py` (the single Playwright/Patchright import, `PATCHED_BROWSER`), `profile.py` (`BrowserProfile`: real Chrome, nothing spoofed), `factory.py` (launch → context → page → CDP, client-hints repair; capture hooks in here), `session.py` (`BrowserSession` facade), `resolution.py` (locator chains), `actions.py` (dispatch), `triggers.py` (state conditions, polling), `dom/` (`models.py`, `observer.py` — snapshot across frames/shadow DOM, `serializer.py` — the observation text the agent reads, `closed_shadow.py` — closed roots over CDP, `scripts/*.js` — the injected walker) |
 | `executor/` | control-program interpreter + parameter resolution (static + page-extracted, with guards) |
-| `agent/` | the compile-time agents, one package each: `explorer/` (functions + one compiled LangGraph: `graph.py` observe→decide→act nodes, `create_explorer_agent()`/`EXPLORER`, `explore()`; `context.py` the per-run `ExplorerContext`, `memory.py` the cross-run `ExplorerMemory`, `agent.py` the thin `ExplorerAgent` façade, `models.py` the values, plus decision/prompt/actions), `planner/` (task → `Plan` of explorer-sized sub-goals; same layout, `PLANNER`, `plan()`, `PlannerAgent`; not yet wired into the orchestrator), `generator/` (trajectories → NFA), `verifier/` (LLM judge from page evidence, same layout: `graph.py` gather→judge, `VERIFIER`, `verify()`; `context.py`, `models.py`, `prompt.py`, `agent.py` the `VerifierAgent` façade); `orchestrator.py` chains them (the entry behind `netgent generate`, itself a LangGraph); shared LLM seam in `llm.py` |
+| `agent/` | the compile-time agents, one package each: `explorer/` (functions + one compiled LangGraph: `graph.py` observe→decide→act nodes, `create_explorer_agent()`/`EXPLORER`, `explore()`; `context.py` the per-run `ExplorerContext`, `memory.py` the cross-run `ExplorerMemory`, `agent.py` the thin `ExplorerAgent` façade, `models.py` the values incl. the M0 locator ladder on `AgentStep`, plus decision/prompt/actions), `planner/` (task → `Plan`; `plan_variations()` the N same-family variations of `--runs`; `plan_next()` the closed loop's ONE call: `NextRoundPlan` = next variations + scoped sub-tasks + typed `GeneralizationHint`s, normalized in code), `generator/` (`compiler.py` one run → NFA; `merge.py` N runs → one NFA with dispositions, hints applied only where re-derivable, every hint's outcome recorded; `hints.py` the closed hint vocabulary), `verifier/` (LLM judge from page evidence, same layout: `graph.py` gather→judge, `VERIFIER`, `verify()`; `context.py`, `models.py`, `prompt.py`, `agent.py` the `VerifierAgent` façade), `triage.py` (pure code: verdicts + merge trail + replay → typed `Episode`s), `rounds.py` (the `RoundContext` persisted as `context.json`), `replay.py` (the zero-LLM metamorphic check), `store.py` (the trajectory store); `orchestrator.py` chains them (the entry behind `netgent generate`, itself a LangGraph: the single-run graph and the round loop); shared LLM seam in `llm.py` (`scoped()` views give each parallel run its own usage counters) |
 | `cli/` | Typer commands: `run`, `generate`, `agent`, `trajectory`, `schema`, `doctor`, and the `eval` group (`dataset`, `observation`, `stress`, `matrix`) |
 | `evals/` | the runners behind `netgent eval` — importable functions returning rows/markdown, no `sys.exit`; results land in `v2/evals/results/<eval>/` |
 | `core/` | settings (pydantic-settings, `.env`), errors, logger |
@@ -60,8 +67,9 @@ uv run netgent doctor
 
 Conventions: `GOOGLE_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` (no aliases); models are
 `provider:model` strings as `init_chat_model` takes them, `/` also accepted (cheap exploration model:
-`anthropic:claude-haiku-4-5-20251001`; Gemini is `google_genai:gemini-…`);
-`--headed` to watch a run; `--trajectory DIR` to keep screenshots + records.
+`anthropic:claude-haiku-4-5-20251001`; Gemini is `google_genai:gemini-…`; `claude-code:sonnet` routes
+to the local Claude Code CLI via the sibling `langchain-claude-code` package — subscription-billed,
+`uv sync --extra claude-code`); `--headed` to watch a run; `--trajectory DIR` to keep screenshots + records.
 
 ## Branches
 
