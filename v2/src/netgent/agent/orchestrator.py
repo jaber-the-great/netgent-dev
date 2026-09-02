@@ -6,11 +6,19 @@ Single run (`--runs 1`, the default — unchanged):
                │          │
                └─ failed ─┴─ not achieved (retries spent) ► END
 
-Multi-run (`--runs N`, the ReUseIt-style loop with a typed merge):
+Multi-run (`--runs N --rounds R`, the closed loop with a typed merge):
 
-    START → plan → explore_run ↺ (×N, fresh memory each; verify per run, private retry)
-                 → merge (pure code: typed-key alignment → ONE generalized NFA)
-                 → replay (zero-LLM metamorphic check: same state sequence per value set) → END
+    START → plan → explore_run ×N (Send, parallel; fresh memory each; verify per run, private retry)
+                 → merge (pure code: typed-key alignment of ALL runs so far → ONE generalized NFA,
+                          the previous round's typed hints applied only where the recordings prove them)
+                 → replay (zero-LLM metamorphic check: same state sequence per value set)
+                 → triage (pure code: verdicts + merge trail + replay → typed Episodes)
+                 → END if the replay passed on ≥ 2 unseen value sets (or the round budget is spent)
+                 → plan_next (ONE LLM call: next variations / scoped sub-tasks / generalization hints)
+                 → explore_run ×k (usually 1-2) → merge → … up to `--rounds` rounds.
+
+The exit is replay-decided; the judge never grades the artifact. The RoundContext (agent/rounds.py)
+accumulates across rounds and is persisted as <name>.trajectories/context.json.
 
 One LangGraph StateGraph each, one node per agent. Independence policy
 (docs/research/trajectory-memory.md §C.4): runs share ONLY a short read-only hints block
@@ -38,7 +46,7 @@ from netgent.schema.workflow import Workflow, dump_workflow
 
 logger = get_logger(__name__)
 
-Stage = Literal["plan", "explore", "verify", "merge", "generate", "replay"]
+Stage = Literal["plan", "explore", "verify", "merge", "generate", "replay", "triage", "round"]
 Listener = Callable[[Stage, str], None]  # (stage, human-readable event) → for CLI progress
 
 
@@ -72,6 +80,10 @@ class GenerateRequest(BaseModel):
     # 1 = sequential (what the FakeLLM tests need: a scripted LLM is consumed in order).
     parallel: int = Field(default=1, ge=1)
     variation: dict[str, str] = Field(default_factory=dict)  # pin one variation's values (--variation)
+    # The closed loop (`--rounds R`, runs > 1 only): after the replay check, triage → plan_next →
+    # another round of explorations merged with everything so far, until the replay passes on
+    # ≥ 2 unseen value sets or the budget is spent. 1 = today's single round.
+    max_rounds: int = Field(default=3, ge=1)
 
 
 class GenerateResult(BaseModel):
@@ -85,7 +97,10 @@ class GenerateResult(BaseModel):
     variations: Any = None  # the planner's VariationPlan
     run_reports: list[dict] = Field(default_factory=list)  # per-run {run, task, values, achieved, attempts}
     generalized: Any = None  # the merge's GeneralizedTrajectory (also at <store>/generalized.json)
-    replay: Any = None  # the zero-LLM ReplayReport (the metamorphic check)
+    replay: Any = None  # the zero-LLM ReplayReport (the metamorphic check) — the last round's
+    context: Any = None  # the RoundContext (agent/rounds.py): every round's evidence, at <store>/context.json
+    rounds: int = 0  # rounds run
+    episodes: list = Field(default_factory=list)  # the last round's triage Episodes
 
 
 class OrchestrationState(TypedDict, total=False):
@@ -211,13 +226,21 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
 
 
 class MultiRunState(TypedDict, total=False):
-    plan: Any  # the planner's VariationPlan
-    k: int  # this run's 1-based index (a Send payload key; each explore_run task gets its own)
-    inputs: Annotated[list, operator.add]  # merge RunInput per finished run (achieved or not) — fan-in
+    plan: Any  # the planner's VariationPlan (round 1)
+    # Send payload keys, one explore_run task each: the run's global 1-based number, its round,
+    # the TaskVariation to explore, and whether it is a scoped sub-task (evidence, not a spine).
+    k: int
+    round: int
+    variation: Any
+    scoped: bool
+    start_url: str | None
+    inputs: Annotated[list, operator.add]  # merge RunInput per finished run, ALL rounds — fan-in
     reports: Annotated[list, operator.add]  # per-run summary dicts — fan-in
     workflow: Any
     generalized: Any
     replay: Any
+    context: Any  # the RoundContext, replaced each node that advances it
+    hints: list  # the GeneralizationHints the NEXT merge consumes (from plan_next)
     error: str
 
 
@@ -270,8 +293,31 @@ def _variation_task(variation, hints: str, suffix: str) -> str:
     return task
 
 
+def _run_values(gen, rid: int) -> dict[str, str]:
+    """The artifact's value set for exploration run `rid` (its planned values under the params)."""
+    return {p.name: p.values_by_run.get(rid, p.default) or p.default or "" for p in gen.params}
+
+
+def select_replay_sets(wf, gen, achieved_runs: list[int], previous_failed: list[dict[str, str]],
+                       max_sets: int = 3) -> list[dict[str, str]]:
+    """The value sets to replay: the artifact's defaults first, then UNSEEN sets (≠ defaults):
+    sets that failed last round come first (they must pass now), then the newest runs' values
+    (the latest round's runs were planned to exercise the episodes). At most `max_sets`.
+    With no unseen set, the defaults twice (the determinism check)."""
+    defaults = {p.name: p.default or "" for p in wf.params}
+    unseen: list[dict[str, str]] = []
+    for values in [*previous_failed, *(_run_values(gen, rid) for rid in sorted(achieved_runs, reverse=True))]:
+        values = {name: values.get(name, defaults[name]) for name in defaults}
+        if values != defaults and values not in unseen:
+            unseen.append(values)
+    sets = [defaults, *unseen[: max_sets - 1]]
+    if len(sets) == 1:
+        sets.append(dict(defaults))
+    return sets
+
+
 def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener | None = None):
-    """Compile plan → explore_run (×N) → merge → replay, bound to one request."""
+    """Compile plan → explore_run (×N) → merge → replay → triage → {END | plan_next → explore_run …}."""
     from langgraph.graph import END, START, StateGraph
     from langgraph.types import Command, Send
 
@@ -279,10 +325,15 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
     from netgent.agent.explorer.graph import EXPLORER
     from netgent.agent.explorer.graph import explore as run_explorer
     from netgent.agent.generator.merge import RunInput, merge_trajectories
-    from netgent.agent.planner.graph import VARIATION_PLANNER
+    from netgent.agent.llm import scoped_llm, usage_of
+    from netgent.agent.planner.graph import NEXT_ROUND_PLANNER, VARIATION_PLANNER
+    from netgent.agent.planner.graph import plan_next as run_next_round_planner
     from netgent.agent.planner.graph import plan_variations as run_variation_planner
+    from netgent.agent.planner.models import TaskVariation
     from netgent.agent.replay import replay_check
+    from netgent.agent.rounds import GeneralizedSummary, ReplaySummary, RoundContext, RoundRecord, RunSummary
     from netgent.agent.store import TrajectoryStore
+    from netgent.agent.triage import triage as run_triage
     from netgent.agent.verifier.graph import VERIFIER
     from netgent.agent.verifier.graph import verify as run_verifier
 
@@ -293,10 +344,22 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
 
     store = TrajectoryStore(_store_root(req))
 
+    def sends(round_: int, variations: list, first_k: int, scoped: list | None = None) -> list:
+        out = [Send("explore_run", {"k": first_k + i, "round": round_, "variation": v, "scoped": False,
+                                    "start_url": req.url}) for i, v in enumerate(variations)]
+        for st in scoped or []:
+            out.append(Send("explore_run", {
+                "k": first_k + len(out), "round": round_, "scoped": True, "start_url": st.start_url,
+                "variation": TaskVariation(task_text=st.task_text, values=dict(st.values)),
+            }))
+        return out
+
     async def plan(state: MultiRunState) -> Command[Literal["explore_run"]]:  # goto is a list of Send
+        emit("round", f"round 1/{req.max_rounds}")
         emit("plan", f"planning {req.runs} task variations")
+        plan_llm = scoped_llm(llm)
         variation_plan = await run_variation_planner(
-            req.task, llm=llm, n=req.runs, url=req.url, pinned=req.variation or None, graph=VARIATION_PLANNER
+            req.task, llm=plan_llm, n=req.runs, url=req.url, pinned=req.variation or None, graph=VARIATION_PLANNER
         )
         # `-p name=sample` names are proposals too: the base run uses the sample; the merge
         # confirms the name only if the planner also varied it.
@@ -308,32 +371,40 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
             emit("plan", f"variation {i}: {v.task_text} [{vals}]")
         for note in variation_plan.notes:
             emit("plan", f"note: {note}")
+        base = variation_plan.variations[0]
+        context = RoundContext(
+            task=req.task, url=req.url, runs_per_round=req.runs, max_rounds=req.max_rounds,
+            canonical_names=list(base.values), base_values=dict(base.values),
+            rounds=[RoundRecord(round=1, variations=list(variation_plan.variations),
+                                usage={"plan": usage_of(plan_llm)})],
+        )
+        store.save_context(context)
         # Fan out: one explore_run task per variation, in parallel up to `req.parallel`
         # (top-level RunnableConfig `max_concurrency`, set in orchestrate()). The runs are
         # independent samples, so nothing is lost by not sequencing them — the read-only
         # HINTS block is the one thing sequencing gave, and it was context, never a step.
-        sends = [Send("explore_run", {"plan": variation_plan, "k": k}) for k in range(1, req.runs + 1)]
-        return Command(update={"plan": variation_plan}, goto=sends)
+        return Command(update={"plan": variation_plan, "context": context, "hints": []},
+                       goto=sends(1, variation_plan.variations, 1))
 
     async def explore_run(state: MultiRunState) -> dict:
-        k = state["k"]
-        variation = state["plan"].variations[k - 1]
+        k, round_, variation = state["k"], state["round"], state["variation"]
+        scoped = bool(state.get("scoped"))
+        url = state.get("start_url") or req.url
         run_dir = store.run_dir(k)
-        store.save_variation(k, variation)
+        store.save_variation(k, {**variation.model_dump(), "round": round_, "scoped": scoped})
+        run_llm = scoped_llm(llm)  # its own usage counters: tokens stay attributable under --parallel
         hints = ""  # parallel runs have no earlier runs to learn overlay anchors from
         max_attempts = 1 + (req.verify_retries if req.judge else 0)
         attempts, achieved, verdict, traj, suffix = 0, False, None, None, ""
         while True:
             attempts += 1
             task = _variation_task(variation, hints, suffix)
-            emit(
-                "explore",
-                f"run {k}/{req.runs}: {variation.task_text}" + (f" (attempt {attempts})" if attempts > 1 else ""),
-            )
+            emit("explore", f"run {k} (round {round_}{', scoped' if scoped else ''}): {variation.task_text}"
+                 + (f" (attempt {attempts})" if attempts > 1 else ""))
             async with BrowserSession(headless=req.headless) as session:
                 # memory=None → a FRESH ExplorerMemory per attempt: runs are independent samples.
                 traj = await run_explorer(
-                    session, task, llm=llm, url=req.url, max_steps=req.max_steps, run_dir=run_dir,
+                    session, task, llm=run_llm, url=url, max_steps=req.max_steps, run_dir=run_dir,
                     allowed_kinds=DEFAULT_KINDS | set(req.allow_kinds),
                     max_actions_per_step=req.max_actions_per_step, graph=EXPLORER,
                 )
@@ -347,7 +418,7 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
                 achieved = True
                 break
             verdict = await run_verifier(
-                traj, variation.task_text, llm=llm, params=variation.values, run_dir=run_dir, graph=VERIFIER
+                traj, variation.task_text, llm=run_llm, params=variation.values, run_dir=run_dir, graph=VERIFIER
             )
             achieved = verdict.achieved
             emit("verify", f"run {k}: judge says {'achieved' if achieved else 'NOT achieved'}"
@@ -362,29 +433,62 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
             store.stash_failed_attempt(k, attempts)
             emit("verify", f"run {k}: re-exploring with the unmet points (private to this run)")
         store.save_verdict(k, verdict, achieved, attempts)
+        usage = usage_of(run_llm)
+        store.save_usage(k, usage)
+        if usage and usage.get("calls"):
+            emit("explore", f"run {k}: LLM usage: {usage['calls']} calls, "
+                 f"{usage['input_tokens']:,} input + {usage['output_tokens']:,} output tokens")
         # Fan-in: the list reducers on MultiRunState append this run's results; `merge` runs
-        # once, after every explore_run task of the superstep has finished (the START→plan→
-        # Send→explore_run→merge edge), and sorts inputs by run number.
+        # once, after every explore_run task of the superstep has finished (the
+        # explore_run→merge edge), and sorts inputs by run number.
         return {
-            "inputs": [RunInput(run=k, trajectory=traj, values=dict(variation.values), achieved=achieved)],
-            "reports": [{"run": k, "task": variation.task_text, "values": dict(variation.values),
-                         "achieved": achieved, "attempts": attempts}],
+            "inputs": [RunInput(run=k, trajectory=traj, values=dict(variation.values), achieved=achieved,
+                                scoped=scoped)],
+            "reports": [{"run": k, "round": round_, "task": variation.task_text, "values": dict(variation.values),
+                         "scoped": scoped, "achieved": achieved, "attempts": attempts, "usage": usage,
+                         "steps": len(traj.steps), "success": traj.success, "stopped_reason": traj.stopped_reason,
+                         "unmet": list(verdict.unmet) if verdict is not None else []}],
         }
 
+    def _round_of(state: MultiRunState) -> int:
+        return len(state["context"].rounds)
+
     async def merge(state: MultiRunState) -> Command[Literal["replay", "__end__"]]:
+        context: RoundContext = state["context"]
+        round_ = _round_of(state)
+        record = context.rounds[-1]
+        record.runs = [RunSummary(
+            run=r["run"], round=r["round"], task_text=r["task"], values=r["values"], scoped=r["scoped"],
+            achieved=r["achieved"], attempts=r["attempts"], success=r["success"], stopped_reason=r["stopped_reason"],
+            steps=r["steps"], unmet=r["unmet"], usage=r["usage"],
+        ) for r in sorted(state["reports"], key=lambda r: r["run"]) if r["round"] == round_]
+        for r in record.runs:
+            record.usage[f"run-{r.run}"] = r.usage
         inputs = sorted(state["inputs"], key=lambda i: i.run)  # fan-in arrives in completion order
-        achieved = [i for i in inputs if i.achieved]
+        achieved = [i for i in inputs if i.achieved and not i.scoped]
         if not achieved:
-            return Command(update={"error": "no run achieved the task — nothing to merge"}, goto=END)
-        emit("merge", f"merging {len(achieved)}/{len(inputs)} achieved runs (typed-key alignment, pure code)")
+            record.exit = "unpassable"
+            store.save_context(context)
+            return Command(update={"context": context, "error": "no run achieved the task — nothing to merge"},
+                           goto=END)
+        hints = list(state.get("hints") or [])
+        emit("merge", f"merging {len(achieved)}/{len([i for i in inputs if not i.scoped])} achieved runs "
+             f"(typed-key alignment, pure code{f', {len(hints)} hint(s)' if hints else ''})")
         warnings: list[str] = []
         try:
-            outcome = merge_trajectories(inputs, name=req.name, warnings=warnings)
+            outcome = merge_trajectories(inputs, name=req.name, warnings=warnings, hints=hints)
         except ValueError as exc:
-            return Command(update={"error": f"merge failed: {exc}"}, goto=END)
-        store.save_generalized(outcome.generalized)
+            record.exit = "error"
+            store.save_context(context)
+            return Command(update={"context": context, "error": f"merge failed: {exc}"}, goto=END)
+        store.save_generalized(outcome.generalized, round_=round_)
         for w in warnings:
             emit("merge", f"WARNING: {w}")
+        for h in outcome.generalized.hints:
+            emit("merge", f"hint column {h.hint.column} {h.hint.intent}{' fold' if h.hint.repeat_fold else ''}: "
+                 f"{h.status} — {h.reason}")
+        record.hints = list(outcome.generalized.hints)
+        record.generalized = GeneralizedSummary.from_generalized(outcome.generalized)
         wf = outcome.workflow
         if req.out is not None:
             dump_workflow(wf, req.out)
@@ -392,33 +496,108 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
              f"{len(wf.interrupts)} interrupt(s), accept_states={wf.accept_states}")
         for p in wf.params:
             emit("generate", f"param {p.name} (default: {p.default!r}) — {p.description}")
-        return Command(update={"workflow": wf, "generalized": outcome.generalized}, goto="replay")
+        store.save_context(context)
+        return Command(update={"workflow": wf, "generalized": outcome.generalized, "context": context},
+                       goto="replay")
 
-    async def replay(state: MultiRunState) -> Command[Literal["__end__"]]:
-        wf = state["workflow"]
-        gen = state["generalized"]
-        achieved = [i for i in state["inputs"] if i.achieved]
-        value_sets: list[dict[str, str]] = [{p.name: p.default or "" for p in wf.params}]
-        for other in achieved[1:2]:  # the second achieved run's values — the metamorphic pair
-            value_sets.append({
-                p.name: next((g.values_by_run.get(other.run) for g in gen.params if g.name == p.name), None)
-                or p.default or ""
-                for p in wf.params
-            })
-        if len(value_sets) == 1:
-            value_sets.append(dict(value_sets[0]))  # determinism check: same values, same sequence
+    async def replay(state: MultiRunState) -> Command[Literal["triage"]]:
+        context: RoundContext = state["context"]
+        round_ = _round_of(state)
+        wf, gen = state["workflow"], state["generalized"]
+        previous_failed = [r.values for rd in context.rounds[:-1] for r in rd.replay if not r.success]
+        value_sets = select_replay_sets(wf, gen, list(gen.achieved_runs), previous_failed)
         emit("replay", f"zero-LLM replay × {len(value_sets)}: {value_sets}")
-        report = await replay_check(wf, value_sets, headless=req.headless, run_dir_base=store.root)
+        report = await replay_check(wf, value_sets, headless=req.headless, run_dir_base=store.round_dir(round_))
         for r in report.runs:
             emit("replay", f"{'ok' if r.success else 'FAILED'} {r.values} -> states {r.signature}"
                  + (f" ({r.error})" if r.error else ""))
-        update: dict[str, Any] = {"replay": report}
-        if report.passed:
-            emit("replay", "metamorphic check passed: same state sequence for every value set, zero LLM")
+        defaults = value_sets[0]
+        unseen = [r for r in report.runs if r.values != defaults]
+        unseen_passed = sum(1 for r in unseen if r.success)
+        passed = report.passed and bool(unseen) and unseen_passed >= min(2, len(unseen))
+        record = context.rounds[-1]
+        record.replay = ReplaySummary.from_report(report)
+        record.replay_passed = passed
+        record.unseen_passed = unseen_passed
+        if passed:
+            emit("replay", f"metamorphic check passed: same state sequence for every value set "
+                 f"({unseen_passed} unseen), zero LLM")
         else:
-            update["error"] = "replay check failed: the compiled workflow did not replay identically for " \
-                              f"every value set ({[r.signature for r in report.runs]})"
-        return Command(update=update, goto=END)
+            emit("replay", f"replay check FAILED this round: {[r.signature for r in report.runs]}")
+        store.save_context(context)
+        return Command(update={"replay": report, "context": context}, goto="triage")
+
+    async def triage(state: MultiRunState) -> Command[Literal["plan_next", "__end__"]]:
+        context: RoundContext = state["context"]
+        round_ = _round_of(state)
+        record = context.rounds[-1]
+        verdicts = {r["run"]: type("V", (), {"unmet": r["unmet"]})() for r in state["reports"]}
+        inputs = sorted(state["inputs"], key=lambda i: i.run)
+        episodes = run_triage(generalized=state["generalized"], replay=state["replay"],
+                              runs=[i for i in inputs if not i.scoped], verdicts=verdicts)
+        record.episodes = episodes
+        store.save_episodes(round_, episodes)
+        for e in episodes:
+            emit("triage", e.as_line())
+        if not episodes:
+            emit("triage", "no episodes")
+        update: dict[str, Any] = {"context": context}
+        if record.replay_passed:
+            record.exit = "passed"
+            store.save_context(context)
+            return Command(update=update, goto=END)
+        if any(e.kind == "unpassable" for e in episodes):
+            record.exit = "unpassable"
+            update["error"] = "triage: unpassable — " + "; ".join(e.detail for e in episodes if e.kind == "unpassable")
+            store.save_context(context)
+            return Command(update=update, goto=END)
+        if round_ >= req.max_rounds:
+            record.exit = "max_rounds"
+            update["error"] = (f"replay check failed after {round_} round(s): the compiled workflow did not replay "
+                               f"identically for every value set ({[r.signature for r in record.replay]})")
+            store.save_context(context)
+            return Command(update=update, goto=END)
+        store.save_context(context)
+        return Command(update=update, goto="plan_next")
+
+    async def plan_next(state: MultiRunState) -> Command[Literal["explore_run", "__end__"]]:
+        context: RoundContext = state["context"]
+        round_ = _round_of(state)
+        record = context.rounds[-1]
+        plan_llm = scoped_llm(llm)
+        emit("plan", f"planning round {round_ + 1} from {len(record.episodes)} episode(s)")
+        next_plan = await run_next_round_planner(context, llm=plan_llm, graph=NEXT_ROUND_PLANNER)
+        record.next_plan = next_plan
+        record.usage["plan_next"] = usage_of(plan_llm)
+        store.save_next_plan(round_, next_plan)
+        for v in next_plan.next_variations:
+            vals = ", ".join(f"{k}={val!r}" for k, val in v.values.items()) or "(no values)"
+            emit("plan", f"next variation: {v.task_text} [{vals}]")
+        for st in next_plan.scoped_subtasks:
+            emit("plan", f"scoped sub-task: {st.task_text} @ {st.start_url}")
+        for h in next_plan.generalization_hints:
+            emit("plan", f"hint: column {h.column} {h.intent}"
+                 + (f" fold({h.repeat_fold.kind}, {h.repeat_fold.count_param})" if h.repeat_fold else "")
+                 + (f" param={h.param_name}" if h.param_name else "") + (f" — {h.why}" if h.why else ""))
+        for note in next_plan.notes:
+            emit("plan", f"note: {note}")
+        if not next_plan.next_variations and not next_plan.scoped_subtasks:
+            record.exit = "no_next_runs"
+            store.save_context(context)
+            return Command(update={"context": context,
+                                   "error": f"replay check failed and the planner proposed no round {round_ + 1} runs"},
+                           goto=END)
+        first_k = max(i.run for i in state["inputs"]) + 1
+        variations = list(next_plan.next_variations) + [
+            TaskVariation(task_text=st.task_text, values=dict(st.values)) for st in next_plan.scoped_subtasks]
+        context.rounds.append(RoundRecord(round=round_ + 1, variations=variations))
+        store.save_context(context)
+        emit("round", f"round {round_ + 1}/{req.max_rounds}: {len(next_plan.next_variations)} variation(s), "
+             f"{len(next_plan.scoped_subtasks)} scoped sub-task(s), {len(next_plan.generalization_hints)} hint(s)")
+        return Command(
+            update={"context": context, "hints": list(next_plan.generalization_hints)},
+            goto=sends(round_ + 1, next_plan.next_variations, first_k, next_plan.scoped_subtasks),
+        )
 
     return (
         StateGraph(MultiRunState)
@@ -426,6 +605,8 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
         .add_node("explore_run", explore_run)
         .add_node("merge", merge)
         .add_node("replay", replay)
+        .add_node("triage", triage)
+        .add_node("plan_next", plan_next)
         .add_edge(START, "plan")
         .add_edge("explore_run", "merge")
         .compile()
@@ -447,15 +628,21 @@ async def orchestrate(req: GenerateRequest, llm: LLM, listen: Listener | None = 
     graph = build_multi_orchestration_graph(req, llm, listen)
     # `max_concurrency` is a TOP-LEVEL config key (pregel reads it there, not from
     # `configurable`); it bounds how many explore_run Send tasks — browsers — run at once.
-    final = await graph.ainvoke({}, config={"recursion_limit": 4 * req.runs + 16, "max_concurrency": req.parallel})
+    final = await graph.ainvoke({}, config={
+        "recursion_limit": (4 * req.runs + 16) * req.max_rounds, "max_concurrency": req.parallel,
+    })
     inputs = final.get("inputs") or []
-    spine = next((i.trajectory for i in inputs if i.achieved), None)
+    spine = next((i.trajectory for i in inputs if i.achieved and not i.scoped), None)
+    context = final.get("context")
     return GenerateResult(
         trajectory=spine,
         workflow=final.get("workflow"),
         error=final.get("error"),
         variations=final.get("plan"),
-        run_reports=final.get("reports") or [],
+        run_reports=sorted(final.get("reports") or [], key=lambda r: r["run"]),
         generalized=final.get("generalized"),
         replay=final.get("replay"),
+        context=context,
+        rounds=len(context.rounds) if context is not None else 0,
+        episodes=list(context.rounds[-1].episodes) if context is not None and context.rounds else [],
     )

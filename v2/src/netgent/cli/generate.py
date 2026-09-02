@@ -49,6 +49,11 @@ def generate(
         list[str] | None,
         typer.Option("--variation", help="Pin one variation's value as name=value (repeatable; needs --runs > 1)."),
     ] = None,
+    rounds: Annotated[
+        int, typer.Option("--rounds", min=1, help="Closed-loop round budget (--runs > 1): after a failed replay "
+                          "check, triage → plan_next → another round of explorations merged with everything so "
+                          "far, until the replay passes on 2 unseen value sets. 1 = a single round.")
+    ] = 3,
 ) -> None:
     """Explore the task with the agent, judge the run from page evidence, compile it into a workflow."""
 
@@ -76,11 +81,12 @@ def generate(
         runs=runs,
         parallel=parallel,
         variation=dict(v.split("=", 1) for v in (variation or [])),
+        max_rounds=rounds,
     )
     llm = make_llm(model or get_settings().generator_model)
 
-    colors = {"plan": "magenta", "explore": None, "verify": "yellow",
-              "merge": "blue", "generate": "cyan", "replay": "green"}
+    colors = {"plan": "magenta", "explore": None, "verify": "yellow", "merge": "blue",
+              "generate": "cyan", "replay": "green", "triage": "yellow", "round": "magenta"}
 
     def listen(stage: str, text: str) -> None:
         fg = "red" if "FAILED" in text or "failed" in text else colors.get(stage)

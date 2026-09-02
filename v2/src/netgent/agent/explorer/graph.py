@@ -303,13 +303,7 @@ async def act(state: AgentState, runtime: Runtime[ExplorerContext]) -> Command[L
         if error is None:
             step.action = action  # the compilable record of what actually ran
             step.locator_check = note
-            if probe is not None and getattr(action, "locator", None):
-                # M0: the whole ladder the element had, as the live page resolved it.
-                step.locator_candidates = list(probe.chains)
-                step.candidate_kinds = list(probe.kinds)
-                step.match_counts = list(probe.counts)
-                step.match_indices = list(probe.indices)
-                step.element = _element_identity(snapshot, item.index)
+            record_ladder(step, probe, snapshot, item.index)
             step.dialogs = ctx.session.dialogs_since_last_action()  # THIS item's own dialogs (per item)
         await capture_screenshot(ctx, step)
         steps.append(step)
@@ -466,6 +460,18 @@ def _target_label(snapshot, index: int | None) -> str:
         return ""
     el = elems[index]
     return el.name or (f"{el.tag}[{el.type}]" if el.type else el.tag)
+
+
+def record_ladder(step: AgentStep, probe, snapshot, index: int | None) -> None:
+    """M0: keep the whole ladder the acted element had, as the live page resolved it, on the
+    step — every rung, its kind, its match count and the acted element's index where known."""
+    if probe is None or not getattr(step.action, "locator", None):
+        return
+    step.locator_candidates = list(probe.chains)
+    step.candidate_kinds = list(probe.kinds)
+    step.match_counts = list(probe.counts)
+    step.match_indices = list(probe.indices)
+    step.element = _element_identity(snapshot, index)
 
 
 def _element_identity(snapshot, index: int | None) -> dict:

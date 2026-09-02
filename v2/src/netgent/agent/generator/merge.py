@@ -67,6 +67,10 @@ class RunInput(BaseModel):
     trajectory: AgentTrajectory
     values: dict[str, str] = Field(default_factory=dict)  # planner-proposed name -> this run's value
     achieved: bool = True  # the verifier's call; only achieved runs form the merge spine
+    # A scoped sub-task run (plan_next's `scoped_subtasks`): a SEGMENT of the task explored
+    # on its own — evidence for the round context, never aligned as a full run (its missing
+    # columns would read as "the other runs achieved it without this step").
+    scoped: bool = False
 
 
 class ColumnReport(BaseModel):
@@ -516,6 +520,11 @@ def merge_trajectories(
     warnings = warnings if warnings is not None else []
     hints = list(hints or [])
     outcomes: list[HintOutcome] = []
+    if any(r.scoped for r in runs):
+        warnings.append(
+            f"{sum(1 for r in runs if r.scoped)} scoped sub-task run(s) kept as evidence, not merged"
+        )
+    runs = [r for r in runs if not r.scoped]
     achieved = [r for r in runs if r.achieved]
     if not achieved:
         raise ValueError("no achieved runs to merge — nothing forms the spine")
