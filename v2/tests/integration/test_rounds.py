@@ -96,7 +96,7 @@ def test_round_two_turns_the_first_result_click_positional_and_passes(serve, tmp
     assert r2.generalized is not None and r2.generalized.achieved_runs == [1, 2, 3]
     (outcome,) = r2.hints
     assert outcome.status == "applied" and "#results > li > a" in outcome.reason
-    assert r2.hint_acceptance_rate() == 1.0 and r1.hint_acceptance_rate() is None
+    assert r2.hint_acceptance_rate == 1.0 and r1.hint_acceptance_rate is None and r2.hints_applied == 1
     (click_col,) = [c for c in r2.generalized.columns if c.action_type == "click"]
     assert click_col.disposition == "positional"
     assert r2.replay_passed and r2.unseen_passed == 2 and r2.exit == "passed"

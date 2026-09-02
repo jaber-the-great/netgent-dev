@@ -3,6 +3,7 @@ scoped sub-tasks and TYPED generalization hints, normalized in code (≤ N runs,
 names, values verbatim, hints on existing columns, one per column)."""
 
 import asyncio
+import json
 
 import pytest
 
@@ -182,8 +183,19 @@ def test_round_context_helpers():
     assert [c.index for c in ctx.latest_columns()] == [0, 1, 3, 5]
     assert ctx.all_values_seen() == [{"search_query": "Dream Theater"}, {"search_query": "Metallica"}]
     assert ctx.total_usage() == {"calls": 13, "input_tokens": 1500, "output_tokens": 150}
-    assert ctx.current.hint_acceptance_rate() is None  # this round consumed no hints
+    assert ctx.current.hint_acceptance_rate is None  # this round consumed no hints
     outcomes = [HintOutcome(hint=GeneralizationHint(column=3), status="applied"),
                 HintOutcome(hint=GeneralizationHint(column=5), status="rejected", reason="x")]
     assert acceptance_rate(outcomes) == 0.5 and acceptance_rate([]) is None
     assert RoundContext.model_validate_json(ctx.model_dump_json()) == ctx  # persists as context.json
+    dumped = json.loads(ctx.model_dump_json())["rounds"][0]
+    assert dumped["hint_acceptance_rate"] is None and dumped["hints_applied"] == 0  # the bench's per-round columns
+
+
+def test_plan_next_asks_once_more_when_the_plan_is_empty():
+    variation = TaskVariation(task_text="search YouTube for Rush", values={"search_query": "Rush"})
+    draft = NextRoundPlan(next_variations=[variation])
+    llm = FakeLLM([], verdicts=[NextRoundPlan(), draft])
+    plan = asyncio.run(plan_next(_context(), llm=llm))
+    assert len(llm.judged) == 2 and "proposed nothing" in llm.judged[1][-1]["text"]
+    assert [v.values["search_query"] for v in plan.next_variations] == ["Rush"]

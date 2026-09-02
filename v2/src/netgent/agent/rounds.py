@@ -9,7 +9,7 @@ hint_acceptance_rate, tokens per run), lives here as typed records and is persis
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from netgent.agent.generator.hints import HintOutcome, acceptance_rate
 from netgent.agent.generator.merge import GeneralizedTrajectory
@@ -110,8 +110,17 @@ class RoundRecord(BaseModel):
     usage: dict[str, dict[str, int] | None] = Field(default_factory=dict)  # "plan" | "plan_next" | "run-k"
     exit: str = ""  # "" while the loop continues; passed | max_rounds | no_next_runs | unpassable | error
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
     def hint_acceptance_rate(self) -> float | None:
+        """applied ÷ proposed for the hints this round's merge consumed (None: none proposed) —
+        serialized into context.json so the eval bench reads it per round."""
         return acceptance_rate(self.hints)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def hints_applied(self) -> int:
+        return sum(1 for h in self.hints if h.status == "applied")
 
 
 class RoundContext(BaseModel):

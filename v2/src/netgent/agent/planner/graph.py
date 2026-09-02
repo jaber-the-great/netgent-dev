@@ -151,7 +151,15 @@ async def draft_next_round(state: NextRoundState, runtime: Runtime[PlannerContex
     in code (≤ N runs, canonical names, values verbatim, hints on existing columns)."""
     ctx = runtime.context
     rc = state["context"]
-    plan: NextRoundPlan = await ctx.llm.judge(NEXT_ROUND_SYSTEM, build_next_round_content(rc), NextRoundPlan)
+    content = build_next_round_content(rc)
+    plan: NextRoundPlan = await ctx.llm.judge(NEXT_ROUND_SYSTEM, content, NextRoundPlan)
+    if not (plan.next_variations or plan.scoped_subtasks or plan.generalization_hints):
+        # An empty plan ends the loop: ask once more, naming the shape (the same defense as
+        # draft_variations — an enveloped answer validates as an empty plan).
+        retry = [*content, {"type": "text", "text": "\nYour previous answer proposed nothing. Return at least one "
+                                                     "next_variation (task_text + values) and, per episode column, a "
+                                                     "generalization_hint from the closed vocabulary."}]
+        plan = await ctx.llm.judge(NEXT_ROUND_SYSTEM, retry, NextRoundPlan)
     return {"plan": normalize_next_round_plan(
         plan, n=rc.runs_per_round, canonical_names=rc.canonical_names, base_values=rc.base_values,
         columns=[c.index for c in rc.latest_columns()],

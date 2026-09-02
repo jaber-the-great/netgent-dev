@@ -50,14 +50,20 @@ def unwrap_envelope(data: Any, schema: dict[str, Any] | type) -> Any:
     Measured (Claude Code 2.1.x): for a schema with a dict-valued field the CLI may return
     ``{"<field>": "<the whole answer as a JSON string>"}`` — e.g. a plan whose
     ``variations[].values`` is a dict came back as ``{"values": "{\"variations\": [...]}"}`` —
-    or the ``$PARAMETER_VALUE`` wrapper. Rule: a single-key dict whose only value is a JSON
-    string decoding to an object, where the key is not a property of the schema or is a known
-    envelope key, is replaced by that object (recursively). A genuine single-field answer
-    whose value is not a JSON object is left alone.
+    or the tool-parameter wrapper ``{"$PARAMETER_NAME": "response", "$PARAMETER_VALUE": "<json>"}``.
+    Rule: a single-key dict whose only value is a JSON string decoding to an object, where the
+    key is not a property of the schema or is a known envelope key, is replaced by that object
+    (recursively). A genuine single-field answer whose value is not a JSON object is left alone.
     """
     properties = _schema_properties(schema)
     for _ in range(4):  # bounded: envelopes nest at most a few levels
-        if not (isinstance(data, dict) and len(data) == 1):
+        if not isinstance(data, dict):
+            break
+        # The tool-parameter wrapper (measured, Claude Code 2.1.257, a NextRoundPlan schema):
+        # {"$PARAMETER_NAME": "response", "$PARAMETER_VALUE": "<the answer as a JSON string>"}.
+        if "$PARAMETER_VALUE" in data and set(data) <= {"$PARAMETER_NAME", "$PARAMETER_VALUE"}:
+            data = {"$PARAMETER_VALUE": data["$PARAMETER_VALUE"]}
+        if len(data) != 1:
             break
         ((key, value),) = data.items()
         if not isinstance(value, str):

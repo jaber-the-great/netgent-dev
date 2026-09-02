@@ -52,6 +52,17 @@ def test_parameter_value_envelope_and_nesting_are_unwrapped():
     assert unwrap_envelope(nested, Plan) == PLAN
 
 
+def test_parameter_name_value_pair_is_unwrapped():
+    """Measured (Claude Code 2.1.257): the tool-parameter wrapper with BOTH keys — it read as an
+    empty plan and ended a closed-loop compile at round 1 ("the planner proposed no runs")."""
+    pair = {"$PARAMETER_NAME": "response", "$PARAMETER_VALUE": json.dumps(PLAN)}
+    assert unwrap_envelope(pair, Plan) == PLAN
+    assert parse_structured_message(_msg(pair), Plan).variations[0].task_text == "watch a cat video"
+    # a two-key dict that is NOT the wrapper stays as it is
+    other = {"$PARAMETER_VALUE": json.dumps(PLAN), "extra": 1}
+    assert unwrap_envelope(other, Plan) == other
+
+
 def test_a_genuine_single_string_field_is_left_alone():
     """{"answer": "{...}"} where `answer` IS the schema's string field and the inner object
     carries none of the schema's properties: not an envelope."""
