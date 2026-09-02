@@ -13,6 +13,7 @@ from netgent.browser.dom import (
     element_key,
     element_lines,
     format_observation,
+    media_line,
 )
 
 
@@ -150,3 +151,26 @@ def test_media_line_renders_playback_ground_truth_under_title():
     assert lines[3] == "MEDIA: audio PAUSED at 0:07 [muted]"
     # no media → no line (non-video pages see zero change)
     assert "MEDIA:" not in format_observation(DomSnapshot(url="u", title="t", elements=[_el("Play", y=10)]))
+
+
+def test_media_line_renders_detached_and_load_state():
+    """Detached players (SoundCloud's `new Audio()`) read like any other; a source-less element
+    (Twitch's never-attached stream) reads NOT LOADED, not as a pause the agent would toggle."""
+    from netgent.browser.dom.models import MediaState
+
+    detached = MediaState(tag="audio", current=7, duration=192, attached=False, muted=True, ready_state=4)
+    assert media_line(detached) == "audio (detached) PLAYING at 0:07 / 3:12 [muted]"
+    dead = MediaState(tag="video", current=0, paused=True, ready_state=0, network_state=0, has_source=False)
+    assert media_line(dead) == "video NOT LOADED (no source)"
+    failed = MediaState(tag="video", current=0, paused=True, ready_state=0, network_state=3, has_source=True)
+    assert media_line(failed) == "video NOT LOADED (source failed to load)"
+    # a source that is still loading is a plain reading, marked as stalled while it plays
+    loading = MediaState(tag="video", current=0, ready_state=0, network_state=2)
+    assert media_line(loading) == "video PLAYING at 0:00 [buffering]"
+    idle = MediaState(tag="audio", current=0, paused=True, ready_state=0, network_state=1)
+    assert media_line(idle) == "audio PAUSED at 0:00"
+    # records taken before load state was observed render exactly as before
+    old = MediaState(tag="video", current=449, duration=515, paused=False)
+    assert media_line(old) == "video PLAYING at 7:29 / 8:35"
+    m = MediaState(tag="video", current=0, ready_state=0, has_source=False)
+    assert not m.loaded and not m.playing

@@ -7,8 +7,9 @@ import time
 
 from netgent.browser.dialogs import DialogLog
 from netgent.browser.dom.closed_shadow import ClosedShadowObserver
+from netgent.browser.dom.media import MediaObserver, attached_media, by_relevance
 from netgent.browser.dom.models import DomElement, DomSnapshot, MediaState, TextBlock
-from netgent.browser.dom.scripts import DOM_SNAPSHOT_JS, FRAME_CONTENT_ORIGIN_JS, FRAME_SELECTOR_JS
+from netgent.browser.dom.scripts import DOM_SNAPSHOT_JS, FRAME_CONTENT_ORIGIN_JS, FRAME_SELECTOR_JS, MEDIA_DOM_JS
 from netgent.browser.pw import Frame, Page
 from netgent.core.logger import get_logger
 
@@ -17,14 +18,20 @@ logger = get_logger(__name__)
 
 class DomObserver:
     """Snapshots interactive elements + text across all frames, joining closed shadow roots
-    observed over CDP (`closed_shadow` is None under plain Playwright or without a CDP session)."""
+    observed over CDP (`closed_shadow` is None under plain Playwright or without a CDP session),
+    plus every media element's playback (`media`, CDP; None → DOM-attached media only)."""
 
     def __init__(
-        self, page: Page, closed_shadow: ClosedShadowObserver | None = None, dialogs: DialogLog | None = None
+        self,
+        page: Page,
+        closed_shadow: ClosedShadowObserver | None = None,
+        dialogs: DialogLog | None = None,
+        media: MediaObserver | None = None,
     ):
         self._page = page
         self._closed_shadow = closed_shadow
         self._dialogs = dialogs
+        self._media = media
 
     def dialogs_seen(self) -> list[str]:
         return self._dialogs.history if self._dialogs is not None else []
@@ -57,6 +64,22 @@ class DomObserver:
         cache[frame] = (parent_path + [selector], px + left, py + top)
         return cache[frame]
 
+    async def media(self, frame_cache: dict[Frame, tuple[list[str], float, float]] | None = None) -> list[MediaState]:
+        """Playback readings across frames, attached or not, without a DOM walk — safe at replay
+        (zero-LLM). CDP enumeration first (dom/media.py); when it is unavailable, the DOM-attached
+        media of each frame through Playwright. Most relevant first (playing, then attached)."""
+        readings = await self._media.read() if self._media is not None else None
+        if readings is None:
+            readings = []
+            cache = frame_cache if frame_cache is not None else {}
+            for frame in self._page.frames:
+                try:
+                    frame_path, _, _ = await self._frame_info(frame, cache)
+                    readings += await attached_media(frame, MEDIA_DOM_JS, frame_path)
+                except Exception:  # noqa: BLE001 — a detached/mid-navigation frame is skipped
+                    continue
+        return by_relevance(readings)
+
     async def snapshot(self, *, drain_dialogs: bool = True) -> DomSnapshot:
         """Observe interactive elements + text across ALL frames (same- and cross-origin).
 
@@ -71,7 +94,6 @@ class DomObserver:
         page = self._page
         elements: list[DomElement] = []
         texts: list[TextBlock] = []
-        media: list[MediaState] = []
         skipped: list[str] = []
         viewport_height = await page.evaluate("() => window.innerHeight")
         closed: dict[tuple[str, ...], dict] = {}
@@ -102,15 +124,12 @@ class DomObserver:
             for t in raw["texts"]:
                 t["frame_path"] = frame_path
                 texts.append(TextBlock.model_validate(t))
-            for m in raw.get("media", []):  # absent from snapshots taken by an older walker
-                m["frame_path"] = frame_path
-                media.append(MediaState.model_validate(m))
         return DomSnapshot(
             url=page.url,
             title=await page.title(),
             elements=elements,
             texts=texts,
-            media=media,
+            media=await self.media(frame_cache),
             taken_at=time.time(),
             viewport_height=int(viewport_height),
             frames_skipped=len(skipped),

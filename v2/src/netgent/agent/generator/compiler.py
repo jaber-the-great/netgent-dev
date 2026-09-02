@@ -63,7 +63,11 @@ MEDIA_GATE_MIN_CONTENT_S = 30.0  # content shorter than this can't be told from 
 MEDIA_GATE_CAP_S = 120.0
 MEDIA_GATE_TIMEOUT_MS = 130_000  # a gated state may legitimately wait out an unskippable ad
 
-_MEDIA_READING_RE = re.compile(r"\b(video|audio) (PLAYING|PAUSED|ENDED) at (\d+):(\d{2})(?: / (\d+):(\d{2}))?")
+# "video PLAYING at 0:21 / 8:35", "audio (detached) PAUSED at 1:02 / 3:12 [muted]"; a
+# "NOT LOADED" reading has no position and is (rightly) no evidence of playback.
+_MEDIA_READING_RE = re.compile(
+    r"\b(video|audio)(?: \(detached\))? (PLAYING|PAUSED|ENDED) at (\d+):(\d{2})(?: / (\d+):(\d{2}))?"
+)
 
 
 def _base_url(url: str) -> str:

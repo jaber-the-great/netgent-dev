@@ -3,8 +3,12 @@
 import asyncio
 import re
 import time
+from collections.abc import Awaitable, Callable
 
 from netgent.browser.dialogs import DialogLog
+from netgent.browser.dom.media import attached_media
+from netgent.browser.dom.models import MediaState
+from netgent.browser.dom.scripts import MEDIA_DOM_JS
 from netgent.browser.pw import Locator, Page
 from netgent.browser.resolution import LocatorResolver
 from netgent.core.errors import TriggerTimeoutError
@@ -26,10 +30,28 @@ POLL_INTERVAL_S = 0.1
 class TriggerEngine:
     """Evaluates state conditions and page-extracted parameter sources against the live page."""
 
-    def __init__(self, page: Page, resolver: LocatorResolver, dialogs: DialogLog | None = None):
+    def __init__(
+        self,
+        page: Page,
+        resolver: LocatorResolver,
+        dialogs: DialogLog | None = None,
+        media: Callable[[], Awaitable[list[MediaState]]] | None = None,
+    ):
         self._page = page
         self._resolver = resolver
         self._dialogs = dialogs
+        # Media readings across frames, attached or detached (DomObserver.media over CDP);
+        # without one, the DOM-attached media of each frame through Playwright.
+        self._media = media or self._attached_media
+
+    async def _attached_media(self) -> list[MediaState]:
+        out: list[MediaState] = []
+        for frame in self._page.frames:
+            try:
+                out += await attached_media(frame, MEDIA_DOM_JS, [])
+            except Exception:  # noqa: BLE001 — a detached/mid-navigation frame is skipped
+                continue
+        return out
 
     def _element(self, trigger: SelectorVisible | SelectorHidden) -> Locator:
         """The Locator an element trigger is evaluated on: its locator chain through the SAME
@@ -62,18 +84,19 @@ class TriggerEngine:
                     return False
                 return not await locator.first.is_visible()
             case MediaPlaying():
-                # Element properties only — the playback signal that cannot freeze. No media
-                # elements → does not hold (resolved-only, like SelectorHidden). The duration
-                # gate is what tells content from an ad playing in the same element.
-                locator = self._resolver.frame_scope(trigger.frame_path).locator("video, audio")
-                readings = await locator.evaluate_all(
-                    "els => els.map((v) => ({ paused: !!v.paused, ended: !!v.ended,"
-                    " duration: Number.isFinite(v.duration) ? v.duration : null }))"
-                )
-                for m in readings:
-                    state_ok = (not m["paused"] and not m["ended"]) if trigger.playing else m["paused"]
+                # Element properties only — the playback signal that cannot freeze — over
+                # every live media element, attached or not (a `new Audio()` player counts).
+                # No media, or nothing loaded → does not hold (resolved-only, like
+                # SelectorHidden): a source-less element is neither playing nor "paused
+                # content". The duration gate tells content from an ad in the same element.
+                for m in await self._media():
+                    if trigger.frame_path and m.frame_path != trigger.frame_path:
+                        continue
+                    if not m.loaded:
+                        continue
+                    state_ok = m.playing if trigger.playing else m.paused
                     duration_ok = trigger.min_duration_s is None or (
-                        m["duration"] is not None and m["duration"] >= trigger.min_duration_s
+                        m.duration is not None and m.duration >= trigger.min_duration_s
                     )
                     if state_ok and duration_ok:
                         return True

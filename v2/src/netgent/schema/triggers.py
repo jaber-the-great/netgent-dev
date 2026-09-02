@@ -84,15 +84,19 @@ class DialogMatches(BaseModel):
 
 
 class MediaPlaying(BaseModel):
-    """A <video>/<audio> element in `frame_path` is in the given playback state.
+    """A media element is in the given playback state.
 
     Evaluated from the media element's own properties (paused/ended/duration) — the one
-    playback signal that cannot lie or freeze. `min_duration_s` is the ad gate: sites play
-    ads in the same media element as the content, so "a video is playing" is true during an
-    ad too — "a video at least this long is playing" is not (a 7-minute song vs a 90-second
-    ad). A replay whose seeks/dwells are gated this way waits out or skips an ad instead of
-    silently spending its watch time on it. Matches nothing → does not hold (same
-    resolved-only discipline as SelectorHidden).
+    playback signal that cannot lie or freeze — over every live element, in the DOM or held
+    by script only (a `new Audio()` player is the player). An element with nothing loaded
+    (no source, readyState 0) is neither playing nor paused content. `min_duration_s` is the
+    ad gate: sites play ads in the same media element as the content, so "a video is playing"
+    is true during an ad too — "a video at least this long is playing" is not (a 7-minute song
+    vs a 90-second ad). A replay whose seeks/dwells are gated this way waits out or skips an ad
+    instead of silently spending its watch time on it. Matches nothing → does not hold (same
+    resolved-only discipline as SelectorHidden). `frame_path` restricts the check to one
+    iframe; empty = any frame (the compiler cannot tell which frame a player lives in from a
+    step's reading, and a gate is about the page's playback).
     """
 
     type: Literal["media_playing"] = "media_playing"

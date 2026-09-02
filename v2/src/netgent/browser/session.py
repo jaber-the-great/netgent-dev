@@ -11,10 +11,12 @@ from typing import Any
 
 from netgent.browser.actions import ActionDispatcher
 from netgent.browser.dialogs import DialogLog
+from netgent.browser.dom.cdp import CdpFrames
 from netgent.browser.dom.closed_shadow import ClosedShadowObserver
+from netgent.browser.dom.media import MediaObserver
 from netgent.browser.dom.models import DomSnapshot
 from netgent.browser.dom.observer import DomObserver
-from netgent.browser.dom.scripts import DOM_SNAPSHOT_JS, FRAME_SELECTOR_JS
+from netgent.browser.dom.scripts import DOM_SNAPSHOT_JS, FRAME_SELECTOR_JS, MEDIA_READER_JS
 from netgent.browser.factory import BrowserHandle, close, launch
 from netgent.browser.profile import BrowserProfile
 from netgent.browser.pw import PATCHED_BROWSER, Browser, BrowserContext, Locator, Page, Playwright
@@ -26,22 +28,6 @@ from netgent.schema.control import ParamSource
 from netgent.schema.workflow import State
 
 __all__ = ["PATCHED_BROWSER", "BrowserSession"]
-
-# The same reading the walker's observeMedia takes (dom/scripts/snapshot.js), standalone so
-# a replay can take it without a DOM walk: element PROPERTIES only, which keep ticking while
-# a player's on-screen controls are hidden/frozen. Invisible-but-playing media (background
-# <audio>) is included; invisible paused media is not.
-_MEDIA_PROBE_JS = """() => [...document.querySelectorAll('video, audio')].flatMap((v) => {
-  try {
-    const r = v.getBoundingClientRect();
-    if (!(r.width > 0 || r.height > 0) && v.paused) return [];
-    return [{ tag: v.tagName.toLowerCase(),
-              current: Math.floor(v.currentTime || 0),
-              duration: Number.isFinite(v.duration) ? Math.floor(v.duration) : null,
-              paused: !!v.paused, ended: !!v.ended, muted: !!v.muted }];
-  } catch (e) { return []; }
-})"""
-
 
 class BrowserSession:
     def __init__(self, headless: bool = True, profile: BrowserProfile | None = None):
@@ -72,14 +58,18 @@ class BrowserSession:
         # so observing them under plain Playwright would surface elements the replayer could
         # never drive. Cross-origin frames work because every frame is read through its own
         # target's session (an init script via add_init_script would break them — measured).
+        frames = CdpFrames(self._page, self._cdp, FRAME_SELECTOR_JS) if self._cdp is not None else None
         closed_shadow: ClosedShadowObserver | None = None
-        if PATCHED_BROWSER and self._cdp is not None:
-            closed_shadow = ClosedShadowObserver(self._page, self._cdp, DOM_SNAPSHOT_JS, FRAME_SELECTOR_JS)
+        if PATCHED_BROWSER and frames is not None:
+            closed_shadow = ClosedShadowObserver(frames, DOM_SNAPSHOT_JS)
+        # Media elements, attached or not, enumerated over CDP in the same worlds (dom/media.py);
+        # engine-independent — the reads are our own isolated world's, under either driver.
+        media = MediaObserver(frames, MEDIA_READER_JS) if frames is not None else None
         dialogs = DialogLog(self._page)
-        self._dom = DomObserver(self._page, closed_shadow, dialogs)
+        self._dom = DomObserver(self._page, closed_shadow, dialogs, media)
         self._resolver = LocatorResolver(self._page)
         self._actions = ActionDispatcher(self._page, self._resolver, dialogs)
-        self._triggers = TriggerEngine(self._page, self._resolver, dialogs)
+        self._triggers = TriggerEngine(self._page, self._resolver, dialogs, media=self._dom.media)
         return self
 
     async def __aexit__(self, *exc_info: object) -> None:
@@ -113,25 +103,18 @@ class BrowserSession:
         await self.page.screenshot(path=str(path))
 
     async def media_summary(self) -> str | None:
-        """Playback ground truth for the run record: every visible-or-audible <video>/<audio>
-        across frames as one compact string ('video PLAYING at 0:29 / 7:56'), or None.
+        """Playback ground truth for the run record: every live media element across frames —
+        attached or not — as one compact string ('video PLAYING at 0:29 / 7:56'), or None.
 
-        Read-only property access per frame — safe at REPLAY time (zero-LLM: no model, no
-        DomObserver walk). This is what makes a replay's timing fidelity auditable after the
-        fact: a seek edge whose readings show no jump, or a dwell with a frozen position,
-        is visible in record.json instead of only to someone watching the browser.
+        Read-only property reads, no DOM walk — safe at REPLAY time (zero-LLM). This is what
+        makes a replay's timing fidelity auditable after the fact: a seek edge whose readings
+        show no jump, or a dwell with a frozen position, is visible in record.json instead of
+        only to someone watching the browser.
         """
-        from netgent.browser.dom.models import MediaState
         from netgent.browser.dom.serializer import media_line
 
-        found: list[str] = []
-        for frame in self.page.frames:
-            try:
-                raw = await frame.evaluate(_MEDIA_PROBE_JS)
-            except Exception:  # noqa: BLE001 — a detached/mid-navigation frame is skipped
-                continue
-            found += [media_line(MediaState.model_validate(m)) for m in raw]
-        return "; ".join(found[:3]) if found else None
+        readings = await self._dom.media()
+        return "; ".join(media_line(m) for m in readings[:3]) if readings else None
 
     # ── locator resolution ───────────────────────────────────────────────────────
 

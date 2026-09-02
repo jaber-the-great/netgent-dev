@@ -73,10 +73,10 @@ def format_observation(
     navigation, so a new page is not starred wholesale.
     """
     lines = [f"URL: {snapshot.url}", f"TITLE: {snapshot.title}"]
-    # Playback ground truth (walker reads the <video>/<audio> properties): the on-screen
-    # controls freeze while auto-hidden, so this line is the only reliable playing/paused
-    # signal — and its ticking currentTime keeps a playing page from ever comparing equal
-    # to its previous observation (stuck detection).
+    # Playback ground truth (element properties, attached or not — dom/media.py): the
+    # on-screen controls freeze while auto-hidden, so this line is the only reliable
+    # playing/paused signal — and its ticking currentTime keeps a playing page from ever
+    # comparing equal to its previous observation (stuck detection).
     for m in snapshot.media[:3]:
         lines.append(f"MEDIA: {media_line(m)}")
 
@@ -197,10 +197,23 @@ def _mmss(seconds: int) -> str:
 
 def media_line(m) -> str:
     """One MediaState as the compact reading used in observations, step records and the
-    verifier's media timeline: 'video PLAYING at 0:29 / 7:56'."""
+    verifier's media timeline: 'video PLAYING at 0:29 / 7:56 [muted]'.
+
+    `audio (detached) PLAYING …` — the player is an audio object script holds outside the
+    DOM (SoundCloud); still the true state. `video NOT LOADED (no source)` — the element has
+    nothing to play (Twitch when the stream never attaches): not a pause, and play cannot
+    fix it. `[buffering]` — playing but stalled for data (readyState < HAVE_FUTURE_DATA).
+    """
+    tag = m.tag if m.attached else f"{m.tag} (detached)"
+    if m.ready_state == 0 and (not m.has_source or m.network_state == 3):
+        why = "no source" if not m.has_source else "source failed to load"
+        return f"{tag} NOT LOADED ({why})"
     state = "ENDED" if m.ended else ("PAUSED" if m.paused else "PLAYING")
     pos = _mmss(m.current) + (f" / {_mmss(m.duration)}" if m.duration is not None else "")
-    return f"{m.tag} {state} at {pos}" + (" [muted]" if m.muted else "")
+    flags = " [muted]" if m.muted else ""
+    if state == "PLAYING" and m.ready_state is not None and m.ready_state < 3:
+        flags += " [buffering]"
+    return f"{tag} {state} at {pos}{flags}"
 
 
 def _render(el: DomElement) -> str:

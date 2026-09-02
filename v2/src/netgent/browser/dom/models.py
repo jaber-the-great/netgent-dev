@@ -59,11 +59,18 @@ class TextBlock(BaseModel):
 
 
 class MediaState(BaseModel):
-    """A <video>/<audio> element's playback state, read from its DOM properties.
+    """A media element's playback and load state, read from its properties.
 
     The properties are ground truth: they keep ticking while a player's on-screen controls
     are auto-hidden and their labels/timers frozen (YouTube stops updating hidden controls —
-    the accessibility strings lied to the agent; currentTime cannot)."""
+    the accessibility strings lied to the agent; currentTime cannot).
+
+    The element need not be in the DOM: a `new Audio()` a site never inserts (SoundCloud) is
+    still the player, found over CDP (dom/media.py) and reported with `attached=False`. Load
+    state tells "nothing to play" from "paused": `ready_state` is HTMLMediaElement.readyState
+    (0 HAVE_NOTHING … 4 HAVE_ENOUGH_DATA), `network_state` its networkState (0 EMPTY, 1 IDLE,
+    2 LOADING, 3 NO_SOURCE), `has_source` whether any src/currentSrc/srcObject/<source> is set.
+    None/defaults on records taken before these were observed."""
 
     tag: str  # video | audio
     current: int  # currentTime, whole seconds
@@ -71,7 +78,20 @@ class MediaState(BaseModel):
     paused: bool = False
     ended: bool = False
     muted: bool = False
+    attached: bool = True  # in the DOM; False = held by script only (still the live player)
+    ready_state: int | None = None
+    network_state: int | None = None
+    has_source: bool = True
     frame_path: list[str] = Field(default_factory=list)
+
+    @property
+    def loaded(self) -> bool:
+        """Has media to play (metadata or more); False for a source-less/failed element."""
+        return self.ready_state is None or self.ready_state > 0
+
+    @property
+    def playing(self) -> bool:
+        return not self.paused and not self.ended and self.loaded
 
 
 class DomSnapshot(BaseModel):

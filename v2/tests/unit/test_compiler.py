@@ -332,3 +332,12 @@ def test_media_gate_absent_without_readings_or_for_short_content():
             s.media = s.media.replace("7:04", "0:25").replace("1:30", "0:20")
     wf = compile_trajectory(short, name="short")  # 25s content: length can't tell it from an ad
     assert all(c.type != "media_playing" for s in wf.states for c in s.conditions)
+
+
+def test_media_readings_parse_detached_players_and_ignore_unloaded_ones():
+    from netgent.agent.generator.compiler import _media_readings
+
+    class Step:
+        media = "audio (detached) PLAYING at 0:07 / 3:12 [muted]; video NOT LOADED (no source); video PAUSED at 1:00"
+
+    assert _media_readings(Step()) == [("PLAYING", 192), ("PAUSED", None)]

@@ -178,24 +178,6 @@
 
   const results = [];
   const texts = [];
-  // Media ground truth, read from the element PROPERTIES — currentTime/paused never freeze,
-  // unlike YouTube's accessibility strings, which stop updating while the control bar is
-  // auto-hidden. Read-only property access; never call play()/pause() here. An invisible but
-  // audibly playing element (background <audio>) is still reported.
-  const media = [];
-  const observeMedia = (el) => {
-    try {
-      if (!visible(el) && el.paused) return;
-      media.push({
-        tag: el.tagName.toLowerCase(),
-        current: Math.floor(el.currentTime || 0),
-        duration: Number.isFinite(el.duration) ? Math.floor(el.duration) : null,
-        paused: !!el.paused,
-        ended: !!el.ended,
-        muted: !!el.muted,
-      });
-    } catch (e) { /* skip pathological media node */ }
-  };
   const seenText = new Set();
   // Inline children are part of their parent's sentence: "Score: <span>1</span> / 17" must
   // read as one text block, not "Score: / 17" plus a stray "1" (measured on the challenge
@@ -234,7 +216,9 @@
         // iframes are NOT descended here — the Python layer iterates page.frames and
         // evaluates this walk inside EACH frame's own context (works cross-origin via CDP).
         if (el.tagName === 'IFRAME') continue;
-        if (el.tagName === 'VIDEO' || el.tagName === 'AUDIO') observeMedia(el);
+        // Media playback is NOT read here: browser/dom/media.py enumerates every media element
+        // — attached or not (`new Audio()` players never enter the DOM) — over CDP and reads
+        // it with scripts/media_reader.js in this same isolated world.
         if (isInteractive(el)) {
           // A hidden file input is still ACTIONABLE: set_input_files works on it, and custom
           // upload widgets (Bootstrap custom-file opacity:0, Material UI display:none behind a
@@ -306,5 +290,5 @@
     }
   };
   walk(document, false);
-  return { elements: results, texts, media };
+  return { elements: results, texts };
 }

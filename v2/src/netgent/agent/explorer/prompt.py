@@ -72,7 +72,14 @@ complete: do not wait again, and do not re-check by waiting. Go straight to done
 
 MEDIA PLAYERS (video/audio)
 The MEDIA line is the player's true state — trust it over button labels and on-screen timers
-(players freeze their controls while they are hidden). A listed `video` element is the target
+(players freeze their controls while they are hidden). `audio (detached) …` is a player the
+site drives from script without putting it on the page: still the true state — read
+PLAYING/PAUSED/[muted] from it exactly like any other. `NOT LOADED (no source)` means the
+element has nothing to play yet: press play once; if it is still NOT LOADED after that and
+after any overlay is gone, the site is not delivering the stream to this browser — do not keep
+toggling play; finish with done=true, success=false and say the player never loaded.
+`[buffering]` means playback is stalled for data: wait a few seconds before judging a press.
+A listed `video` element is the target
 for player keyboard shortcuts: use kind="press" with its index. press focuses it by itself —
 never click a player "to focus" it: clicking a player toggles play/pause.
 Seeking / fast-forwarding by N seconds: send the seek key (one press per step) and VERIFY each

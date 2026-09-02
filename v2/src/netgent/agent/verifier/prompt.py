@@ -32,7 +32,10 @@ Rules:
   across its steps (position +45s over 15s of wall-clock = a +30s seek). A pause shows as
   position frozen while wall-clock advances. A watch/dwell of N seconds is satisfied by a
   wait of N wall-clock seconds with the player PLAYING — buffering can make position advance
-  less than wall-clock, and that still counts as watching; PAUSED does not.
+  less than wall-clock, and that still counts as watching; PAUSED does not. An `audio
+  (detached)` reading is the page's real player (held in script, not in the DOM) and counts
+  like any other; `NOT LOADED (no source)` means the player had nothing to play — nothing was
+  watched.
   Small drifts of a few seconds are normal.
 - Be specific: for every unmet requirement say what is missing, and for every achieved one cite
   the evidence line or screenshot that proves it.
