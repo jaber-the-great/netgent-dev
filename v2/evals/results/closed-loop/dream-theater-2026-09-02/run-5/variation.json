@@ -1,0 +1,13 @@
+{
+  "task_text": "Go to youtube.com search for Led Zeppelin - Stairway to Heaven and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 10s fast forward for 50s and then watch for 25s then pause the video for 5s and the play for another 20s. If at any point any pop-ups happen dismiss them.",
+  "values": {
+    "search_query": "Led Zeppelin - Stairway to Heaven",
+    "watch_time_1": "10s",
+    "fast_forward_time": "50s",
+    "watch_time_2": "25s",
+    "pause_time": "5s",
+    "play_time_2": "20s"
+  },
+  "round": 2,
+  "scoped": false
+}

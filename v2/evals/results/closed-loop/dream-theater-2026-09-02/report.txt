@@ -1,0 +1,70 @@
+task: Go to youtube.com search for Dream Theater - Under a glass moon and play the fir…  runs/round=3 max_rounds=3
+canonical names: ['search_query', 'watch_time_1', 'fast_forward_time', 'watch_time_2', 'pause_time', 'play_time_2']
+
+=== ROUND 1 (exit=continue) ===
+  variation: {'search_query': 'Dream Theater - Under a glass moon', 'watch_time_1': '20s', 'fast_forward_time': '30s', 'watch_time_2': '15s', 'pause_time': '10s', 'play_time_2': '5s'}
+  variation: {'search_query': 'Metallica - Master of Puppets', 'watch_time_1': '15s', 'fast_forward_time': '20s', 'watch_time_2': '10s', 'pause_time': '5s', 'play_time_2': '10s'}
+  variation: {'search_query': 'Pink Floyd - Comfortably Numb', 'watch_time_1': '25s', 'fast_forward_time': '40s', 'watch_time_2': '20s', 'pause_time': '15s', 'play_time_2': '8s'}
+  run 1: achieved=True attempts=1 steps=18 calls=18 in=158708 out=14510
+  run 2: achieved=True attempts=1 steps=18 calls=18 in=154841 out=13832
+  run 3: achieved=True attempts=2 steps=20 calls=37 in=314804 out=30123 unmet='Minor: the video/ad was not shown muted during the initial ~12s after the ad was skipped a'
+  params: [('pause_time', '10'), ('play_time_2', '5'), ('search_query', 'Dream Theater - Under a glass moon'), ('watch_time_1', '20')]
+  columns: {'aligned': 5, 'param': 4, 'dropped': 12, 'target-varies': 1, 'interrupt': 2}
+    col 5 target-varies click role=link[name="Under a Glass Moon 7 minutes, 4 seconds" i]  -> t4
+  warning: column 2: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 4: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 5: click targets differ across runs and match no planned value — kept run 1's selector; replay with other values may not find it
+  warning: column 6: click present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 11: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 15: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 16: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 18: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 19: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 21: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 22: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  replay {'pause_time': '10', 'play_time_2': '5', 'search_query': 'Dream Theater - Under a glass moon', 'watch_time_1': '20'}: ok states=10 last=['s9', 's10']
+  replay {'pause_time': '15', 'play_time_2': '8', 'search_query': 'Pink Floyd - Comfortably Numb', 'watch_time_1': '25'}: FAILED at t4 (action_error; unmet ['url_matches', 'selector_visible']) states=4 last=['s3', 'FAILED@t4']
+  replay {'pause_time': '5', 'play_time_2': '10', 'search_query': 'Metallica - Master of Puppets', 'watch_time_1': '15'}: FAILED at t4 (action_error; unmet ['url_matches', 'selector_visible']) states=4 last=['s3', 'FAILED@t4']
+  replay_passed=False unseen_passed=0
+  episode: positional_target col=5 t4 replay-confirmed targets differ across runs and match no planned value; a list-like target — the task may mean a posi
+  episode: conditional_step col=7   present in 2/3 runs, dismissal-shaped: an interrupt candidate
+  episode: conditional_step col=9   present in 1/3 runs, dismissal-shaped: an interrupt candidate
+  episode: judge_unmet col=None   the judge's caveat on an achieved run; no passing replay contradicts it
+  next_plan: [{'search_query': 'Iron Maiden - The Trooper', 'watch_time_1': '30s', 'fast_forward_time': '30s', 'watch_time_2': '10s', 'pause_time': '20s', 'play_time_2': '15s'}, {'search_query': 'Led Zeppelin - Stairway to Heaven', 'watch_time_1': '10s', 'fast_forward_time': '50s', 'watch_time_2': '25s', 'pause_time': '5s', 'play_time_2': '20s'}] scoped: ['Go to youtube.com, search for Queen - Bohemian Rha'] hints: [(5, 'positional', None), (7, 'instance', None), (9, 'instance', None)]
+    note: Biggest issue this round: replay failed for 2 of 3 param sets at t4 because column 5 (first search-result click) kept run 1's exact video-title select
+    note: fast_forward_time and watch_time_2 never surfaced as confirmed param columns (all the candidate columns 11,14-19 were dropped as inconsistent press/wa
+    note: Columns 2,4,6,11,15,16,18 (misc clicks/presses on the video player) were dropped as present in only 1-2/3 runs; kept unaddressed since no consistent h
+    note: judge_unmet note (video not muted for ~12s after ad skip on run 3) had no contradicting passing replay; not actionable via typed hints, left as-is for
+  usage: {'plan': 2, 'run-1': 18, 'run-2': 18, 'run-3': 37, 'plan_next': 1}
+
+=== ROUND 2 (exit=passed) ===
+  variation: {'search_query': 'Iron Maiden - The Trooper', 'watch_time_1': '30s', 'fast_forward_time': '30s', 'watch_time_2': '10s', 'pause_time': '20s', 'play_time_2': '15s'}
+  variation: {'search_query': 'Led Zeppelin - Stairway to Heaven', 'watch_time_1': '10s', 'fast_forward_time': '50s', 'watch_time_2': '25s', 'pause_time': '5s', 'play_time_2': '20s'}
+  variation: {'search_query': 'Queen - Bohemian Rhapsody'}
+  run 4: achieved=False attempts=2 steps=16 calls=33 in=253500 out=18729 unmet="Fast-forward for 30s: only a single 'l' keypress occurred (step 9), which is YouTube's sta"
+  run 5: achieved=False attempts=2 steps=15 calls=34 in=270006 out=24594 unmet="Fast-forward amount: task required fast_forward_time='50s', but only four 'l' key presses "
+  run 6 scoped: achieved=True attempts=1 steps=6 calls=6 in=54371 out=3136
+  params: [('pause_time', '10'), ('play_time_2', '5'), ('search_query', 'Dream Theater - Under a glass moon'), ('watch_time_1', '20')]
+  columns: {'aligned': 5, 'param': 4, 'dropped': 12, 'positional': 1, 'interrupt': 2}
+    col 5 positional click role=link[name="Under a Glass Moon 7 minutes, 4 seconds" i]  -> t4
+  warning: 1 scoped sub-task run(s) kept as evidence, not merged
+  warning: column 2: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 4: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 6: click present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 11: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 15: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 16: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 18: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 19: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 21: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  warning: column 22: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)
+  hint col 5 positional: applied — structural rung '#dismissible > div > div a#video-title' + nth(0)
+  hint col 7 instance: rejected — column 7 is not a main-path column of this merge
+  hint col 9 instance: rejected — column 9 is not a main-path column of this merge
+  replay {'pause_time': '10', 'play_time_2': '5', 'search_query': 'Dream Theater - Under a glass moon', 'watch_time_1': '20'}: ok states=10 last=['s9', 's10']
+  replay {'pause_time': '15', 'play_time_2': '8', 'search_query': 'Pink Floyd - Comfortably Numb', 'watch_time_1': '25'}: ok states=10 last=['s9', 's10']
+  replay {'pause_time': '5', 'play_time_2': '10', 'search_query': 'Metallica - Master of Puppets', 'watch_time_1': '15'}: ok states=10 last=['s9', 's10']
+  replay_passed=True unseen_passed=2
+  episode: conditional_step col=7   present in 2/3 runs, dismissal-shaped: an interrupt candidate
+  episode: conditional_step col=9   present in 1/3 runs, dismissal-shaped: an interrupt candidate
+  usage: {'run-4': 33, 'run-5': 34, 'run-6': 6}

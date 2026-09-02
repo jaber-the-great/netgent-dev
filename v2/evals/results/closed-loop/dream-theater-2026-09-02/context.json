@@ -1,0 +1,1735 @@
+{
+  "task": "Go to youtube.com search for Dream Theater - Under a glass moon and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 20s fast forward for 30s and then watch for 15s then pause the video for 10s and the play for another 5s. If at any point any pop-ups happen dismiss them.",
+  "url": "https://www.youtube.com",
+  "runs_per_round": 3,
+  "max_rounds": 3,
+  "canonical_names": [
+    "search_query",
+    "watch_time_1",
+    "fast_forward_time",
+    "watch_time_2",
+    "pause_time",
+    "play_time_2"
+  ],
+  "base_values": {
+    "search_query": "Dream Theater - Under a glass moon",
+    "watch_time_1": "20s",
+    "fast_forward_time": "30s",
+    "watch_time_2": "15s",
+    "pause_time": "10s",
+    "play_time_2": "5s"
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "variations": [
+        {
+          "task_text": "Go to youtube.com search for Dream Theater - Under a glass moon and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 20s fast forward for 30s and then watch for 15s then pause the video for 10s and the play for another 5s. If at any point any pop-ups happen dismiss them.",
+          "values": {
+            "search_query": "Dream Theater - Under a glass moon",
+            "watch_time_1": "20s",
+            "fast_forward_time": "30s",
+            "watch_time_2": "15s",
+            "pause_time": "10s",
+            "play_time_2": "5s"
+          }
+        },
+        {
+          "task_text": "Go to youtube.com search for Metallica - Master of Puppets and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 15s fast forward for 20s and then watch for 10s then pause the video for 5s and the play for another 10s. If at any point any pop-ups happen dismiss them.",
+          "values": {
+            "search_query": "Metallica - Master of Puppets",
+            "watch_time_1": "15s",
+            "fast_forward_time": "20s",
+            "watch_time_2": "10s",
+            "pause_time": "5s",
+            "play_time_2": "10s"
+          }
+        },
+        {
+          "task_text": "Go to youtube.com search for Pink Floyd - Comfortably Numb and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 25s fast forward for 40s and then watch for 20s then pause the video for 15s and the play for another 8s. If at any point any pop-ups happen dismiss them.",
+          "values": {
+            "search_query": "Pink Floyd - Comfortably Numb",
+            "watch_time_1": "25s",
+            "fast_forward_time": "40s",
+            "watch_time_2": "20s",
+            "pause_time": "15s",
+            "play_time_2": "8s"
+          }
+        }
+      ],
+      "runs": [
+        {
+          "run": 1,
+          "round": 1,
+          "task_text": "Go to youtube.com search for Dream Theater - Under a glass moon and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 20s fast forward for 30s and then watch for 15s then pause the video for 10s and the play for another 5s. If at any point any pop-ups happen dismiss them.",
+          "values": {
+            "search_query": "Dream Theater - Under a glass moon",
+            "watch_time_1": "20s",
+            "fast_forward_time": "30s",
+            "watch_time_2": "15s",
+            "pause_time": "10s",
+            "play_time_2": "5s"
+          },
+          "scoped": false,
+          "achieved": true,
+          "attempts": 1,
+          "success": true,
+          "stopped_reason": "All required steps completed: video played (muted, ad skipped, popup dismissed), watched 20s, fast-forwarded 30s (verified), watched 15s, paused+verified+waited 10s, resumed+verified+watched 5s. Current MEDIA shows PLAYING at 2:44/7:03 confirming final state is correct.",
+          "steps": 18,
+          "unmet": [],
+          "usage": {
+            "calls": 18,
+            "input_tokens": 158708,
+            "output_tokens": 14510,
+            "cache_read_tokens": 82630,
+            "cache_creation_tokens": 76040,
+            "observation_chars": 61358,
+            "history_chars": 21978
+          }
+        },
+        {
+          "run": 2,
+          "round": 1,
+          "task_text": "Go to youtube.com search for Metallica - Master of Puppets and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 15s fast forward for 20s and then watch for 10s then pause the video for 5s and the play for another 10s. If at any point any pop-ups happen dismiss them.",
+          "values": {
+            "search_query": "Metallica - Master of Puppets",
+            "watch_time_1": "15s",
+            "fast_forward_time": "20s",
+            "watch_time_2": "10s",
+            "pause_time": "5s",
+            "play_time_2": "10s"
+          },
+          "scoped": false,
+          "achieved": true,
+          "attempts": 1,
+          "success": true,
+          "stopped_reason": "All required steps completed per RECENT STEPS: searched and played first video, dismissed popup, muted, watched 15s, fast-forwarded 20s (verified), watched 10s, paused and waited 5s (confirmed PAUSED), resumed and waited 10s (confirmed PLAYING). Task fully satisfied.",
+          "steps": 18,
+          "unmet": [],
+          "usage": {
+            "calls": 18,
+            "input_tokens": 154841,
+            "output_tokens": 13832,
+            "cache_read_tokens": 80811,
+            "cache_creation_tokens": 73992,
+            "observation_chars": 57026,
+            "history_chars": 20273
+          }
+        },
+        {
+          "run": 3,
+          "round": 1,
+          "task_text": "Go to youtube.com search for Pink Floyd - Comfortably Numb and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 25s fast forward for 40s and then watch for 20s then pause the video for 15s and the play for another 8s. If at any point any pop-ups happen dismiss them.",
+          "values": {
+            "search_query": "Pink Floyd - Comfortably Numb",
+            "watch_time_1": "25s",
+            "fast_forward_time": "40s",
+            "watch_time_2": "20s",
+            "pause_time": "15s",
+            "play_time_2": "8s"
+          },
+          "scoped": false,
+          "achieved": true,
+          "attempts": 2,
+          "success": true,
+          "stopped_reason": "All task phases are complete and verified: video was clicked and played (muted), watched 25s, fast-forwarded via 4 verified 'l' presses totaling 40s of seek, watched 20s, paused 15s (confirmed PAUSED state), then resumed and played 8s (confirmed PLAYING state). Current observation confirms video is PLAYING at 3:22/6:54 muted, consistent with the completed sequence. No pop-ups or ads are currently blocking the page.",
+          "steps": 20,
+          "unmet": [
+            "Minor: the video/ad was not shown muted during the initial ~12s after the ad was skipped and the real video began (steps 4-7 timeline entries carry no [muted] tag; mute was only applied at step 8, t+41s, after ~12s of audible/unmuted playback). This is a small deviation from 'mute any video or ad that shows up' being applied immediately, though mute was engaged and sustained for the rest of the session."
+          ],
+          "usage": {
+            "calls": 37,
+            "input_tokens": 314804,
+            "output_tokens": 30123,
+            "cache_read_tokens": 166525,
+            "cache_creation_tokens": 148203,
+            "observation_chars": 124192,
+            "history_chars": 47122
+          }
+        }
+      ],
+      "generalized": {
+        "achieved_runs": [
+          1,
+          2,
+          3
+        ],
+        "params": [
+          {
+            "name": "pause_time",
+            "default": "10",
+            "values_by_run": {
+              "1": "10",
+              "2": "5",
+              "3": "15"
+            }
+          },
+          {
+            "name": "play_time_2",
+            "default": "5",
+            "values_by_run": {
+              "1": "5",
+              "2": "10",
+              "3": "8"
+            }
+          },
+          {
+            "name": "search_query",
+            "default": "Dream Theater - Under a glass moon",
+            "values_by_run": {
+              "1": "Dream Theater - Under a glass moon",
+              "2": "Metallica - Master of Puppets",
+              "3": "Pink Floyd - Comfortably Numb"
+            }
+          },
+          {
+            "name": "watch_time_1",
+            "default": "20",
+            "values_by_run": {
+              "1": "20",
+              "2": "15",
+              "3": "25"
+            }
+          }
+        ],
+        "columns": [
+          {
+            "index": 0,
+            "disposition": "aligned",
+            "action_type": "goto",
+            "target": null,
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": "t1"
+          },
+          {
+            "index": 1,
+            "disposition": "param",
+            "action_type": "fill",
+            "target": "role=combobox[name=\"Search\" i]",
+            "param": "search_query",
+            "field": "text",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {
+              "1": "Dream Theater - Under a glass moon",
+              "2": "Metallica - Master of Puppets",
+              "3": "Pink Floyd - Comfortably Numb"
+            },
+            "transition": "t2"
+          },
+          {
+            "index": 2,
+            "disposition": "dropped",
+            "action_type": "click",
+            "target": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 3,
+            "disposition": "aligned",
+            "action_type": "click",
+            "target": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": "t3"
+          },
+          {
+            "index": 4,
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "role=combobox[name=\"Search\" i]",
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              1,
+              2
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 5,
+            "disposition": "target-varies",
+            "action_type": "click",
+            "target": "role=link[name=\"Under a Glass Moon 7 minutes, 4 seconds\" i]",
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": "t4"
+          },
+          {
+            "index": 6,
+            "disposition": "dropped",
+            "action_type": "click",
+            "target": "#movie_player > div:nth-of-type(7) > button",
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 7,
+            "disposition": "interrupt",
+            "action_type": "click",
+            "target": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 8,
+            "disposition": "aligned",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": "t5"
+          },
+          {
+            "index": 9,
+            "disposition": "interrupt",
+            "action_type": "click",
+            "target": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              1
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 10,
+            "disposition": "param",
+            "action_type": "wait",
+            "target": null,
+            "param": "watch_time_1",
+            "field": "seconds",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {
+              "1": "20.0",
+              "2": "15.0",
+              "3": "25.0"
+            },
+            "transition": "t6"
+          },
+          {
+            "index": 11,
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 12,
+            "disposition": "aligned",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": "t7"
+          },
+          {
+            "index": 13,
+            "disposition": "aligned",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": "t8"
+          },
+          {
+            "index": 14,
+            "disposition": "dropped",
+            "action_type": "wait",
+            "target": null,
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              2
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 15,
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              2
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 16,
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              1,
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 17,
+            "disposition": "dropped",
+            "action_type": "wait",
+            "target": null,
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              1,
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 18,
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 19,
+            "disposition": "dropped",
+            "action_type": "click",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              1
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 20,
+            "disposition": "param",
+            "action_type": "wait",
+            "target": null,
+            "param": "pause_time",
+            "field": "seconds",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {
+              "1": "10.0",
+              "2": "5.0",
+              "3": "15.0"
+            },
+            "transition": "t9"
+          },
+          {
+            "index": 21,
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 22,
+            "disposition": "dropped",
+            "action_type": "click",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              1
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 23,
+            "disposition": "param",
+            "action_type": "wait",
+            "target": null,
+            "param": "play_time_2",
+            "field": "seconds",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {
+              "1": "5.0",
+              "2": "10.0",
+              "3": "8.0"
+            },
+            "transition": "t10"
+          }
+        ],
+        "interrupts": [
+          {
+            "selector": "role=button[name=\"No thanks\" i]",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "selector": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ]
+          }
+        ],
+        "warnings": [
+          "column 2: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 4: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 5: click targets differ across runs and match no planned value — kept run 1's selector; replay with other values may not find it",
+          "column 6: click present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 11: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 15: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 16: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 18: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 19: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 21: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 22: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)"
+        ],
+        "hints": []
+      },
+      "replay": [
+        {
+          "values": {
+            "pause_time": "10",
+            "play_time_2": "5",
+            "search_query": "Dream Theater - Under a glass moon",
+            "watch_time_1": "20"
+          },
+          "success": true,
+          "signature": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s7",
+            "s8",
+            "s9",
+            "s10"
+          ],
+          "failed_edge": null,
+          "outcome": null,
+          "unmet": [],
+          "error": null
+        },
+        {
+          "values": {
+            "pause_time": "15",
+            "play_time_2": "8",
+            "search_query": "Pink Floyd - Comfortably Numb",
+            "watch_time_1": "25"
+          },
+          "success": false,
+          "signature": [
+            "s1",
+            "s2",
+            "s3",
+            "FAILED@t4"
+          ],
+          "failed_edge": "t4",
+          "outcome": "action_error",
+          "unmet": [
+            "url_matches",
+            "selector_visible"
+          ],
+          "error": "click failed via mouse (Locator.click: Timeout 5000ms exceeded.) and via JS dispatch: Locator.evaluate: Timeout 3000ms exceeded.\nCall log:\n  - waiting for get_by_role(\"link\", name=\"Under a Glass Moon "
+        },
+        {
+          "values": {
+            "pause_time": "5",
+            "play_time_2": "10",
+            "search_query": "Metallica - Master of Puppets",
+            "watch_time_1": "15"
+          },
+          "success": false,
+          "signature": [
+            "s1",
+            "s2",
+            "s3",
+            "FAILED@t4"
+          ],
+          "failed_edge": "t4",
+          "outcome": "action_error",
+          "unmet": [
+            "url_matches",
+            "selector_visible"
+          ],
+          "error": "click failed via mouse (Locator.click: Timeout 5000ms exceeded.) and via JS dispatch: Locator.evaluate: Timeout 3000ms exceeded.\nCall log:\n  - waiting for get_by_role(\"link\", name=\"Under a Glass Moon "
+        }
+      ],
+      "replay_passed": false,
+      "unseen_passed": 0,
+      "episodes": [
+        {
+          "kind": "positional_target",
+          "source": "merge",
+          "column": 5,
+          "transition": "t4",
+          "action_type": "click",
+          "field": null,
+          "runs": [
+            1,
+            2,
+            3
+          ],
+          "observed": {
+            "1": "role=link[name=\"Under a Glass Moon 7 minutes, 4 seconds\" i]",
+            "2": "role=link[name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\" i]",
+            "3": "role=link[name=\"Pink Floyd - Comfortably numb 6 minutes, 55 seconds\" i]"
+          },
+          "planned": {
+            "fast_forward_time": {
+              "1": "30s",
+              "2": "20s",
+              "3": "40s"
+            },
+            "pause_time": {
+              "1": "10s",
+              "2": "5s",
+              "3": "15s"
+            },
+            "play_time_2": {
+              "1": "5s",
+              "2": "10s",
+              "3": "8s"
+            },
+            "search_query": {
+              "1": "Dream Theater - Under a glass moon",
+              "2": "Metallica - Master of Puppets",
+              "3": "Pink Floyd - Comfortably Numb"
+            },
+            "watch_time_1": {
+              "1": "20s",
+              "2": "15s",
+              "3": "25s"
+            },
+            "watch_time_2": {
+              "1": "15s",
+              "2": "10s",
+              "3": "20s"
+            }
+          },
+          "replay_values": {
+            "pause_time": "5",
+            "play_time_2": "10",
+            "search_query": "Metallica - Master of Puppets",
+            "watch_time_1": "15"
+          },
+          "unmet": [
+            "url_matches",
+            "selector_visible"
+          ],
+          "confirmed_by_replay": true,
+          "detail": "targets differ across runs and match no planned value; a list-like target — the task may mean a position, not a title"
+        },
+        {
+          "kind": "conditional_step",
+          "source": "merge",
+          "column": 7,
+          "transition": null,
+          "action_type": "click",
+          "field": null,
+          "runs": [
+            2,
+            3
+          ],
+          "observed": {
+            "2": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+            "3": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button"
+          },
+          "planned": {},
+          "replay_values": {},
+          "unmet": [],
+          "confirmed_by_replay": false,
+          "detail": "present in 2/3 runs, dismissal-shaped: an interrupt candidate"
+        },
+        {
+          "kind": "conditional_step",
+          "source": "merge",
+          "column": 9,
+          "transition": null,
+          "action_type": "click",
+          "field": null,
+          "runs": [
+            1
+          ],
+          "observed": {
+            "1": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button"
+          },
+          "planned": {},
+          "replay_values": {},
+          "unmet": [],
+          "confirmed_by_replay": false,
+          "detail": "present in 1/3 runs, dismissal-shaped: an interrupt candidate"
+        },
+        {
+          "kind": "judge_unmet",
+          "source": "judge",
+          "column": null,
+          "transition": null,
+          "action_type": null,
+          "field": null,
+          "runs": [
+            3
+          ],
+          "observed": {},
+          "planned": {},
+          "replay_values": {},
+          "unmet": [
+            "Minor: the video/ad was not shown muted during the initial ~12s after the ad was skipped and the real video began (steps 4-7 timeline entries carry no [muted] tag; mute was only applied at step 8, t+41s, after ~12s of audible/unmuted playback). This is a small deviation from 'mute any video or ad that shows up' being applied immediately, though mute was engaged and sustained for the rest of the session."
+          ],
+          "confirmed_by_replay": false,
+          "detail": "the judge's caveat on an achieved run; no passing replay contradicts it"
+        }
+      ],
+      "hints": [],
+      "next_plan": {
+        "next_variations": [
+          {
+            "task_text": "Go to youtube.com search for Iron Maiden - The Trooper and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 30s fast forward for 30s and then watch for 10s then pause the video for 20s and the play for another 15s. If at any point any pop-ups happen dismiss them.",
+            "values": {
+              "search_query": "Iron Maiden - The Trooper",
+              "watch_time_1": "30s",
+              "fast_forward_time": "30s",
+              "watch_time_2": "10s",
+              "pause_time": "20s",
+              "play_time_2": "15s"
+            }
+          },
+          {
+            "task_text": "Go to youtube.com search for Led Zeppelin - Stairway to Heaven and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 10s fast forward for 50s and then watch for 25s then pause the video for 5s and the play for another 20s. If at any point any pop-ups happen dismiss them.",
+            "values": {
+              "search_query": "Led Zeppelin - Stairway to Heaven",
+              "watch_time_1": "10s",
+              "fast_forward_time": "50s",
+              "watch_time_2": "25s",
+              "pause_time": "5s",
+              "play_time_2": "20s"
+            }
+          }
+        ],
+        "scoped_subtasks": [
+          {
+            "task_text": "Go to youtube.com, search for Queen - Bohemian Rhapsody, and open the first video result that appears in the search results list.",
+            "start_url": "https://www.youtube.com",
+            "values": {
+              "search_query": "Queen - Bohemian Rhapsody"
+            }
+          }
+        ],
+        "generalization_hints": [
+          {
+            "column": 5,
+            "intent": "positional",
+            "param_name": null,
+            "repeat_fold": null,
+            "why": "task text says 'play the first video that pops up'; replay FAILED at t4 for runs 2 and 3 because run 1's literal title selector was kept instead of a position-based match — episode explicitly flags this as list-like/positional"
+          },
+          {
+            "column": 7,
+            "intent": "instance",
+            "param_name": null,
+            "repeat_fold": null,
+            "why": "same ad-skip/dismiss selector recorded identically in runs 2 and 3, a stable dismissal-shaped interrupt target"
+          },
+          {
+            "column": 9,
+            "intent": "instance",
+            "param_name": null,
+            "repeat_fold": null,
+            "why": "same ad-skip/dismiss selector as column 7 but occurring at a different point in run 1's trajectory; keep as the recorded interrupt target"
+          }
+        ],
+        "notes": [
+          "Biggest issue this round: replay failed for 2 of 3 param sets at t4 because column 5 (first search-result click) kept run 1's exact video-title selector rather than a position-based rule; positional hint should fix this — new variations use fresh search queries (Iron Maiden, Led Zeppelin, and scoped Queen subtask) so the first-result title differs again and the fix can be replay-confirmed.",
+          "fast_forward_time and watch_time_2 never surfaced as confirmed param columns (all the candidate columns 11,14-19 were dropped as inconsistent press/wait actions present in only 1-2/3 runs) — the fast-forward gesture (repeated key presses vs. a single wait) was not stable across runs. Chose fast_forward_time values that are still round multiples of a plausible seek-key step (10s: 30/50) hoping consistent per-run press counts let the merge fold them into a repeat_fold; if it still doesn't stabilize, may need a dedicated scoped subtask isolating just the fast-forward gesture.",
+          "Columns 2,4,6,11,15,16,18 (misc clicks/presses on the video player) were dropped as present in only 1-2/3 runs; kept unaddressed since no consistent hint intent applies yet — more runs may resolve whether these are real conditional steps or noise.",
+          "judge_unmet note (video not muted for ~12s after ad skip on run 3) had no contradicting passing replay; not actionable via typed hints, left as-is for now."
+        ]
+      },
+      "usage": {
+        "plan": {
+          "calls": 2,
+          "input_tokens": 5442,
+          "output_tokens": 1332,
+          "cache_read_tokens": 1219,
+          "cache_creation_tokens": 4219,
+          "observation_chars": 981,
+          "history_chars": 20
+        },
+        "run-1": {
+          "calls": 18,
+          "input_tokens": 158708,
+          "output_tokens": 14510,
+          "cache_read_tokens": 82630,
+          "cache_creation_tokens": 76040,
+          "observation_chars": 61358,
+          "history_chars": 21978
+        },
+        "run-2": {
+          "calls": 18,
+          "input_tokens": 154841,
+          "output_tokens": 13832,
+          "cache_read_tokens": 80811,
+          "cache_creation_tokens": 73992,
+          "observation_chars": 57026,
+          "history_chars": 20273
+        },
+        "run-3": {
+          "calls": 37,
+          "input_tokens": 314804,
+          "output_tokens": 30123,
+          "cache_read_tokens": 166525,
+          "cache_creation_tokens": 148203,
+          "observation_chars": 124192,
+          "history_chars": 47122
+        },
+        "plan_next": {
+          "calls": 1,
+          "input_tokens": 6980,
+          "output_tokens": 4022,
+          "cache_read_tokens": 0,
+          "cache_creation_tokens": 6978,
+          "observation_chars": 7231,
+          "history_chars": 10
+        }
+      },
+      "exit": "",
+      "hint_acceptance_rate": null,
+      "hints_applied": 0
+    },
+    {
+      "round": 2,
+      "variations": [
+        {
+          "task_text": "Go to youtube.com search for Iron Maiden - The Trooper and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 30s fast forward for 30s and then watch for 10s then pause the video for 20s and the play for another 15s. If at any point any pop-ups happen dismiss them.",
+          "values": {
+            "search_query": "Iron Maiden - The Trooper",
+            "watch_time_1": "30s",
+            "fast_forward_time": "30s",
+            "watch_time_2": "10s",
+            "pause_time": "20s",
+            "play_time_2": "15s"
+          }
+        },
+        {
+          "task_text": "Go to youtube.com search for Led Zeppelin - Stairway to Heaven and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 10s fast forward for 50s and then watch for 25s then pause the video for 5s and the play for another 20s. If at any point any pop-ups happen dismiss them.",
+          "values": {
+            "search_query": "Led Zeppelin - Stairway to Heaven",
+            "watch_time_1": "10s",
+            "fast_forward_time": "50s",
+            "watch_time_2": "25s",
+            "pause_time": "5s",
+            "play_time_2": "20s"
+          }
+        },
+        {
+          "task_text": "Go to youtube.com, search for Queen - Bohemian Rhapsody, and open the first video result that appears in the search results list.",
+          "values": {
+            "search_query": "Queen - Bohemian Rhapsody"
+          }
+        }
+      ],
+      "runs": [
+        {
+          "run": 4,
+          "round": 2,
+          "task_text": "Go to youtube.com search for Iron Maiden - The Trooper and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 30s fast forward for 30s and then watch for 10s then pause the video for 20s and the play for another 15s. If at any point any pop-ups happen dismiss them.",
+          "values": {
+            "search_query": "Iron Maiden - The Trooper",
+            "watch_time_1": "30s",
+            "fast_forward_time": "30s",
+            "watch_time_2": "10s",
+            "pause_time": "20s",
+            "play_time_2": "15s"
+          },
+          "scoped": false,
+          "achieved": false,
+          "attempts": 2,
+          "success": false,
+          "stopped_reason": "stuck: repeated the same action 6 times (press on element 13)",
+          "steps": 16,
+          "unmet": [
+            "Fast-forward for 30s: only a single 'l' keypress occurred (step 9), which is YouTube's standard 10-second seek, not a 30-second fast-forward. Timeline shows position only jumping ~10s extra (0:51→1:09 over 7s wall-clock ≈ +11s seek), well short of the requested 30s.",
+            "Dismiss pop-ups: the 'Into music? We are too.' YouTube Music promo pop-up (with 'No thanks'/'Check it out' buttons) is visible in all three screenshots including the final one — it was never dismissed despite the task explicitly requiring pop-ups to be dismissed.",
+            "Watch-then-pause-then-play sequence has minor timing looseness (e.g., watch_time_2 gap was ~41s wall-clock instead of ~10s, and pause lasted ~27s not exactly 20s), which is within normal drift tolerance and not counted as a hard failure, but is noted for completeness."
+          ],
+          "usage": {
+            "calls": 33,
+            "input_tokens": 253500,
+            "output_tokens": 18729,
+            "cache_read_tokens": 138542,
+            "cache_creation_tokens": 114892,
+            "observation_chars": 97178,
+            "history_chars": 34480
+          }
+        },
+        {
+          "run": 5,
+          "round": 2,
+          "task_text": "Go to youtube.com search for Led Zeppelin - Stairway to Heaven and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 10s fast forward for 50s and then watch for 25s then pause the video for 5s and the play for another 20s. If at any point any pop-ups happen dismiss them.",
+          "values": {
+            "search_query": "Led Zeppelin - Stairway to Heaven",
+            "watch_time_1": "10s",
+            "fast_forward_time": "50s",
+            "watch_time_2": "25s",
+            "pause_time": "5s",
+            "play_time_2": "20s"
+          },
+          "scoped": false,
+          "achieved": false,
+          "attempts": 2,
+          "success": false,
+          "stopped_reason": "stuck: repeated the same action 6 times (press on element 13)",
+          "steps": 15,
+          "unmet": [
+            "Fast-forward amount: task required fast_forward_time='50s', but only four 'l' key presses (steps 10-13) were issued, each YouTube's standard 10s skip, totaling ~40s of extra seek (computed from timeline: position advanced 81s over 42s wall-clock between t+75s and t+117s, i.e. ~39-40s of seeking beyond normal playback), a full 10s short of the requested 50s fast-forward — not just a 'small drift'.",
+            "Ad-skip step is ambiguous/unclear: the timeline shows an odd intermediate state (video PAUSED at 0:10/1:15, a different duration than the target 8:02 video) between steps 5-6 before the actual video content plays at step 7; there is no explicit confirmation text (e.g., a visible 'Skip Ad' click effect) proving a genuine in-stream ad was skipped rather than just a different UI element being dismissed."
+          ],
+          "usage": {
+            "calls": 34,
+            "input_tokens": 270006,
+            "output_tokens": 24594,
+            "cache_read_tokens": 142611,
+            "cache_creation_tokens": 127327,
+            "observation_chars": 112185,
+            "history_chars": 40173
+          }
+        },
+        {
+          "run": 6,
+          "round": 2,
+          "task_text": "Go to youtube.com, search for Queen - Bohemian Rhapsody, and open the first video result that appears in the search results list.",
+          "values": {
+            "search_query": "Queen - Bohemian Rhapsody"
+          },
+          "scoped": true,
+          "achieved": true,
+          "attempts": 1,
+          "success": true,
+          "stopped_reason": "The observation confirms we navigated to youtube.com, searched for 'Queen - Bohemian Rhapsody', and clicked the first video result. The URL is now watch?v=fJ9rUzIMcZQ with title 'Queen – Bohemian Rhapsody (Official Video Remastered)' and the media is PLAYING - task complete.",
+          "steps": 6,
+          "unmet": [],
+          "usage": {
+            "calls": 6,
+            "input_tokens": 54371,
+            "output_tokens": 3136,
+            "cache_read_tokens": 29269,
+            "cache_creation_tokens": 25088,
+            "observation_chars": 17158,
+            "history_chars": 1181
+          }
+        }
+      ],
+      "generalized": {
+        "achieved_runs": [
+          1,
+          2,
+          3
+        ],
+        "params": [
+          {
+            "name": "pause_time",
+            "default": "10",
+            "values_by_run": {
+              "1": "10",
+              "2": "5",
+              "3": "15"
+            }
+          },
+          {
+            "name": "play_time_2",
+            "default": "5",
+            "values_by_run": {
+              "1": "5",
+              "2": "10",
+              "3": "8"
+            }
+          },
+          {
+            "name": "search_query",
+            "default": "Dream Theater - Under a glass moon",
+            "values_by_run": {
+              "1": "Dream Theater - Under a glass moon",
+              "2": "Metallica - Master of Puppets",
+              "3": "Pink Floyd - Comfortably Numb"
+            }
+          },
+          {
+            "name": "watch_time_1",
+            "default": "20",
+            "values_by_run": {
+              "1": "20",
+              "2": "15",
+              "3": "25"
+            }
+          }
+        ],
+        "columns": [
+          {
+            "index": 0,
+            "disposition": "aligned",
+            "action_type": "goto",
+            "target": null,
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": "t1"
+          },
+          {
+            "index": 1,
+            "disposition": "param",
+            "action_type": "fill",
+            "target": "role=combobox[name=\"Search\" i]",
+            "param": "search_query",
+            "field": "text",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {
+              "1": "Dream Theater - Under a glass moon",
+              "2": "Metallica - Master of Puppets",
+              "3": "Pink Floyd - Comfortably Numb"
+            },
+            "transition": "t2"
+          },
+          {
+            "index": 2,
+            "disposition": "dropped",
+            "action_type": "click",
+            "target": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 3,
+            "disposition": "aligned",
+            "action_type": "click",
+            "target": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": "t3"
+          },
+          {
+            "index": 4,
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "role=combobox[name=\"Search\" i]",
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              1,
+              2
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 5,
+            "disposition": "positional",
+            "action_type": "click",
+            "target": "role=link[name=\"Under a Glass Moon 7 minutes, 4 seconds\" i]",
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": "t4"
+          },
+          {
+            "index": 6,
+            "disposition": "dropped",
+            "action_type": "click",
+            "target": "#movie_player > div:nth-of-type(7) > button",
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 7,
+            "disposition": "interrupt",
+            "action_type": "click",
+            "target": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 8,
+            "disposition": "aligned",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": "t5"
+          },
+          {
+            "index": 9,
+            "disposition": "interrupt",
+            "action_type": "click",
+            "target": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              1
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 10,
+            "disposition": "param",
+            "action_type": "wait",
+            "target": null,
+            "param": "watch_time_1",
+            "field": "seconds",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {
+              "1": "20.0",
+              "2": "15.0",
+              "3": "25.0"
+            },
+            "transition": "t6"
+          },
+          {
+            "index": 11,
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 12,
+            "disposition": "aligned",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": "t7"
+          },
+          {
+            "index": 13,
+            "disposition": "aligned",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": "t8"
+          },
+          {
+            "index": 14,
+            "disposition": "dropped",
+            "action_type": "wait",
+            "target": null,
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              2
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 15,
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              2
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 16,
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              1,
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 17,
+            "disposition": "dropped",
+            "action_type": "wait",
+            "target": null,
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              1,
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 18,
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 19,
+            "disposition": "dropped",
+            "action_type": "click",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              1
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 20,
+            "disposition": "param",
+            "action_type": "wait",
+            "target": null,
+            "param": "pause_time",
+            "field": "seconds",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {
+              "1": "10.0",
+              "2": "5.0",
+              "3": "15.0"
+            },
+            "transition": "t9"
+          },
+          {
+            "index": 21,
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              2,
+              3
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 22,
+            "disposition": "dropped",
+            "action_type": "click",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              1
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 23,
+            "disposition": "param",
+            "action_type": "wait",
+            "target": null,
+            "param": "play_time_2",
+            "field": "seconds",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ],
+            "values_by_run": {
+              "1": "5.0",
+              "2": "10.0",
+              "3": "8.0"
+            },
+            "transition": "t10"
+          }
+        ],
+        "interrupts": [
+          {
+            "selector": "role=button[name=\"No thanks\" i]",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "selector": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              3
+            ]
+          }
+        ],
+        "warnings": [
+          "1 scoped sub-task run(s) kept as evidence, not merged",
+          "column 2: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 4: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 6: click present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 11: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 15: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 16: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 18: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 19: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 21: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 22: click present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)"
+        ],
+        "hints": [
+          {
+            "hint": {
+              "column": 5,
+              "intent": "positional",
+              "param_name": null,
+              "repeat_fold": null,
+              "why": "task text says 'play the first video that pops up'; replay FAILED at t4 for runs 2 and 3 because run 1's literal title selector was kept instead of a position-based match — episode explicitly flags this as list-like/positional"
+            },
+            "status": "applied",
+            "reason": "structural rung '#dismissible > div > div a#video-title' + nth(0)",
+            "transition": "t4"
+          },
+          {
+            "hint": {
+              "column": 7,
+              "intent": "instance",
+              "param_name": null,
+              "repeat_fold": null,
+              "why": "same ad-skip/dismiss selector recorded identically in runs 2 and 3, a stable dismissal-shaped interrupt target"
+            },
+            "status": "rejected",
+            "reason": "column 7 is not a main-path column of this merge",
+            "transition": null
+          },
+          {
+            "hint": {
+              "column": 9,
+              "intent": "instance",
+              "param_name": null,
+              "repeat_fold": null,
+              "why": "same ad-skip/dismiss selector as column 7 but occurring at a different point in run 1's trajectory; keep as the recorded interrupt target"
+            },
+            "status": "rejected",
+            "reason": "column 9 is not a main-path column of this merge",
+            "transition": null
+          }
+        ]
+      },
+      "replay": [
+        {
+          "values": {
+            "pause_time": "10",
+            "play_time_2": "5",
+            "search_query": "Dream Theater - Under a glass moon",
+            "watch_time_1": "20"
+          },
+          "success": true,
+          "signature": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s7",
+            "s8",
+            "s9",
+            "s10"
+          ],
+          "failed_edge": null,
+          "outcome": null,
+          "unmet": [],
+          "error": null
+        },
+        {
+          "values": {
+            "pause_time": "15",
+            "play_time_2": "8",
+            "search_query": "Pink Floyd - Comfortably Numb",
+            "watch_time_1": "25"
+          },
+          "success": true,
+          "signature": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s7",
+            "s8",
+            "s9",
+            "s10"
+          ],
+          "failed_edge": null,
+          "outcome": null,
+          "unmet": [],
+          "error": null
+        },
+        {
+          "values": {
+            "pause_time": "5",
+            "play_time_2": "10",
+            "search_query": "Metallica - Master of Puppets",
+            "watch_time_1": "15"
+          },
+          "success": true,
+          "signature": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s7",
+            "s8",
+            "s9",
+            "s10"
+          ],
+          "failed_edge": null,
+          "outcome": null,
+          "unmet": [],
+          "error": null
+        }
+      ],
+      "replay_passed": true,
+      "unseen_passed": 2,
+      "episodes": [
+        {
+          "kind": "conditional_step",
+          "source": "merge",
+          "column": 7,
+          "transition": null,
+          "action_type": "click",
+          "field": null,
+          "runs": [
+            2,
+            3
+          ],
+          "observed": {
+            "2": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+            "3": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button"
+          },
+          "planned": {},
+          "replay_values": {},
+          "unmet": [],
+          "confirmed_by_replay": false,
+          "detail": "present in 2/3 runs, dismissal-shaped: an interrupt candidate"
+        },
+        {
+          "kind": "conditional_step",
+          "source": "merge",
+          "column": 9,
+          "transition": null,
+          "action_type": "click",
+          "field": null,
+          "runs": [
+            1
+          ],
+          "observed": {
+            "1": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button"
+          },
+          "planned": {},
+          "replay_values": {},
+          "unmet": [],
+          "confirmed_by_replay": false,
+          "detail": "present in 1/3 runs, dismissal-shaped: an interrupt candidate"
+        }
+      ],
+      "hints": [
+        {
+          "hint": {
+            "column": 5,
+            "intent": "positional",
+            "param_name": null,
+            "repeat_fold": null,
+            "why": "task text says 'play the first video that pops up'; replay FAILED at t4 for runs 2 and 3 because run 1's literal title selector was kept instead of a position-based match — episode explicitly flags this as list-like/positional"
+          },
+          "status": "applied",
+          "reason": "structural rung '#dismissible > div > div a#video-title' + nth(0)",
+          "transition": "t4"
+        },
+        {
+          "hint": {
+            "column": 7,
+            "intent": "instance",
+            "param_name": null,
+            "repeat_fold": null,
+            "why": "same ad-skip/dismiss selector recorded identically in runs 2 and 3, a stable dismissal-shaped interrupt target"
+          },
+          "status": "rejected",
+          "reason": "column 7 is not a main-path column of this merge",
+          "transition": null
+        },
+        {
+          "hint": {
+            "column": 9,
+            "intent": "instance",
+            "param_name": null,
+            "repeat_fold": null,
+            "why": "same ad-skip/dismiss selector as column 7 but occurring at a different point in run 1's trajectory; keep as the recorded interrupt target"
+          },
+          "status": "rejected",
+          "reason": "column 9 is not a main-path column of this merge",
+          "transition": null
+        }
+      ],
+      "next_plan": null,
+      "usage": {
+        "run-4": {
+          "calls": 33,
+          "input_tokens": 253500,
+          "output_tokens": 18729,
+          "cache_read_tokens": 138542,
+          "cache_creation_tokens": 114892,
+          "observation_chars": 97178,
+          "history_chars": 34480
+        },
+        "run-5": {
+          "calls": 34,
+          "input_tokens": 270006,
+          "output_tokens": 24594,
+          "cache_read_tokens": 142611,
+          "cache_creation_tokens": 127327,
+          "observation_chars": 112185,
+          "history_chars": 40173
+        },
+        "run-6": {
+          "calls": 6,
+          "input_tokens": 54371,
+          "output_tokens": 3136,
+          "cache_read_tokens": 29269,
+          "cache_creation_tokens": 25088,
+          "observation_chars": 17158,
+          "history_chars": 1181
+        }
+      },
+      "exit": "passed",
+      "hint_acceptance_rate": 0.3333333333333333,
+      "hints_applied": 1
+    }
+  ]
+}
