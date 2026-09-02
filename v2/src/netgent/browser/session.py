@@ -11,10 +11,12 @@ from typing import Any
 
 from netgent.browser.actions import ActionDispatcher
 from netgent.browser.dialogs import DialogLog
+from netgent.browser.dom.cdp import CdpFrames
 from netgent.browser.dom.closed_shadow import ClosedShadowObserver
+from netgent.browser.dom.media import MediaObserver
 from netgent.browser.dom.models import DomSnapshot
 from netgent.browser.dom.observer import DomObserver
-from netgent.browser.dom.scripts import DOM_SNAPSHOT_JS, FRAME_SELECTOR_JS
+from netgent.browser.dom.scripts import DOM_SNAPSHOT_JS, FRAME_SELECTOR_JS, MEDIA_READER_JS
 from netgent.browser.factory import BrowserHandle, close, launch
 from netgent.browser.profile import BrowserProfile
 from netgent.browser.pw import PATCHED_BROWSER, Browser, BrowserContext, Locator, Page, Playwright
@@ -26,7 +28,6 @@ from netgent.schema.control import ParamSource
 from netgent.schema.workflow import State
 
 __all__ = ["PATCHED_BROWSER", "BrowserSession"]
-
 
 class BrowserSession:
     def __init__(self, headless: bool = True, profile: BrowserProfile | None = None):
@@ -57,14 +58,18 @@ class BrowserSession:
         # so observing them under plain Playwright would surface elements the replayer could
         # never drive. Cross-origin frames work because every frame is read through its own
         # target's session (an init script via add_init_script would break them — measured).
+        frames = CdpFrames(self._page, self._cdp, FRAME_SELECTOR_JS) if self._cdp is not None else None
         closed_shadow: ClosedShadowObserver | None = None
-        if PATCHED_BROWSER and self._cdp is not None:
-            closed_shadow = ClosedShadowObserver(self._page, self._cdp, DOM_SNAPSHOT_JS, FRAME_SELECTOR_JS)
+        if PATCHED_BROWSER and frames is not None:
+            closed_shadow = ClosedShadowObserver(frames, DOM_SNAPSHOT_JS)
+        # Media elements, attached or not, enumerated over CDP in the same worlds (dom/media.py);
+        # engine-independent — the reads are our own isolated world's, under either driver.
+        media = MediaObserver(frames, MEDIA_READER_JS) if frames is not None else None
         dialogs = DialogLog(self._page)
-        self._dom = DomObserver(self._page, closed_shadow, dialogs)
+        self._dom = DomObserver(self._page, closed_shadow, dialogs, media)
         self._resolver = LocatorResolver(self._page)
         self._actions = ActionDispatcher(self._page, self._resolver, dialogs)
-        self._triggers = TriggerEngine(self._page, self._resolver, dialogs)
+        self._triggers = TriggerEngine(self._page, self._resolver, dialogs, media=self._dom.media)
         return self
 
     async def __aexit__(self, *exc_info: object) -> None:
@@ -96,6 +101,20 @@ class BrowserSession:
     async def screenshot(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         await self.page.screenshot(path=str(path))
+
+    async def media_summary(self) -> str | None:
+        """Playback ground truth for the run record: every live media element across frames —
+        attached or not — as one compact string ('video PLAYING at 0:29 / 7:56'), or None.
+
+        Read-only property reads, no DOM walk — safe at REPLAY time (zero-LLM). This is what
+        makes a replay's timing fidelity auditable after the fact: a seek edge whose readings
+        show no jump, or a dwell with a frozen position, is visible in record.json instead of
+        only to someone watching the browser.
+        """
+        from netgent.browser.dom.serializer import media_line
+
+        readings = await self._dom.media()
+        return "; ".join(media_line(m) for m in readings[:3]) if readings else None
 
     # ── locator resolution ───────────────────────────────────────────────────────
 

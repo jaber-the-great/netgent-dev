@@ -58,11 +58,51 @@ class TextBlock(BaseModel):
     frame_path: list[str] = Field(default_factory=list)  # which frame the text is in
 
 
+class MediaState(BaseModel):
+    """A media element's playback and load state, read from its properties.
+
+    The properties are ground truth: they keep ticking while a player's on-screen controls
+    are auto-hidden and their labels/timers frozen (YouTube stops updating hidden controls —
+    the accessibility strings lied to the agent; currentTime cannot).
+
+    The element need not be in the DOM: a `new Audio()` a site never inserts (SoundCloud) is
+    still the player, found over CDP (dom/media.py) and reported with `attached=False`. Load
+    state tells "nothing to play" from "paused": `ready_state` is HTMLMediaElement.readyState
+    (0 HAVE_NOTHING … 4 HAVE_ENOUGH_DATA), `network_state` its networkState (0 EMPTY, 1 IDLE,
+    2 LOADING, 3 NO_SOURCE), `has_source` whether any src/currentSrc/srcObject/<source> is set.
+    None/defaults on records taken before these were observed."""
+
+    tag: str  # video | audio
+    current: int  # currentTime, whole seconds
+    duration: int | None = None  # None while unknown (streaming/not loaded)
+    paused: bool = False
+    ended: bool = False
+    muted: bool = False
+    attached: bool = True  # in the DOM; False = held by script only (still the live player)
+    ready_state: int | None = None
+    network_state: int | None = None
+    has_source: bool = True
+    frame_path: list[str] = Field(default_factory=list)
+
+    @property
+    def loaded(self) -> bool:
+        """Has media to play (metadata or more); False for a source-less/failed element."""
+        return self.ready_state is None or self.ready_state > 0
+
+    @property
+    def playing(self) -> bool:
+        return not self.paused and not self.ended and self.loaded
+
+
 class DomSnapshot(BaseModel):
     url: str
     title: str
     elements: list[DomElement] = Field(default_factory=list)
     texts: list[TextBlock] = Field(default_factory=list)
+    media: list[MediaState] = Field(default_factory=list)  # playing/paused <video>/<audio>
+    # Wall-clock (epoch seconds) when this snapshot was taken. Pairs with `media`: the only
+    # way to tell a seek jump from natural playback is position delta vs wall-clock delta.
+    taken_at: float = 0.0
     viewport_height: int = 0  # top-frame innerHeight; 0 = unknown (show everything)
     # Frames whose walk failed (detached mid-snapshot, unreachable): their elements are
     # missing from this observation. Counted and named so the agent and the trajectory can
@@ -89,6 +129,8 @@ class DomSnapshot(BaseModel):
             title=self.title,
             elements=[e for e in self.elements if e.frame_path == frame_path],
             texts=[t for t in self.texts if t.frame_path == frame_path],
+            media=[m for m in self.media if m.frame_path == frame_path],
+            taken_at=self.taken_at,
             viewport_height=0,
             frames_skipped=self.frames_skipped,
             skipped_frames=self.skipped_frames,

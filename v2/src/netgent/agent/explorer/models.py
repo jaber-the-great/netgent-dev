@@ -77,6 +77,14 @@ class AgentStep(BaseModel):
     evaluation: str = ""
     memory: str = ""
     next_goal: str = ""
+    # Playback state observed just BEFORE this step ran ("video PLAYING at 0:21 / 8:35"),
+    # from the step's own snapshot. Objective page evidence (not the model's narration), so
+    # the verifier can check timed watch/pause/seek phases from consecutive readings.
+    media: str | None = None
+    # Wall-clock (epoch seconds) when the step record was made. With `media`, this is what
+    # lets a verifier tell a seek jump from natural playback: position advancing MORE than
+    # the wall-clock between readings is a jump; advancing less is buffering/stall.
+    t: float | None = None
 
 
 class AgentTrajectory(BaseModel):

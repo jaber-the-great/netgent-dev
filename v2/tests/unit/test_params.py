@@ -72,3 +72,23 @@ def test_resolve_action_substitutes_fields():
     # dynamic substitution in a goto URL (value pulled from the page)
     goto = asyncio.run(ctx.resolve_action(GotoAction(url="https://x/confirm/${conf}")))
     assert goto.url == "https://x/confirm/XYZ9"
+
+
+def test_repeat_count_resolves_from_substituted_string():
+    """Repeat.count="${p}" survives resolve_params as a numeric STRING (count keeps its str
+    type); the executor coerces it, and still refuses unresolved or non-numeric counts."""
+    import pytest
+
+    from netgent.core.errors import ExecutionError
+    from netgent.executor.engine import Executor
+    from netgent.schema.workflow import State, Workflow
+
+    wf = Workflow(name="x", start_state="init", states=[State(id="init")], transitions=[])
+    ex = Executor(session=None, workflow=wf)
+    assert ex._resolve_count("10") == 10
+    assert ex._resolve_count("7.0") == 7
+    assert ex._resolve_count(3) == 3 and ex._resolve_count(None) is None
+    with pytest.raises(ExecutionError, match="unresolved param"):
+        ex._resolve_count("${watch_time}")
+    with pytest.raises(ExecutionError, match="did not resolve to a number"):
+        ex._resolve_count("abc")

@@ -69,3 +69,21 @@ def test_nothing_resolves_returns_the_unverified_chain():
     el = _el(candidates=[SelectorCandidate(kind="css", value="#gone")])
     chain = asyncio.run(unique_locator_for(FakeSession({}), el))
     assert [(s.fn, s.args) for s in chain] == [("locator", ["#gone"])]
+
+
+def test_machine_generated_ids_never_lead_the_ladder():
+    """A per-mount id (`#skip-button\\:2`, React's `:r1:`, trailing counters) must not win
+    bucket 1: it changes every session, so a chain built on it can never replay — the
+    YouTube ad-skip interrupt anchored on one and never fired again (2026-09-01)."""
+    from netgent.browser.locators import is_volatile_selector
+
+    for vid in (r"#skip-button\:2", "#:r1:", "#player-1234567", "#deadbeefcafe01", "#item-3", "#email2"):
+        el = _el(candidates=[
+            SelectorCandidate(kind="css", value=vid),
+            SelectorCandidate(kind="role", role="button", name="Skip"),
+        ], tag="button", type=None)
+        chains = locator_candidates(el)
+        assert chains[0][-1].fn == "get_by_role", vid  # role leads; the volatile id is css-fallback only
+        assert is_volatile_selector(vid), vid
+    assert not is_volatile_selector("#email")
+    assert not is_volatile_selector("#main-content")

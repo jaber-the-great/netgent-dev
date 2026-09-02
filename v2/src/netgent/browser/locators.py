@@ -9,7 +9,21 @@ import re
 from netgent.browser.dom.models import DomElement
 from netgent.schema.actions import LocatorStep
 
-_VOLATILE_ID = re.compile(r"\d{4,}|[0-9a-f]{8,}|^#(tw|ember|react|:)")
+# Machine-generated id signals: long digit/hex runs, framework prefixes, a colon anywhere
+# (React useId `:r1:`, YouTube's per-mount `skip-button:2` — the CSS-escaped form carries a
+# backslash), or a trailing counter. Such ids change per session/instance, so a compiled
+# workflow could never replay them (measured: an ad-skip interrupt anchored on
+# `#skip-button\:2` never fired on the next replay's ad, whose button had a fresh suffix).
+_VOLATILE_ID = re.compile(r"\d{4,}|[0-9a-f]{8,}|^#(tw|ember|react)|[:\\]|[-_]?\d+$")
+
+
+def is_volatile_selector(selector: str) -> bool:
+    """True when a CSS selector is an #id that looks machine-generated (per-session/mount).
+
+    The compiler uses this to warn when an interrupt gets anchored on one: an interrupt
+    exists to fire on a FUTURE instance of its overlay, which a per-mount id can never match.
+    """
+    return selector.startswith("#") and _VOLATILE_ID.search(selector) is not None
 
 
 def locator_candidates(el: DomElement) -> list[list[LocatorStep]]:

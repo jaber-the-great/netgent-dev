@@ -42,3 +42,25 @@ def test_evidence_carries_actions_effects_and_last_three_screenshots_but_no_reas
 def test_verdict_schema_defaults():
     v = Verdict(achieved=False, unmet=["no confirmation shown"])
     assert v.confidence == "medium" and v.evidence == []
+
+
+def test_media_timeline_reaches_the_judge_only_when_steps_observed_media(tmp_path):
+    traj = _traj(tmp_path)
+    # No step carries media → no timeline, and the prompt section is absent (non-video
+    # tasks see zero change).
+    ev = Evidence.from_trajectory("submit the form", traj, run_dir=tmp_path)
+    assert ev.media_timeline == []
+    assert "MEDIA TIMELINE" not in build_judge_content(ev)[0]["text"]
+
+    traj.steps[1].media = "video PLAYING at 0:21 / 8:35"
+    traj.steps[1].t = 1000.0
+    traj.steps[2].media = "video PAUSED at 0:45 / 8:35"
+    traj.steps[2].t = 1017.0
+    ev = Evidence.from_trajectory("watch the video", traj, run_dir=tmp_path)
+    assert ev.media_timeline == [
+        "1. [t+0s] click 'Submit' — video PLAYING at 0:21 / 8:35",
+        "2. [t+17s] click — video PAUSED at 0:45 / 8:35",
+    ]
+    text = build_judge_content(ev)[0]["text"]
+    assert "MEDIA TIMELINE (playback position observed just BEFORE each step ran):" in text
+    assert "1. [t+0s] click 'Submit' — video PLAYING at 0:21 / 8:35" in text

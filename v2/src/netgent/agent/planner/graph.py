@@ -18,8 +18,13 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.runtime import Runtime
 
 from netgent.agent.planner.context import PlannerContext
-from netgent.agent.planner.models import Plan
-from netgent.agent.planner.prompt import PLANNER_SYSTEM, build_planner_content
+from netgent.agent.planner.models import Plan, VariationPlan, normalize_variation_plan
+from netgent.agent.planner.prompt import (
+    PLANNER_SYSTEM,
+    VARIATIONS_SYSTEM,
+    build_planner_content,
+    build_variations_content,
+)
 
 if TYPE_CHECKING:
     from netgent.agent.llm import LLM
@@ -67,4 +72,55 @@ async def plan(
     graph = PLANNER if graph is None else graph
     ctx = PlannerContext(llm=llm) if max_steps is None else PlannerContext(llm=llm, max_steps=max_steps)
     final = await graph.ainvoke({"task": task, "url": url}, context=ctx)
+    return final["plan"]
+
+
+class VariationState(TypedDict, total=False):
+    task: str
+    url: str | None
+    n: int
+    pinned: dict[str, str]
+    plan: Any  # VariationPlan (draft_variations' output)
+
+
+async def draft_variations(state: VariationState, runtime: Runtime[PlannerContext]) -> dict:
+    """Task → N same-family variations with proposed param values: the one LLM call,
+    normalized in code (exactly N, base first, consistent names, pinned values applied)."""
+    ctx = runtime.context
+    content = build_variations_content(state["task"], state["n"], state.get("url"), state.get("pinned"))
+    plan: VariationPlan = await ctx.llm.judge(VARIATIONS_SYSTEM, content, VariationPlan)
+    return {"plan": normalize_variation_plan(plan, state["task"], state["n"], state.get("pinned"))}
+
+
+def create_variation_planner() -> CompiledStateGraph:
+    """Build and compile the variation-planner graph. Same shape as `create_planner_agent`."""
+    return (
+        StateGraph(VariationState, context_schema=PlannerContext)
+        .add_node("draft_variations", draft_variations)
+        .add_edge(START, "draft_variations")
+        .add_edge("draft_variations", END)
+        .compile(name="variation_planner")
+    )
+
+
+VARIATION_PLANNER = create_variation_planner()  # compiled ONCE
+
+
+async def plan_variations(
+    task: str,
+    *,
+    llm: "LLM",
+    n: int,
+    url: str | None = None,
+    pinned: dict[str, str] | None = None,
+    graph: CompiledStateGraph | None = None,
+) -> VariationPlan:
+    """The ONE run API for `--runs N`: N same-family task variations, each carrying its
+    intended concrete values under proposed param names. `graph` defaults to VARIATION_PLANNER."""
+    if n < 1:
+        raise ValueError("n must be >= 1")
+    graph = VARIATION_PLANNER if graph is None else graph
+    final = await graph.ainvoke(
+        {"task": task, "url": url, "n": n, "pinned": dict(pinned or {})}, context=PlannerContext(llm=llm)
+    )
     return final["plan"]

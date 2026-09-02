@@ -22,6 +22,7 @@ import asyncio
 import operator
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
@@ -36,7 +37,7 @@ from netgent.agent.explorer.decision import DEFAULT_KINDS, TERMINATES_BATCH
 from netgent.agent.explorer.memory import ExplorerMemory
 from netgent.agent.explorer.models import AgentStep, AgentTrajectory, StepRecord
 from netgent.agent.explorer.prompt import build_system_prompt
-from netgent.browser.dom import element_lines, format_observation
+from netgent.browser.dom import element_lines, format_observation, media_line
 from netgent.browser.locators import capture_locator, durable_locator
 from netgent.browser.session import BrowserSession
 from netgent.core.errors import ExecutionError
@@ -56,6 +57,12 @@ SETTLE_WATCH_S = 6.0
 # REPEAT_STOP (browser-use's "repeated failure" guard, tool-calling doc §5.2).
 REPEAT_NUDGE = 3
 REPEAT_STOP = 6  # how long after an action the page is sampled for text that appears (then vanishes)
+
+
+def _media_of(snapshot) -> str | None:
+    """The snapshot's playback state as one compact string for the step record (verifier
+    evidence): 'video PLAYING at 0:21 / 8:35'. None when the page has no observed media."""
+    return "; ".join(media_line(m) for m in snapshot.media[:3]) or None
 
 
 async def _watch_texts(
@@ -124,25 +131,32 @@ async def observe(state: AgentState, runtime: Runtime[ExplorerContext]) -> Comma
         previous_texts=state.get("prev_texts") if same_page else None,
     )
 
-    # Stuck detection is observation-based: an action that changes nothing on screen
-    # makes no progress; a scroll that reveals a new batch does change it.
-    prev = state.get("prev_observation")
-    no_progress = state.get("no_progress", 0)
-    if prev is not None:
-        no_progress = no_progress + 1 if plain == prev else 0
-    # Deliberately NOT written back into the step record: telling the model "no visible
-    # change" made it re-run the action whenever the change was invisible to the walker
-    # (measured, explorer-optimisation.md); the hard stop below stays.
-    if no_progress >= MAX_REPEAT:
-        reason = f"stuck: {MAX_REPEAT} steps with no change on screen"
-        stop = AgentStep(n=n, kind="done", reasoning=reason, url=snapshot.url, error=reason)
-        return Command(update={"n": n, "steps": [stop], "stopped_reason": reason}, goto=END)
     # Accumulate every text observed during the run: success banners are often transient
     # (hidden again after ~3 s), so post-run verification must be able to check what was
     # SEEN, not only what is still on screen (sweep._form_succeeded).
     seen = list(state.get("texts_seen") or [])
     known = set(seen)
-    seen += [t.text for t in snapshot.texts if t.text not in known][:50]
+    fresh = [t.text for t in snapshot.texts if t.text not in known]
+
+    # Stuck detection is observation-based: an action that changes nothing on screen
+    # makes no progress; a scroll that reveals a new batch does change it. The rendered
+    # slice caps visible text, so a page changing OUTSIDE that slice (an ad's captions,
+    # a live ticker) can compare byte-equal while demonstrably alive — never-seen text
+    # is the tiebreaker (measured: 'stuck: no change on screen' fired mid-ad while
+    # texts_seen was recording the ad's captions advancing).
+    prev = state.get("prev_observation")
+    no_progress = state.get("no_progress", 0)
+    if prev is not None:
+        no_progress = no_progress + 1 if plain == prev and not fresh else 0
+    # Deliberately NOT written back into the step record: telling the model "no visible
+    # change" made it re-run the action whenever the change was invisible to the walker
+    # (measured, explorer-optimisation.md); the hard stop below stays.
+    if no_progress >= MAX_REPEAT:
+        reason = f"stuck: {MAX_REPEAT} steps with no change on screen"
+        stop = AgentStep(n=n, kind="done", reasoning=reason, url=snapshot.url, error=reason,
+                         media=_media_of(snapshot), t=snapshot.taken_at or time.time())
+        return Command(update={"n": n, "steps": [stop], "stopped_reason": reason}, goto=END)
+    seen += fresh[:50]
     return Command(
         update={
             "n": n,
@@ -187,7 +201,8 @@ async def decide(state: AgentState, runtime: Runtime[ExplorerContext]) -> Comman
     logger.info("step %d: %s — %s", n, "done" if decision.done else decision.kind, decision.reasoning)
 
     if decision.done:
-        step = AgentStep(n=n, kind="done", reasoning=decision.reasoning, url=state["snapshot"].url)
+        step = AgentStep(n=n, kind="done", reasoning=decision.reasoning, url=state["snapshot"].url,
+                         media=_media_of(state["snapshot"]), t=state["snapshot"].taken_at or time.time())
         return Command(
             update={
                 "steps": [step],
@@ -282,6 +297,7 @@ async def act(state: AgentState, runtime: Runtime[ExplorerContext]) -> Command[L
         step = AgentStep(
             n=n, item=i, kind=item.kind or "", reasoning=decision.reasoning, url=ctx.session.page.url, error=error,
             evaluation=decision.evaluation, memory=decision.memory, next_goal=decision.next_goal,
+            media=_media_of(snapshot), t=snapshot.taken_at or time.time(),
         )
         if error is None:
             step.action = action  # the compilable record of what actually ran

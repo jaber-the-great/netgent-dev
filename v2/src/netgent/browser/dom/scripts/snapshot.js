@@ -16,7 +16,12 @@
 // (scripts/__init__.py) strips them and hands the rest to `frame.evaluate` and to CDP
 // `Runtime.callFunctionOn(functionDeclaration=…)` unchanged.
 (...closedRoots) => {
-  const INTERACTIVE = new Set(['A','BUTTON','INPUT','SELECT','TEXTAREA']);
+  // VIDEO/AUDIO are interactive on purpose: a visible player is a real click target (players
+  // toggle play/pause on click) and the natural receiver for keyboard shortcuts (k/l/j,
+  // arrows) — without it listed, an agent that must seek precisely has no element to press
+  // on and falls back to proportional seek-bar clicks (measured: 4-minute overshoots on
+  // YouTube). Invisible/0x0 media (background <audio>) is still filtered by visible().
+  const INTERACTIVE = new Set(['A','BUTTON','INPUT','SELECT','TEXTAREA','VIDEO','AUDIO']);
   // Roles you actually operate on. Container roles (radiogroup, group, list, tablist, …)
   // are NOT here: listing them makes the agent try to click a wrapper and time out.
   const INTERACTIVE_ROLES = new Set(['button','link','checkbox','radio','textbox','combobox',
@@ -36,6 +41,14 @@
   const visible = (el) => {
     const r = el.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) return false;
+    // checkVisibility (native, Chromium) sees what the own-style check below cannot: an
+    // ANCESTOR's opacity:0. YouTube auto-hides its control bar that way and stops updating
+    // the hidden controls' labels — without the ancestor check the walker reports a frozen
+    // "Play (k)" / timer as live UI (measured: the pause-toggle and frozen-ad stuck loops).
+    if (el.checkVisibility) {
+      try { return el.checkVisibility({ opacityProperty: true, visibilityProperty: true }); }
+      catch (e) { /* fall through to the own-style check */ }
+    }
     const s = getComputedStyle(el);
     return s.visibility !== 'hidden' && s.display !== 'none' && s.opacity !== '0';
   };
@@ -72,17 +85,22 @@
     (el.tagName === 'SELECT' ? '' : el.innerText) ||
     el.getAttribute('value') || ''
   );
+  // Machine-generated id signals (mirrors browser/locators.py _VOLATILE_ID): long digit/hex
+  // runs, framework prefixes, a colon (React useId, YouTube's per-mount `skip-button:2`), or
+  // a trailing counter. Such ids change per session/mount — a chain built on one can never
+  // replay, so the walker falls through to the structural path instead.
+  const VOLATILE_ID = /\d{4,}|[0-9a-f]{8,}|^(tw|ember|react)|:|[-_]?\d+$/;
   const cssPath = (el) => {
     // Structural path only: tag + nth-of-type. No class names — nth-of-type already makes
     // each hop unique among its siblings, and classes flip with STATE (measured: Quill drops
     // ql-blank on first input, so a class-bearing chain resolved to 0 right after the fill it
     // was captured for). An #id (when present and stable-looking) still short-circuits.
-    if (el.id) return `#${CSS.escape(el.id)}`;
+    if (el.id && !VOLATILE_ID.test(el.id)) return `#${CSS.escape(el.id)}`;
     const parts = [];
     let node = el;
     while (node && node.nodeType === 1 && parts.length < 6) {
       let sel = node.tagName.toLowerCase();
-      if (node.id && !/\d{4,}/.test(node.id)) { parts.unshift(`#${CSS.escape(node.id)}`); break; }
+      if (node.id && !VOLATILE_ID.test(node.id)) { parts.unshift(`#${CSS.escape(node.id)}`); break; }
       const parent = node.parentNode;
       if (parent) {
         const sibs = [...parent.children].filter(c => c.tagName === node.tagName);
@@ -198,6 +216,9 @@
         // iframes are NOT descended here — the Python layer iterates page.frames and
         // evaluates this walk inside EACH frame's own context (works cross-origin via CDP).
         if (el.tagName === 'IFRAME') continue;
+        // Media playback is NOT read here: browser/dom/media.py enumerates every media element
+        // — attached or not (`new Audio()` players never enter the DOM) — over CDP and reads
+        // it with scripts/media_reader.js in this same isolated world.
         if (isInteractive(el)) {
           // A hidden file input is still ACTIONABLE: set_input_files works on it, and custom
           // upload widgets (Bootstrap custom-file opacity:0, Material UI display:none behind a

@@ -70,6 +70,29 @@ Reach the state the task describes (video playing, no ad on screen), THEN use ki
 seconds = the full duration, once. When RECENT STEPS shows "-> DONE WAITING", the dwell is
 complete: do not wait again, and do not re-check by waiting. Go straight to done.
 
+MEDIA PLAYERS (video/audio)
+The MEDIA line is the player's true state — trust it over button labels and on-screen timers
+(players freeze their controls while they are hidden). `audio (detached) …` is a player the
+site drives from script without putting it on the page: still the true state — read
+PLAYING/PAUSED/[muted] from it exactly like any other. `NOT LOADED (no source)` means the
+element has nothing to play yet: press play once; if it is still NOT LOADED after that and
+after any overlay is gone, the site is not delivering the stream to this browser — do not keep
+toggling play; finish with done=true, success=false and say the player never loaded.
+`[buffering]` means playback is stalled for data: wait a few seconds before judging a press.
+A listed `video` element is the target
+for player keyboard shortcuts: use kind="press" with its index. press focuses it by itself —
+never click a player "to focus" it: clicking a player toggles play/pause.
+Seeking / fast-forwarding by N seconds: send the seek key (one press per step) and VERIFY each
+press landed before counting it. Playback advances on its own between your steps, so the raw
+position proves nothing: a press landed only if the next MEDIA reading advanced by clearly more
+than the seconds that elapsed (a +10s seek key -> position up ~10s beyond normal playback). A
+reading consistent with playback alone means that press MISSED (focus was lost) — send it
+again; it does not count. Track the running total of VERIFIED jumps in your reasoning
+("jumps so far: 10+10 = 20 of 30") and keep pressing until it reaches N. Never stop because
+the position number looks close to a target, and never count presses you have not verified.
+Pausing: one press/click on the pause control, then confirm the MEDIA line says PAUSED before
+starting the pause's wait; if it still says PLAYING, the toggle did not land.
+
 FORMS
 - Dates: a field showing format=… wants EXACTLY that format — use it verbatim (native
   input[date] → YYYY-MM-DD; input[time] → HH:MM; input[month] → YYYY-MM). A date was REJECTED

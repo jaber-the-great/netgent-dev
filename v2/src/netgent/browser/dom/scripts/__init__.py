@@ -3,6 +3,8 @@
 - snapshot.js — the DOM walker (`DOM_SNAPSHOT_JS`); runs in an isolated world per frame.
 - frame_selector.js — CSS selector for a frame-owner element (`FRAME_SELECTOR_JS`).
 - frame_content_origin.js — an iframe's content-box origin in its parent (`FRAME_CONTENT_ORIGIN_JS`).
+- media_reader.js — playback readings for media elements handed in + the frame's attached ones
+  (`MEDIA_READER_JS`; `MEDIA_DOM_JS` is its no-argument form: attached elements only).
 
 Each file is a bare function expression preceded by `//` comment lines. `load` strips those
 leading comment lines so the string handed to Playwright (`frame.evaluate(src)`, which must
@@ -28,5 +30,16 @@ def load(name: str) -> str:
 DOM_SNAPSHOT_JS = load("snapshot.js")
 FRAME_SELECTOR_JS = load("frame_selector.js")
 FRAME_CONTENT_ORIGIN_JS = load("frame_content_origin.js")
+MEDIA_READER_JS = load("media_reader.js")
+# The reader with no handles: the frame's DOM-attached media only — what `frame.evaluate`
+# can reach without CDP (the fallback when the heap enumeration is unavailable).
+MEDIA_DOM_JS = f"() => ({MEDIA_READER_JS.strip()})()"
 
-__all__ = ["DOM_SNAPSHOT_JS", "FRAME_CONTENT_ORIGIN_JS", "FRAME_SELECTOR_JS", "load"]
+__all__ = [
+    "DOM_SNAPSHOT_JS",
+    "FRAME_CONTENT_ORIGIN_JS",
+    "FRAME_SELECTOR_JS",
+    "MEDIA_DOM_JS",
+    "MEDIA_READER_JS",
+    "load",
+]
