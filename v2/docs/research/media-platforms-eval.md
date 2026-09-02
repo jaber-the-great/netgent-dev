@@ -173,3 +173,40 @@ Dailymotion's ad variability between runs.
 
 Twitch stays blocked until the browser profile passes Twitch's stream-integrity checks — an
 investigation for the stealth/profile layer, not the pipeline.
+
+---
+
+## After fixes 1 and 2 (2026-09-02, branch `pr8-plus-scaffold-1`, commits `277cec5` + `fba7fc7`)
+
+Same protocol as above (single-run `generate --max-steps 30 --allow press --model claude-code:sonnet`,
+then zero-LLM `run`; one retry per failed exploration). Raw material under `/tmp/fix-eval/<site>/`.
+
+| Site | Explore | Verify | Compile | Zero-LLM replay | MEDIA lines observed |
+|---|---|---|---|---|---|
+| Internet Archive | ✓ 10 steps | achieved (high) | 12 t / 11 s, 2 `media_playing` gates | ✗ at **t6** (was t1): t1–t5 ok, s1 recognized in 24 ms | `video PLAYING at 0:32 / 90:07 [muted]` |
+| SoundCloud, attempt 1 | ✗ 11 steps (stuck) | — | — | — | none (playback never started: 3 clicks on an inert "Play current") |
+| SoundCloud, attempt 2 | ✗ 29 steps (gave up: mute control not found) | — | — | — | **`audio (detached) PLAYING at 0:09 / 120:00`** from step 15, advancing to `3:05` at step 29; readings on 15 of 30 steps (was 0 of 31) |
+| Twitch | ✗ 13 + 13 steps (two internal explorations, both ended by the explorer's own `done`) | NOT achieved (high) | — | — | `video NOT LOADED (no source)` from step 4; `video (detached) PAUSED at 0:21 / 0:30 [muted]` (the offline promo loop) |
+
+- **Fix 1 (anchors carry the action's locator chain):** Archive's first edge, the one that failed
+  before, now recognizes in 24 ms; edges t1–t5 all pass (latencies 0–155 ms, 7.1 s for the
+  results-page wait). The replay fails at t6 in both of two runs: s6 is anchored on the player's
+  `link "Click for sound"`, whose box is 30×0 px on this page (present, `display:block`, never
+  visible over 40 s of polling). The explorer's click on it at step 6 landed only through the
+  dispatcher's JS-click fallback, so "its element is visible" was never true even during
+  exploration. Same shape at s8 (`link "Click to mute"`). New generic gap, distinct from the
+  name-semantics bug: **an anchor derived from a click that needed the JS fallback (a
+  Playwright-invisible target) is unsatisfiable**; the walker lists 30×0 elements (it drops only
+  0×0) while Playwright's visibility needs both dimensions > 0.
+- **Fix 2 (CDP media enumeration + load state):** SoundCloud's detached `new Audio()` is read
+  (attempt 2, 15 readings, position advancing 0:09 → 3:05 across steps); the explorer used it
+  ("confirmed PLAYING via MEDIA line"). The remaining failure is explorer-side: it could not
+  find the volume/mute control in the sticky player bar and scroll-thrashed for 12 steps.
+  Twitch's dead player reads `NOT LOADED (no source)`; each exploration stopped at 13 steps by
+  the explorer's own decision citing that line (before: 30-step budget exhausted, then 13 + 10).
+- **Cost of the media read** (SoundCloud, 12 frames): 100 ms while a player is playing (cached
+  re-resolve), 1.2 s when nothing is playing (one `Runtime.queryObjects` heap walk per target —
+  a full GC); 7.7 s before the walk was rationed to each target's top document.
+- **Regression:** forms sweep `netgent eval stress sweep --model claude-code:haiku`: **19/21** (the
+  baseline; the two unverified forms are the known broken fixtures, forms 8 and 12), 167 LLM calls,
+  1919 s wall.
