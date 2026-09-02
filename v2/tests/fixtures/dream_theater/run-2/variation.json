@@ -1,0 +1,11 @@
+{
+  "task_text": "Go to youtube.com search for Metallica - Master of Puppets and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 25s fast forward for 20s and then watch for 10s then pause the video for 15s and the play for another 8s. If at any point any pop-ups happen dismiss them.",
+  "values": {
+    "search_query": "Metallica - Master of Puppets",
+    "initial_watch_seconds": "25s",
+    "fast_forward_seconds": "20s",
+    "second_watch_seconds": "10s",
+    "pause_seconds": "15s",
+    "final_watch_seconds": "8s"
+  }
+}

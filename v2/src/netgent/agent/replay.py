@@ -23,6 +23,12 @@ class ReplayRun(BaseModel):
     success: bool = False
     signature: list[str] = Field(default_factory=list)
     error: str | None = None
+    # Where it stopped, when it did: the first non-ok main-path edge, its outcome
+    # (trigger_timeout / action_error / param_error) and the target state's unmet conjuncts —
+    # what the triage (agent/triage.py) reads to name the failing column.
+    failed_edge: str | None = None
+    outcome: str | None = None
+    unmet: list[str] = Field(default_factory=list)
 
 
 class ReplayReport(BaseModel):
@@ -44,6 +50,18 @@ def state_signature(record: RunRecord) -> list[str]:
             continue
         sig.append(e.target)
     return sig
+
+
+def replay_run_from_record(values: dict[str, str], record: RunRecord) -> ReplayRun:
+    """A ReplayRun read off a RunRecord (the live check, or a stored replay-N/record.json)."""
+    failed = next((e for e in record.edges if e.outcome not in ("ok", "recovered")), None)
+    return ReplayRun(
+        values=values, success=record.success, signature=state_signature(record),
+        error=failed.error if failed else None,
+        failed_edge=failed.transition_id if failed else None,
+        outcome=failed.outcome if failed else None,
+        unmet=[c.type for c in failed.conditions if not c.met] if failed else [],
+    )
 
 
 async def replay_workflow(
@@ -68,10 +86,7 @@ async def replay_check(
         run_dir = (run_dir_base / f"replay-{i}") if run_dir_base is not None else None
         try:
             record = await replay_workflow(wf, values, headless=headless, run_dir=run_dir)
-            report.runs.append(ReplayRun(
-                values=values, success=record.success, signature=state_signature(record),
-                error=next((e.error for e in record.edges if e.outcome not in ("ok", "recovered")), None),
-            ))
+            report.runs.append(replay_run_from_record(values, record))
         except Exception as exc:  # noqa: BLE001 — a crashed replay is a failed check, not a crash
             report.runs.append(ReplayRun(values=values, success=False, error=str(exc)))
     signatures = {tuple(r.signature) for r in report.runs}

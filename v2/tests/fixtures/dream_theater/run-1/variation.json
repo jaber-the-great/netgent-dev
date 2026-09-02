@@ -1,0 +1,11 @@
+{
+  "task_text": "Go to youtube.com search for Dream Theater - Under a glass moon and play the first video that pops up. If at any point an ad is shown skip the add. Mute any video or ad that shows up. When the video starts playing watch for 20s fast forward for 30s and then watch for 15s then pause the video for 10s and the play for another 5s. If at any point any pop-ups happen dismiss them.",
+  "values": {
+    "search_query": "Dream Theater - Under a glass moon",
+    "initial_watch_seconds": "20s",
+    "fast_forward_seconds": "30s",
+    "second_watch_seconds": "15s",
+    "pause_seconds": "10s",
+    "final_watch_seconds": "5s"
+  }
+}

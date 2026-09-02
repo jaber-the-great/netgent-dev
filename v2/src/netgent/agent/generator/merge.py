@@ -44,6 +44,7 @@ from netgent.agent.generator.compiler import (
     compile_trajectory,
     is_interruption_step,
 )
+from netgent.agent.generator.hints import HintOutcome
 from netgent.schema.actions import Action, GotoAction, LocatorStep, NoopAction, WaitAction
 from netgent.schema.control import Branch, BranchArm, ControlNode, EdgeStep, Interrupt, Param, Repeat
 from netgent.schema.workflow import State, Transition, Workflow
@@ -80,6 +81,13 @@ class ColumnReport(BaseModel):
     target: str | None = None
     param: str | None = None
     note: str = ""
+    # Evidence the triage reads (agent/triage.py): the per-run canonical targets, the value
+    # field that differed (and its per-run values) for param / value-diverges columns, and
+    # the main-path transition this column compiled to (None: dropped / interrupt / branch).
+    targets_by_run: dict[int, str] = Field(default_factory=dict)
+    field: str | None = None
+    values_by_run: dict[int, str] = Field(default_factory=dict)
+    transition: str | None = None
 
 
 class ParamReport(BaseModel):
@@ -99,6 +107,9 @@ class GeneralizedTrajectory(BaseModel):
     interrupts: list[dict] = Field(default_factory=list)  # {selector, support, runs}
     branches: list[dict] = Field(default_factory=list)  # {guards, runs_by_arm}
     warnings: list[str] = Field(default_factory=list)
+    # What became of each generalization hint the planner proposed for this merge
+    # (applied | rejected + reason): the per-round hint_acceptance_rate evidence.
+    hints: list[HintOutcome] = Field(default_factory=list)
 
 
 class MergeOutcome(BaseModel):
@@ -335,13 +346,14 @@ def _generalize_target(col: _Column, values_by_run: dict[int, dict[str, str]]) -
 
 class _EmitStep:
     def __init__(self, action: Action, col: _Column, *, anchor_ok: bool, param: str | None = None,
-                 dwell_param: str | None = None, dwell_bound: int = 0):
+                 dwell_param: str | None = None, dwell_bound: int = 0, col_index: int = -1):
         self.action = action
         self.col = col
         self.anchor_ok = anchor_ok  # may the PREVIOUS state anchor on this step's target?
         self.param = param
         self.dwell_param = dwell_param  # a parameterized dwell: Repeat(count="${param}")
         self.dwell_bound = dwell_bound
+        self.col_index = col_index  # which aligned column this emit came from (the evidence trail)
 
 
 class _EmitBranch:
@@ -412,12 +424,17 @@ def merge_trajectories(
     confirmed: dict[str, ParamReport] = {}
     branches_report: list[dict] = []
 
-    def report(i: int, col: _Column, disposition: str, param: str | None = None, note: str = "") -> None:
+    def report(i: int, col: _Column, disposition: str, param: str | None = None, note: str = "",
+               field: str | None = None) -> None:
         spine_step = col.steps.get(spine_rid) or col.steps[min(col.steps)]
+        values = {}
+        if field is not None:
+            values = {rid: str(getattr(st.action, field, "")) for rid, st in sorted(col.steps.items())}
         reports.append(ColumnReport(
             index=i, disposition=disposition, support=len(col.steps), runs=sorted(col.steps),
             action_type=spine_step.action.type, target=_target_selector(spine_step.action),
-            param=param, note=note,
+            param=param, note=note, field=field, values_by_run=values,
+            targets_by_run={rid: _canonical_locator(st.action) for rid, st in sorted(col.steps.items())},
         ))
 
     def confirm(name: str, col: _Column) -> None:
@@ -487,10 +504,12 @@ def merge_trajectories(
         raise ValueError("merge produced no main-path steps")
 
     # Pass 2: emit plan → workflow.
-    wf = _compile_emits(
+    wf, edge_by_col = _compile_emits(
         emits, interrupt_cands, name=name, version=version, task=task,
         n_runs=n_runs, run_values=values_by_run, confirmed=confirmed,
     )
+    for rep in reports:
+        rep.transition = edge_by_col.get(rep.index)
     generalized = GeneralizedTrajectory(
         task=task, runs=len(runs), achieved_runs=[r.run for r in achieved],
         params=sorted(confirmed.values(), key=lambda p: p.name),
@@ -517,13 +536,13 @@ def _make_emit(col, spine_rid, values_by_run, confirmed, confirm, report, warnin
             confirm(pname, col)
             report(idx, col, "param-target", param=pname,
                    note="role-name targets each contain that run's value; rewrote to name=${%s} + nth(0)" % pname)
-            return _EmitStep(action, col, anchor_ok=True, param=pname)
+            return _EmitStep(action, col, anchor_ok=True, param=pname, col_index=idx)
         report(idx, col, "target-varies", note="same action, different targets; kept run 1's")
         warnings.append(
             f"column {idx}: {action.type} targets differ across runs and match no planned value — "
             "kept run 1's selector; replay with other values may not find it"
         )
-        return _EmitStep(action, col, anchor_ok=False)
+        return _EmitStep(action, col, anchor_ok=False, col_index=idx)
     # one sig: targets agree; do the value fields?
     for field in _VALUE_FIELDS:
         per_run = {rid: getattr(s.action, field, None) for rid, s in col.steps.items()}
@@ -531,13 +550,13 @@ def _make_emit(col, spine_rid, values_by_run, confirmed, confirm, report, warnin
             continue
         pname = _confirm_param(col, field, values_by_run)
         if pname is None:
-            report(idx, col, "value-diverges",
+            report(idx, col, "value-diverges", field=field,
                    note=f"{field} differs across runs and matches no planned value; kept run 1's")
             warnings.append(
                 f"column {idx}: {action.type}.{field} differs across runs ({sorted(set(map(str, per_run.values())))}) "
                 "and matches no planned value — kept run 1's"
             )
-            return _EmitStep(action, col, anchor_ok=True)
+            return _EmitStep(action, col, anchor_ok=True, col_index=idx)
         confirm(pname, col)
         if field == "seconds":
             # The param feeds Repeat.count, so its stored values must be bare numbers even
@@ -551,15 +570,16 @@ def _make_emit(col, spine_rid, values_by_run, confirmed, confirm, report, warnin
             rep.default = _num_str(rep.default)
             rep.values_by_run = {rid: _num_str(v) for rid, v in rep.values_by_run.items()}
             observed = max(int(float(v)) for v in per_run.values())  # type: ignore[arg-type]
-            report(idx, col, "param", param=pname, note=f'dwell parameterized: Repeat(count="${{{pname}}}")')
-            return _EmitStep(action, col, anchor_ok=True, param=pname,
+            report(idx, col, "param", param=pname, field=field,
+                   note=f'dwell parameterized: Repeat(count="${{{pname}}}")')
+            return _EmitStep(action, col, anchor_ok=True, param=pname, col_index=idx,
                             dwell_param=pname, dwell_bound=max(60, 3 * observed))
         value = values_by_run[spine_rid].get(pname, "")
         action = action.model_copy(update={field: _sub_value(getattr(action, field), value, pname)})
-        report(idx, col, "param", param=pname, note=f"{field} varies with {pname}")
-        return _EmitStep(action, col, anchor_ok=True, param=pname)
+        report(idx, col, "param", param=pname, field=field, note=f"{field} varies with {pname}")
+        return _EmitStep(action, col, anchor_ok=True, param=pname, col_index=idx)
     report(idx, col, "aligned")
-    return _EmitStep(action, col, anchor_ok=True)
+    return _EmitStep(action, col, anchor_ok=True, col_index=idx)
 
 
 def _try_branch(region: list[_Column], n_runs: int, run_ids: list[int]) -> _EmitBranch | None:
@@ -656,7 +676,9 @@ def _compile_emits(
     n_runs: int,
     run_values: dict[int, dict[str, str]],
     confirmed: dict[str, ParamReport],
-) -> Workflow:
+) -> tuple[Workflow, dict[int, str]]:
+    """The workflow, and column index → the main-path transition id it compiled to."""
+    edge_by_col: dict[int, str] = {}
     states = [State(id="init")]
     transitions: list[Transition] = []
     control: list[ControlNode] = []
@@ -698,6 +720,7 @@ def _compile_emits(
 
         emit_step: _EmitStep = emit
         ti += 1
+        edge_by_col[emit_step.col_index] = f"t{ti}"
         base = _shared_base(emit_step.col)
         conditions: list = []
         if base is not None and base != prev_base:
@@ -781,7 +804,7 @@ def _compile_emits(
               + ", ".join(f"run {rid}: {v!r}" for rid, v in sorted(p.values_by_run.items())))
         for p in sorted(confirmed.values(), key=lambda p: p.name)
     ]
-    return Workflow(
+    wf = Workflow(
         name=name,
         version=version,
         description=task,
@@ -794,6 +817,7 @@ def _compile_emits(
         params=params,
         accept_states=accept,
     )
+    return wf, edge_by_col
 
 
 def _interrupt_summary(cands: list[tuple[int, AgentStep]]) -> dict[str, tuple[int, set[int]]]:
