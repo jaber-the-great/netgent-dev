@@ -1,6 +1,7 @@
 # The generator as an agent — an LLM that emits a typed *generalization plan*, and code that applies it
 
-Research doc for NetGent v2 (UCSB SNL). Written 2026-09-02. Research only: no code was changed.
+Research doc for NetGent v2 (UCSB SNL). Written 2026-09-02; revised the same day, after the design shipped
+on `v2/closed-loop-rounds` and ran end-to-end (Part D). Research only: no code was changed for this doc.
 
 ---
 
@@ -15,23 +16,26 @@ Research doc for NetGent v2 (UCSB SNL). Written 2026-09-02. Research only: no co
 3. Everyone who solves them uses an LLM. Nobody makes the LLM's answer checkable: Workflow Use has the LLM
    write the workflow; ReUseIt/Magentic-UI have it write prose with `<angle-bracket>` placeholders; AWM has it
    write `{placeholder}` text. None of these artifacts can be type-checked, and none report parameter precision.
-4. The one system that *verifies* its induction is ASI, and it verifies by **execution**: induction pass rate
-   drops 31.4 % → 15.6 %, and it still beats AWM by 11.3 points. Verification, not fluency, is what pays.
-5. Proposal: the LLM never writes YAML. It reads the typed trajectory and emits a **`GeneralizationPlan`** — a
-   patch of typed edits (`locator_intent`, `param_binding`, `fold_repeat`, `role`, `accept`) keyed by step id.
+4. The systems that verify by **execution** win — ASI's pass rate drops 31.4 % → 15.6 % and it still beats AWM
+   by 11.3 pts; WebXSkill's largest ablation is verification. But SkillWeaver's authors document their own gate
+   passing code that merely silenced its exceptions, which is exactly NetGent's empty-`accept_states` hole.
+5. Proposal: the LLM never writes YAML. It reads the typed trajectory and emits a **patch of typed edits**
+   (`locator_intent`, `param_binding`, `fold_repeat`, `role`, `accept`); code applies what it can re-derive.
 6. Every edit is *checkable against the recording*: a binding must match a literal actually present in that
    step's field; a positional locator must be a rung of the candidate ladder the browser layer already computed;
    a fold must cover contiguous identical actions.
-7. The cheap trick, if it holds: `browser/locators.py::locator_candidates()` already computes a *ladder* of
-   chains per element and throws all but one away. The LLM's job becomes **choosing a rung**, not writing a
-   selector. Whether a structure-keyed rung actually exists is the first thing to measure (§D.3).
+7. The cheap trick holds: `locator_candidates()` already computes a *ladder* per element and throws all but
+   one away, and it does contain a container-relative rung. The LLM's job is **choosing a rung**, not writing
+   a selector; code supplies the ordinal (§D.3).
 8. Placement: `explore → verify → compile/merge (code) → **generalize (LLM patch)** → apply+validate (code) →
    replay check (the gate)`. Code runs first so the LLM is only asked about what code could not dispose of.
 9. On conflict, cross-run evidence beats a single-run reading for *structure*; the LLM wins on
    *locator intent* (the one place the merge is measurably wrong today), and the replay check gates both.
-10. First milestone is a prerequisite with no LLM in it: record the candidate ladder on `AgentStep`. Then one
-    LLM call, measured offline on stored trajectories, on three targets — a different-query/different-duration
-    replay must pass, the 21-form sweep must yield ~zero params, and the known-broken fixtures must still fail.
+10. **Measured (Part D).** On the Dream Theater task, round 1's replay failed 2 of 3 value sets at `t4` on the
+    title-keyed click; triage emitted `positional_target`, the planner hinted `positional`, code applied it to
+    the rung `#dismissible > div > div a#video-title` + `nth(0)`, and round 2 passed all three including two
+    unseen queries. Still open: no repeat fold fires (triage has no episode for a varying-count gesture), and
+    `accept_states` is empty, so the gate checks the state *sequence*, not the goal.
 
 ---
 
@@ -58,18 +62,19 @@ and a concrete typed design for a NetGent generalizer agent.
 
 **Source discipline.** Everything about NetGent is cited by file and line, with the branch named — the code is
 spread over three branches and it matters which. Everything external is cited by URL. Claims I could not verify
-are in §D.
+are in §E.
 
 Branches read (2026-09-02):
 
 | Branch | HEAD | What lives there |
 |---|---|---|
-| `eugene/v2-scaffold` | `ff242d0` | `generator/compiler.py` (single-run compile), the schema, `browser/locators.py`, `evals/` |
+| `eugene/v2-scaffold` | `8c7217b` | `generator/compiler.py` (single-run compile, now **including** the media gate and `MediaPlaying`), the schema, `browser/locators.py`, `evals/` |
 | `v2/multi-trajectory-parallel` | `a90e675` | `generator/merge.py`, `planner/` variations, the multi-run orchestrator, `agent/replay.py`, `agent/store.py` |
-| `origin/v2-media-observation` | `724cf03` | `MediaPlaying`, `AgentStep.media` / `AgentStep.t`, the media gate in the compiler, the seek prompt |
+| `v2/closed-loop-rounds` | — | `agent/triage.py`, `agent/generator/hints.py`, `plan_next`, the rounds loop, the M0 ladder on `AgentStep` — **the implementation of Part C**; see Part D |
 
-`merge.py` and `plan_variations` are **not** on `eugene/v2-scaffold`; `AgentStep.media` is on neither of the
-first two. A generator agent has to be designed against the union, and shipped after those branches land.
+Every `compiler.py` / `locators.py` / `workflow.py` line number below is against `eugene/v2-scaffold` @
+`8c7217b` (`git show HEAD:…`), because the working tree was mid-merge when this was written (§E.2);
+`triage.py` / `hints.py` / `planner/models.py` line numbers are against `v2/closed-loop-rounds`.
 
 ---
 
@@ -79,21 +84,23 @@ first two. A generator agent has to be designed against the union, and shipped a
 
 **One run → one NFA** (`generator/compiler.py`, `eugene/v2-scaffold`, 287 lines, zero LLM):
 
-- Keeps only successful action steps: `s.action is not None and s.error is None` (L135).
+- Keeps only successful action steps: `s.action is not None and s.error is None` (L197).
 - Each step becomes one `Transition`; the state it lands in is recognized by the query-stripped URL when the
-  URL changed (L162), plus — for the *next* step's target — an in-iframe `selector_visible` with a frame path
-  (L164-168, `_element_condition`) or a top-frame `selector_visible` (L173-174), plus a `dialog_matches` when
-  the step raised a JS dialog (L180-181).
-- Dwells ≥ 3 s become `Repeat` of 1 s `wait` slices so interrupt sweeps run between them (L51-52, L191-202).
-- Interruption steps leave the main word and become scoped ε-`Interrupt`s (L207-222), classified by a
+  URL changed (L218), plus — for the *next* step's target — a `selector_visible` carrying that edge's own
+  **locator chain** (L224; `_anchor`, L78-97: the chain itself is the condition, so role/name matching,
+  `exact`, frame steps and `nth` hold exactly as the action resolves them), plus a `dialog_matches` when the
+  step raised a JS dialog (L231).
+- Dwells ≥ 3 s become `Repeat` of 1 s `wait` slices so interrupt sweeps run between them (L53-54, L242-245).
+- Interruption steps leave the main word and become scoped ε-`Interrupt`s (L260-282), classified by a
   **conjunction of two regexes over prose**: the step's reasoning must match
-  `\b(ads?|advert\w+|pop-?ups?|cookies?|consent|banners?|dismiss\w*|no thanks)\b` (L38-41) **and** its target
-  selector must match `skip|dismiss|consent|cookie|no.?thanks|close|reject|accept|got.?it` (L46-49). The
-  comment at L43-45 records why both are needed: reasoning alone flagged a seek-slider click as an interrupt.
+  `\b(ads?|advert\w+|pop-?ups?|cookies?|consent|banners?|dismiss\w*|no thanks)\b` (L40-43) **and** its target
+  selector must match `skip|dismiss|consent|cookie|no.?thanks|close|reject|accept|got.?it` (L48-51). The
+  comment at L45-47 records why both are needed: reasoning alone flagged a seek-slider click as an interrupt.
 - Parameters are a **caller-declared literal sweep**: `-p name=sample` values are substituted case-insensitively
   (and URL-encoded) into action `text`/`value`/`url` fields and into state condition patterns — and
-  **never inside locators** (L258-262, and the docstring at L131-133: "never inside locators, where substring
-  matches over-abstracted names"). A sample that binds nowhere produces a warning, not a failure (L277-282).
+  **never inside locators** (`_bind_params`, L305-347; the docstring at L192-194 says "never inside locators,
+  where substring matches over-abstracted names"). A sample that binds nowhere produces a warning, not a
+  failure (L341).
 
 **N runs → one NFA** (`generator/merge.py`, `v2/multi-trajectory-parallel`, 808 lines, zero LLM). The typed-key
 merge of `trajectory-memory.md` §C.1:
@@ -125,8 +132,9 @@ L33-46, excludes interrupt edges and collapses self-loops). This is already ASI'
 ### P1 — positional intent compiled as an instance key
 
 The task says *"click the first video result"*. The explorer clicks it; `browser/locators.py::locator_candidates`
-(`eugene/v2-scaffold`, L15-59) ranks candidate chains **`#id` → `get_by_role` with a real accessible name →
-test-id → label → any css path**, and `unique_locator_for` (L67-94) takes the first unique one. On YouTube that
+(`eugene/v2-scaffold` @ `8c7217b`, L29-73) ranks candidate chains **`#id` → `get_by_role` with a real
+accessible name → test-id → label → any css path**, and `unique_locator_for` (L81-108) takes the first unique
+one. On YouTube that
 is the role+name rung: `get_by_role("link", name="<the video's title>")`. The title is an *instance*; the
 intent was a *position*.
 
@@ -169,10 +177,10 @@ typed). It cannot confirm `20`/`30`/`10`, because those live in a `WaitAction.se
 
 ### P3 — interrupts classified by regex over prose
 
-`_is_interruption` (L142-146) is two regexes ANDed. The comments record both failure directions:
+`is_interruption_step` (L172-181) is two regexes ANDed. The comments record both failure directions:
 
 - reasoning alone over-fires — *"maybe it restarted after the ad" flagged a seek-slider click as an interrupt
-  (v3 run, 2026-08-27)"* (L43-45);
+  (v3 run, 2026-08-27)"* (L45-47);
 - the word "skip" had to be excluded from the reasoning regex because *"fast-forward reasoning says 'skip ahead
   10 seconds'"* (L37).
 
@@ -331,7 +339,7 @@ the key move NetGent's compiler currently forbids: **a variable may appear insid
 ```
 
 `compile_trajectory`'s docstring says the opposite — *"never inside locators, where substring matches
-over-abstracted names"* (`compiler.py` L131-133) — and `merge._generalize_target` (L293-330) is the narrow,
+over-abstracted names"* (`compiler.py` L192-194) — and `merge._generalize_target` (L293-330) is the narrow,
 cross-run-evidenced exception. Workflow Use grants the LLM the general power; NetGent grants code the narrow
 one. §C proposes the middle: the LLM may request it, code must verify it.
 
@@ -1101,19 +1109,54 @@ For example, find_cheapest_flight(page, from: str, to: str) => {{"from": "New Yo
 (https://raw.githubusercontent.com/OSU-NLP-Group/SkillWeaver/main/skillweaver/templates/generate_practice_args.md)
 
 **That is exactly NetGent's `replay_check` with a different value set** — and it is the strongest external
-precedent for §C.8's primary metric.
+precedent for §C.7's primary metric.
+
+**And the authors say plainly that their own gate is gameable.** This is the most important paragraph in the
+survey for our design (https://arxiv.org/html/2504.07079v1, Appendix D.2.1):
+
+> Because our criteria for a function to be "verified" was to have it be called without producing an
+> exception, we found that occasionally, malfunctioning APIs could be marked as verified simply because they
+> **silenced all exceptions** that could have occurred. This represents a measure for evaluation having
+> unintended consequences. … instead of improving the function's signature or adding a check to ensure the
+> function was called correctly, the LLM adds "if" statements to simply avoid any of the atomic actions from
+> producing an error. While this does reduce the number of exceptions, it does not improve the robustness of
+> the API.
+
+§4.3 also names parameter choice as a top-2 *use*-time failure mode — *"We identify two primary categories of
+failures: (1) failure to identify the appropriate API and (2) **generating wrong parameters**."* — with a
+worked example and no rate.
+
+**NetGent has the same hole today, and Part D measures it.** `Workflow.accept_states` defaults to empty, and
+the schema says what empty means: *"Empty = legacy behavior (success = every edge ok)"* (`schema/workflow.py`
+L90-91). A replay in which every edge dispatched without error but nothing was achieved is recorded as a
+success. That is exactly the SkillWeaver failure mode; commit `724cf03` measured it on YouTube — *"the replay
+spent its dwells on a Sleep Number ad and its three +10s seeks no-op'd, **while every edge recorded ok**"* —
+and the Dream Theater artifact of §D.4 shipped with `accept_states: []`. §C.4 therefore requires a positive
+postcondition on the gate, and §C.7 promotes `accept` out of the deferred milestone.
 
 ### B.6.4 Voyager, ICAL — for completeness
 
-- **Voyager** (arXiv:2305.16291): the artifact is a Mineflayer async JS function, but it is parameterized only
-  by `bot` in practice (the skill-description prompt's own worked example is `async function
-  mineCobblestone(bot)` with the count `8` hardcoded). Admission is an LLM critic returning strict JSON —
-  notable because the critic reads **environment state** (inventory, biome, nearby blocks), not the agent's
-  narration. A grounded judge is closer to a state assertion than an opinion; that is the same reason NetGent's
-  verifier is fed page evidence and *"never carries the explorer's reasoning"* (`verifier/models.py` L33).
-- **ICAL** (arXiv:2406.14596v6): the artifact is a rewritten action sequence plus free-form NL and visual
-  annotations — **not parameterized at all**; generality is prose. Admission = execution in the environment
-  plus human NL feedback. TEACh +17.5 % goal-condition success; VisualWebArena 1.6×/2.8×.
+- **Voyager** (arXiv:2305.16291): the artifact is a Mineflayer async JS function, and the induced skills are
+  **never parameterized**. The prompt mandates it (`voyager/prompts/action_template.txt` L30: *"Write an async
+  function taking the bot as the only argument"*), and of the 172 skills shipped under
+  `skill_library/trial1/skill/code/`, 15 of 15 sampled take `bot` only — `collectFiveCactusBlocks(bot)`,
+  `cookSevenMutton(bot)`, `killFourSheep(bot)`, `smeltFiveRawIron(bot)`. **The quantities are baked into the
+  function name and body.** The sharp part: the hand-written primitives Voyager *calls* are parameterized
+  (`mineBlock(bot, name, count)`, `craftItem(bot, name, count)`), so the LLM consumes a parameterized API and
+  emits a strictly less abstract one. Admission is an LLM critic returning strict JSON, notable because it
+  reads **environment state** (inventory, biome, nearby blocks) rather than the agent's narration — the same
+  reason NetGent's verifier is fed page evidence and *"never carries the explorer's reasoning"*
+  (`verifier/models.py` L33). Removing self-verification costs **−73 % discovered items**, the largest single
+  ablation drop in the paper.
+- **ICAL** (arXiv:2406.14596v6, latest version 2025-09-18): the artifact is a stored **in-context example** —
+  a corrected action sequence plus NL annotations — and it is **not parameterized**; the induced records bind
+  literals (`"CounterTop_2"`, `"Mug_1"`) even though ICAL's own *action API* is typed
+  (`InteractionObject(object_class, object_instance, parent_object, grounding_phrase)`). Generalization happens
+  at retrieval-and-regeneration time (ada-002 + CLIP, top-k = 5), never by argument substitution. Admission =
+  execution plus human NL feedback; examples still failing after N feedback rounds are **not stored**. TEACh
+  unseen-val 35.8 SR / 54.2 GC vs HELPER's hand-written 34.5 / 36.7 (the "+17.5 %" is 54.2 − 36.7); ablation
+  w/o human-in-the-loop 29.9 / 41.0 against 35.1 / 49.3 full. The web-domain abstraction prompt
+  (`agent/prompts/prompt_add_knowledge.txt`) is referenced by the code and **absent from the repo** — 404.
 
 ### B.6.5 The 2026 wave — one paper is our formalism
 
@@ -1143,6 +1186,24 @@ them as design input, not as verified mechanism.
 - **W2S / RWSA** (arXiv:2606.06893) is one of the few to measure the *artifact* directly, by replay-based
   behavioural fidelity against reference skills: **0.503** vs Anthropic Skill Creator's 0.455. Even the winner
   reproduces about half the reference behaviour. (Its linked repo is empty.)
+- **WebXSkill** (arXiv:2604.13318v2, `github.com/aiming-lab/WebXSkill`) is the closest published match to
+  NetGent's *artifact*: *"executable skills, each pairing a **parameterized action program** with step-level
+  natural-language guidance"*, where a skill carries *"name, description, **typed parameters**, and per-step
+  guidance"* with `{{param}}` placeholders, indexed in a URL-keyed graph. It is also the only paper that
+  **third-party-measures** another system's library (Table 7 — per-skill execution SR / utilization):
+  SkillWeaver 84.1 / 8.2, WALT 67.2 / 22.0, WebXSkill 77.1 / 12.9, WebXSkill† 85.0 / 27.8. Its ablation says
+  what ASI's does: *w/o skill verification* is the largest single drop (69.5 → **55.2**), ahead of *w/o skill
+  graph* (59.1) and *w/o step guidance* (60.4).
+- **WALT** (arXiv:2510.01524) generates tools with **validated input schemas** in a demonstrate → generate →
+  validate loop, and defines the most directly transferable per-artifact objective in the survey: minimize
+  `FailRate(u, I_test) + StepCount(u) + AgenticRatio(u)`, where **AgenticRatio is the fraction of steps
+  requiring LLM-dependent reasoning — an explicit determinism term.** NetGent's AgenticRatio is 0 by
+  construction; it is worth reporting as such, next to the cost column.
+- **SGDR** (arXiv:2606.04391) mines text–code pairs by sliding-window segmentation and draws the distinction
+  §C.3 needs: `submit_driving_directions_form(start_field_id, dest_field_id, go_button_id, start_location,
+  destination)` separates **structural webpage arguments** from **task-specific content arguments**. Its
+  validation is a **counterfactual replay** — substitute the skill call back into the original trajectory,
+  re-execute, keep only if still judged successful.
 
 ## B.7 The parameter-decision signal table
 
@@ -1204,11 +1265,31 @@ cost/latency estimates ("10-30× slower", "$0.10-0.30") and the maturity disclai
 early development so we don't recommend using this in production."* ReUseIt reports success rate only, and
 has no parameter mechanism to measure.
 
+The zero-hit result was confirmed independently across five papers — AWM, ASI, ICAL v6, SkillWeaver v1 and
+Voyager v2 — for `precision`, `recall`, `F1`, `human evaluation`, `annotator` and `abstraction quality`.
+
 What is measured instead: end-task success rate (universal), steps saved, reuse rate, and — the most useful
 proxy — **induction acceptance rate**: ASI 15.6 % vs AWM 31.4 %. AWM's own "workflow quality analysis"
 (Table 10: ~7.4 workflows/site, function overlap 0.08–0.20, utility rate 0.91–0.94, Mind2Web coverage 0.40)
-measures *use*, not correctness. Two artifact-level numbers exist: W2S's replay fidelity 0.503, and
-Skill-DisCo's residual skill-call error rate 21.5 % on WebArena.
+measures *use*, not correctness.
+
+Six systems measure the **artifact** at all, and every one measures "does it run" or "does it replay", never
+"is this the right parameterization":
+
+| system | artifact-level metric | value |
+|---|---|---|
+| WebXSkill | per-skill execution SR / utilization | 77.1 / 12.9 — and it measures **SkillWeaver at 84.1 / 8.2** |
+| Skill-DisCo | skill-call execution error rate | 75.3 % → 0.0 % (ALFWorld); 33.9 % → **21.5 %** (WebArena) |
+| W2S | replay fidelity vs reference skills | **0.503** vs 0.455 |
+| WALT | `FailRate + StepCount + AgenticRatio` per tool | optimized, not reported as a headline |
+| ASI | verification pass rate | **15.6 %** of turns (AWM 31.4 %) |
+| ReUseIt | 9-participant comprehension/steerability study | qualitative — the only human evaluation of induced artifacts in this set |
+
+Two consequences. First, **even honed libraries carry roughly one broken entry in five** (WebXSkill's 77–85 %
+per-skill SR; Skill-DisCo's 21.5 % residual). Second, the abstraction *boundary* matters more than the code:
+Skill-DisCo's A1 ablation (one skill per trace, no cross-trace consolidation) produces a **larger** library
+(43 vs 5) and drops SR **99.3 → 53.0**. Over-fragmentation is a worse failure than under-generalization —
+an argument for NetGent's merge staying the structural authority (§C.5).
 
 **If NetGent measures parameter precision, it will be reporting a number nobody else has.** That is a
 publishable contribution on its own, and §C.8 makes it the eval.
@@ -1277,7 +1358,10 @@ Three rules the survey earns and this design adopts:
 2. **The recorder may infer less than the language can express** (CoScripter: *"It's ok for the user to write a
    command that uses a variable for the ordinal, but we shouldn't record one."*). Positional intent is
    expressible in the plan and never *derived* by code.
-3. **Replay is the grader, never a judge** (ASI; arXiv:2605.23899's 46.4 %/15.8 % result). The verifier stays
+3. **Replay is the grader, never a judge** (ASI; arXiv:2605.23899's 46.4 %/15.8 % result) — **and "every edge
+   returned ok" is not a grade.** SkillWeaver's authors document their own gate being satisfied by code that
+   merely silenced its exceptions (§B.6.3); NetGent's equivalent is an empty `accept_states`, and Part D
+   measures a shipped artifact with exactly that. The gate needs a positive postcondition. The verifier stays
    advisory and gets no vote on the generalization.
 
 ## C.1 Where it sits
@@ -1316,14 +1400,16 @@ protocol in `agent/llm.py` — same seam as the planner and verifier. It imports
 
 ### C.2.1 The prerequisite: record the candidate ladder
 
-`browser/locators.py::locator_candidates(el)` (`eugene/v2-scaffold` L15-59) already returns **every durable
-chain for an element, most durable first** — `#id` → `get_by_role(role, name=…)` → test-id → label → *any css
-path*. `unique_locator_for` (L67-94) picks the first that resolves uniquely and, when everything is ambiguous,
-appends `nth(match_index)` chosen by bounding box. `capture_locator` (L97-130) cross-checks against
-Playwright's own generator.
+`browser/locators.py::locator_candidates(el)` (`eugene/v2-scaffold` @ `8c7217b`, L29-73) already returns
+**every durable chain for an element, most durable first** — `#id` → `get_by_role(role, name=…)` → test-id →
+label → *any css path*. `unique_locator_for` (L81-108) picks the first that resolves uniquely and, when
+everything is ambiguous, appends `nth(match_index)` chosen by bounding box. `capture_locator` (L111-144)
+cross-checks against Playwright's own generator. (`is_volatile_selector` / `_VOLATILE_ID`, L17-26, keep
+machine-generated ids off the ladder — a per-mount `#skip-button\:2` could never match a future overlay.)
 
-**Then the alternatives are thrown away.** `AgentStep` keeps only the chosen `action` and a prose
-`locator_check` note (`explorer/models.py` L69-74).
+**Then the alternatives were thrown away** — `AgentStep` kept only the chosen `action` and a prose
+`locator_check` note. **This shipped** on `v2/closed-loop-rounds` as `locator_candidates`, `candidate_kinds`
+and `element` (`explorer/models.py` L83-89); §D.3 reports what the ladder turned out to contain.
 
 That css rung is the structure-keyed locator — on a results list it is something like
 `ytd-video-renderer:nth-of-type(1) a#video-title`, which encodes *position*, while the role rung encodes the
@@ -1336,13 +1422,14 @@ So, three fields on `AgentStep`, all populated by the browser layer, all compile
 
 ```python
     locator_candidates: list[Locator] = []   # the ladder from locator_candidates(el), in durability order
+    candidate_kinds: list[str] = []          # id | role | test_id | label | css | structural, per rung
     element: dict = {}                       # tag, type, role, name, format, required, frame_path — from DomElement
-    match_counts: list[int] = []             # how many elements each rung resolved to at capture time
 ```
 
-`match_counts` is what makes a positional edit checkable **offline, with no browser**: rung *k* is a legitimate
-positional anchor only if it resolved to > 1 element and the acted-on element was at a known index.
-`unique_locator_for` computes exactly this already and discards it.
+`candidate_kinds` is what makes a positional edit checkable **offline, with no browser**: a rung tagged
+`structural` is a container-relative path, which is a legitimate positional anchor once code appends the
+ordinal. (§C.4 V5 as first drafted asked for a `match_counts` list instead — how many elements each rung
+resolved to at capture time. The shipped design uses the kind tag; see §E.4.)
 
 `element` also unlocks a zero-LLM signal we are not using: browser-use decides a value is a parameter from
 `input[type=email]` and from `aria-label` keywords (§B.1.6), and NetGent's `DomElement` carries `tag`, `type`,
@@ -1425,9 +1512,9 @@ Ten rules. Each rejection appends a warning naming the edit and its `why`; **no 
 | **V1** | *Literal witness.* For each `ParamBinding`, `literal` must be recoverable from the named field of the named step's recorded action under a **closed** set of forms: `identity`, `quote_plus`, and — for `seconds` — `_number_in` numeric equality. Anything else is rejected. | Skyvern `_input_templated_holes_are_self_validating`; Rousillon "includes the text of any relation node" |
 | **V2** | *Provenance.* `kind: user` requires the literal (or its number) to appear in the task text or in a planner `value`. `kind: page` requires it to appear in `texts_seen`/the step observation **and not** in the task, and it must compile to a **dynamic** `Param` with a `ParamSource`, never a static one. A `kind: user` claim on a value the page supplied is downgraded to `page` with a warning. | Skyvern `ParameterType`; NetGent `ParamSource` already exists |
 | **V3** | *Shape band.* Reject a string literal shorter than **3** characters or longer than 500, or in a stop-list (`submit`, `search`, `ok`, `yes`, `no`, `next`, `continue`, `login`, the page's own button labels from `element.name`, the site host). Numeric `seconds` bindings are exempt — they compare, not substitute. | Skyvern `MIN=4`/`MAX=500` *"Short values … cause too many false-positive replacements"*; Workflow Use `STATIC_VALUES`; NetGent's `_MIN_VALUE_LEN=2` is too low |
-| **V4** | *Locators are never swept.* The literal sweep still touches only action value fields and state condition patterns. A `${param}` reaches a locator **only** through `LocatorIntent(kind="text_param")`. | `compiler.py` L131-133, unchanged |
-| **V5** | *Locator resolution.* `instance` → no-op. `positional` → `candidate` must index the recorded ladder; that rung must have `match_counts[candidate] >= index+1`; the acted-on element must have been at `index` in that rung's match set. `text_param` → the recorded `get_by_role` name must contain the param's literal case-insensitively, and the emitted chain is `[…frames…, get_by_role(role, name="${p}"), nth(0)]`. Any check that fails → keep the recorded chain. **All three checks run against recorded data; no browser.** | `merge._generalize_target` L293-330 generalized to N=1; CoScripter's ordinal-as-disambiguator |
-| **V6** | *Role edits.* `noise` is refused for a step whose action changed the base URL, and for the last step. `interrupt` requires `action.type == "click"` **and** an expressible target selector; code then builds the anchor state (`selector_visible`), the done state (`selector_hidden`), the resolve edge and the `scope` from the base URL, and sets `max_fires = 3`. | `compiler.py` L207-222 unchanged; the LLM supplies only the classification |
+| **V4** | *Locators are never swept.* The literal sweep still touches only action value fields and state condition patterns. A `${param}` reaches a locator **only** through `LocatorIntent(kind="text_param")`. | `compiler.py` L192-194, unchanged |
+| **V5** | *Locator resolution.* `instance` → no-op. `positional` → `candidate` must index the recorded ladder and that rung must be container-relative (`candidate_kinds[candidate] == "structural"` in the shipped design; this rule was first drafted against a `match_counts` list that was not built — §E.4). `text_param` → the recorded `get_by_role` name must contain the param's literal case-insensitively, and the emitted chain is `[…frames…, get_by_role(role, name="${p}"), nth(0)]`. Any check that fails → keep the recorded chain. **All three checks run against recorded data; no browser.** | `merge._generalize_target` L293-330 generalized to N=1; CoScripter's ordinal-as-disambiguator |
+| **V6** | *Role edits.* `noise` is refused for a step whose action changed the base URL, and for the last step. `interrupt` requires `action.type == "click"` **and** an expressible target selector; code then builds the anchor state (`selector_visible`), the done state (`selector_hidden`), the resolve edge and the `scope` from the base URL, and sets `max_fires = 3`. | `compiler.py` L260-282 unchanged; the LLM supplies only the classification |
 | **V7** | *Repeat folds.* `steps` must be contiguous in the trajectory, all with the same `_sig`, length ≥ 2. If `name` is set, the param's default is the **iteration count**, and `per_iteration` is recorded in `Param.description` (see the open question below). `max_iterations` is set by code to `max(3 × count, 10)`. | `merge._make_emit` dwell path L542-556 |
 | **V8** | *Accept must be witnessed.* `url_matches` must match the recorded final URL; `selector_visible`/`selector_hidden` must name a selector present in the final observation; `title_contains` must be a substring of the observed title; `media_playing` requires a matching final `media` reading. Unwitnessed → dropped. | Voyager's env-state critic; NetGent's `MediaPlaying` gate |
 | **V9** | *Param closure.* Every `${name}` reaching the artifact must have a `Param`; every `Param` must be referenced by ≥1 action or condition. Violations are **errors**, not warnings — the plan is re-applied without the offending binding. | Skyvern's `parameter_reference_guard`; NetGent's "never bound" warning promoted |
@@ -1438,6 +1525,15 @@ to its `alt_value` (and every folded repeat to its `alt_count`). Both must succe
 signature — `state_signature` already excludes interrupt edges and collapses self-loop repeats, so a different
 dwell length is not a difference (`replay.py` L33-46). A failure is reported honestly and the artifact is
 marked not-validated; it does **not** silently fall back.
+
+**V11 — the gate needs a positive postcondition.** `Workflow.accept_states` defaults to empty, and empty means
+*"success = every edge ok"* (`schema/workflow.py` L90-91). That is the oracle SkillWeaver's authors document
+being gamed (§B.6.3), the one commit `724cf03` measured failing on YouTube, and the one the Dream Theater
+artifact shipped with (§D.4). So: **a generalized workflow with no `accept_states` does not pass the gate.** At
+least one witnessed `Expectation` must survive V8 and become an accept state, or the compile reports
+`not-validated (no postcondition)`. This is ASI's "Skill Validity" DOM-diff, ReUseIt's execution guards and
+Skill-DisCo's postcondition satisfaction converging on one answer — and NetGent already has the primitive in
+`browser/triggers.py`, so it costs nothing and stays zero-LLM at replay.
 
 ## C.5 Composition with the multi-run merge
 
@@ -1522,7 +1618,7 @@ accept:
 
 - **roles.** Step 2 is a click whose selector matches `accept`; step 6's matches `skip`. V6 passes for both;
   code builds `Interrupt(state=i1, resolve=[ti1], scope=[states on youtube.com], max_fires=3)` exactly as
-  `compiler.py` L207-222. Both would also have fired today's regexes — the LLM agrees with code here, which is
+  `compiler.py` L260-282. Both would also have fired today's regexes — the LLM agrees with code here, which is
   the boring, good case. The value is that it no longer *depends* on the regex: the "skip ahead 10 seconds"
   collision that forced `skip` out of `_INTERRUPTION_RE` (L37) stops being a problem, because steps 8-10 are
   classified `main` on their reasoning, not on a keyword.
@@ -1534,12 +1630,13 @@ accept:
   the existing dwell path to `Repeat(count="${watch_time}", max_iterations=60)` of 1 s slices — the machinery
   `merge._make_emit` L542-556 already has, now reachable from one run.
 - **`locators[0]` — the load-bearing edit.** Candidate 2 must be a rung of step 5's recorded ladder. On a
-  results list that rung is the css path (`locator_candidates` step 5, *"any css path"*, L54-56), something
-  like `ytd-video-renderer:nth-of-type(1) a#video-title` — structure-keyed, not title-keyed. V5 checks
-  `match_counts[2] >= 1` and that the acted-on element was the 0th match. If the rung already pins position
-  (`nth-of-type(1)`) it is emitted as-is; if it resolves to many, code appends `nth(0)` and re-checks. **If
-  either check fails the edit is dropped and run 1's selector is kept — i.e. exactly today's artifact, plus a
-  warning naming why.** That degradation property is the reason this design is safe to ship.
+  results list that rung is the css path (`locator_candidates` step 5, *"any css path"*, `locators.py`
+  L67-70) — structure-keyed, not title-keyed. Code checks the rung exists and is container-relative, then
+  appends `nth(index)`. **If the check fails the edit is dropped and run 1's selector is kept — i.e. exactly
+  today's artifact, plus a warning naming why.** That degradation property is the reason this design is safe
+  to ship. **Measured (§D.2): the rung is `#dismissible > div > div a#video-title`, and code applied it with
+  `nth(0)`** — so the ordinal comes from code, not from the ladder, which is a narrower claim than this
+  section originally made.
 - **`repeats[0]`.** V7: steps 8-10 are contiguous, share `_sig = ("press", "l", <chain>)`, count 3 ✓. Compiled
   to one transition plus `Repeat(body=[that edge], count="${fast_forward_presses}", max_iterations=9)`, with
   `Param(name="fast_forward_presses", default="3", description="each press seeks +10 s (task: 30 s)")`.
@@ -1562,16 +1659,21 @@ P4 are closed on this family; if it fails, the failure names the edge.
 |---|---|---|---|
 | **M0** | Record `locator_candidates`, `match_counts` and `element` on `AgentStep` (§C.2.1) | **no** | Falsifiable in a day: does a *structure-keyed* rung actually exist in the ladder for the YouTube video click? If not, nothing downstream is buildable and the fix is in `locator_candidates`, not in a prompt. **Do this first, alone.** |
 | **M1** | `GeneralizationPlan` schema + validator + applier, exercised by a hand-written plan fixture against the stored 3-run YouTube bundle | **no** | The apply path is sound. Gate: applying an **empty** plan must produce a byte-identical workflow to today's. `merge_trajectories` already re-merges stored trajectories offline with zero LLM, so this whole milestone runs with no browser and no model. |
-| **M2** | The `generalize` node: one LLM call, structured output, three edit kinds only — `locators`, `params`, `repeats` | yes | The measurable hypothesis. `roles` and `accept` are deferred: the merge and the regexes already handle interrupts acceptably, and accept-states are a separate concern. |
-| **M3** | Replay gate on the single-run path, driven by `alt_value` | no | Closes the N=1 verification hole |
-| **M4** | `roles` and `accept` edits | yes | Only after M2's acceptance rate is understood |
+| **M2** | The `generalize` node: one LLM call, structured output, four edit kinds — `locators`, `params`, `repeats`, **`accept`** | yes | The measurable hypothesis. `accept` is *not* deferred: without a witnessed postcondition the gate is the known-broken "every edge ok" oracle (V11), which Part D measures shipping. `roles` is deferred — the merge and the regexes already handle interrupts acceptably. |
+| **M3** | Replay gate on the single-run path, driven by `alt_value`, requiring a non-empty `accept_states` | no | Closes the N=1 verification hole **and** the vacuous-success hole |
+| **M4** | `roles` edits | yes | Only after M2's acceptance rate is understood |
+
+**Status as of 2026-09-02:** M0, M1 and a rounds-shaped M2 have shipped on `v2/closed-loop-rounds` and been
+run end-to-end; M3 has not. See Part D for what each milestone actually produced and what it did not.
 
 ### Metrics
 
 1. **Metamorphic replay (primary).** A workflow compiled from the YouTube family must replay with a
-   *different query* **and** a *different duration* and produce the same state signature. Baseline today:
-   **fails** — measured and documented in `e8932d9`. Report `pass^k` over k replays, the retention metric of
-   `trajectory-memory.md` §C.6.
+   *different query* **and** a *different duration*, reach a witnessed accept state, and produce the same
+   state signature. Baseline before the closed loop: **fails** — measured in `e8932d9`, and again in round 1
+   of §D.2. Report `pass^k` over k replays, the retention metric of `trajectory-memory.md` §C.6, and report
+   **vacuous passes separately**: runs where every edge returned ok but no accept state held. That count is
+   unmeasurable today because `accept_states` is empty; making it measurable is M3.
 2. **False-param rate on the 21-form sweep (the negative control).** `netgent eval stress sweep` walks 21
    forms with the task *"Fill in THIS form completely with plausible values and submit it"*
    (`evals/sweep.py::FORM_TASK`). **No value in that task comes from the user** — the agent invents them all —
@@ -1586,7 +1688,7 @@ P4 are closed on this family; if it fails, the failure names the edge.
    is the comparison point. Near 100 % means the validator is too weak; near 0 % means the prompt or the
    inputs are wrong. This number is the health check on the whole design and costs nothing to collect.
 5. **Regression: the known-broken fixtures must still be rejected.** The generalizer must not paper over a
-   genuinely broken workflow by relaxing a locator until it matches *something*. (See §D — I could not locate
+   genuinely broken workflow by relaxing a locator until it matches *something*. (See §E.1 — I could not locate
    these fixtures in the tree; if they are informal, M1 should make them formal, as two committed trajectory
    bundles whose compile must not pass the gate.)
 6. **Cost.** One LLM call per compile; report tokens and dollars alongside the existing explore/verify usage
@@ -1632,7 +1734,8 @@ not a rewrite.
    they run an LLM at replay and we do not, so prose is not available to us — but the risk they cite is real:
    a positional locator survives a title change and breaks on a layout change. The mitigation is that the
    choice is *requested and checked*, never derived (rule 2 of §C.0), and that the replay gate catches it.
-   Worth revisiting once we have a failure corpus.
+   §D.2 is one confirmation on one site; it says nothing yet about layout drift over time, which is exactly
+   what Ringer's 37-day study measured and we have not.
 4. **`kind: page` bindings imply dynamic `Param` + `ParamSource` extraction with a `guard`** — machinery that
    exists in the schema (`control.py` L79-109) and is exercised by `tests/integration/test_dynamic_params.py`,
    but that the generator has never emitted. Defer past M2.
@@ -1642,7 +1745,180 @@ not a rewrite.
 
 ---
 
-# D. Unverified, uncertain, or could not confirm
+# Part D — Measured: the closed loop on the Dream Theater task (2026-09-02)
+
+Between the survey above and this revision, the design shipped. Branch `v2/closed-loop-rounds` (being merged
+into `eugene/v2-scaffold` at the time of writing — see §E.2), run artifacts committed under
+`v2/evals/results/closed-loop/dream-theater-2026-09-02/`. Everything in this part is read from those files and
+from the branch's source; nothing here is inferred.
+
+## D.1 What shipped, and how it differs from §C.3
+
+The implementation kept the contract of §C.0 exactly and made the vocabulary **narrower** than the
+`GeneralizationPlan` sketch — which is the right direction.
+
+| §C.3 sketch | shipped as | note |
+|---|---|---|
+| `GeneralizationPlan` | `NextRoundPlan` (`agent/planner/models.py` L119-138) | also carries `next_variations` and `scoped_subtasks`: the plan says what to *explore* next as well as what to *generalize* |
+| per-step edits keyed by `StepId` | `GeneralizationHint` keyed by **merge column index** (`agent/generator/hints.py` L32-46) | better: a column is the unit the merge already reasons about, and it exists at N ≥ 2 |
+| `LocatorIntent{instance, positional, text_param}` | `HintIntent = Literal["positional", "text_contains_param", "instance"]` (`hints.py` L15) | one-for-one |
+| `RepeatFold{steps, name, per_iteration}` | `RepeatFold{kind: press\|click, count_param}` (`hints.py` L18-29) | the block is *derived* from the column, not listed by the LLM — strictly safer |
+| `ParamBinding` | not a hint kind | the merge already confirms value params from cross-run variance; the LLM was not given a job code does correctly (§C.5) |
+| `StepRole` | `Episode(kind="conditional_step")` on the triage side | classification moved to code |
+| `Expectation` / `accept` | **not implemented** | the gap §D.4 measures |
+| rejections as warnings | `HintOutcome{hint, status: applied\|rejected, reason, transition}` + `acceptance_rate()` (`hints.py` L49-62) | the edit-acceptance metric of §C.7 #4 is a first-class number |
+
+`hints.py`'s own docstring states the contract in the doc's terms: *"A hint is a typed CHOICE among options
+the recordings already contain, never a selector, a regex, an action or artifact content … Code re-derives
+every hint from the recordings before applying it … a rejected hint leaves the draft unchanged."*
+
+Two components §C did not anticipate and that turn out to be load-bearing:
+
+- **`agent/triage.py`** (218 lines, zero LLM) turns one round's evidence into typed `Episode`s in a closed
+  vocabulary — `positional_target`, `unbound_value`, `conditional_step`, `flow_drift`, `unpassable`,
+  `judge_unmet`. Its authority rule is §B.8.3 in code: *"replay and merge signals are authoritative; the
+  judge's are advisory and are dropped when a replay with that run's values passed"* (L17-18), implemented at
+  L205-212 — a judge caveat survives only if no passing replay with that run's own value set contradicts it.
+- **The M0 ladder shipped** as three fields on `AgentStep` (`explorer/models.py` L83-89):
+  `locator_candidates: list[list[LocatorStep]]`, `candidate_kinds: list[str]`, `element: dict`. `triage._list_like`
+  (L95-113) reads `"structural" in step.candidate_kinds` as its primary signal, with a listy-role and an
+  `nth`-in-selector regex as fallbacks for records made before M0.
+
+## D.2 The run
+
+Task: *"Go to youtube.com, search for Dream Theater - Under a glass moon and play the first video that pops
+up…"*, `--runs 3 --rounds 3`, model `claude-code:sonnet`. Canonical param names proposed by the planner:
+`search_query, watch_time_1, fast_forward_time, watch_time_2, pause_time, play_time_2`.
+
+**Round 1** (`round-1/`). All three runs achieved (run 3 needed a second attempt). The merge confirmed four
+params — `search_query, watch_time_1, pause_time, play_time_2` — and dispositioned the columns
+`{aligned: 5, param: 4, dropped: 12, target-varies: 1, interrupt: 2}`. Column 5 is the video click:
+
+```json
+{"index": 5, "disposition": "target-varies", "support": 3, "action_type": "click",
+ "targets_by_run": {"1": "role=link[name=\"Under a Glass Moon 7 minutes, 4 seconds\" i]",
+                    "2": "role=link[name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\" i]",
+                    "3": "role=link[name=\"Pink Floyd - Comfortably numb 6 minutes, 55 seconds\" i]"},
+ "transition": "t4"}
+```
+
+The replay gate then failed exactly as §A.2 P1 predicts:
+
+```
+replay {... 'search_query': 'Dream Theater - Under a glass moon' ...}: ok states=10 last=['s9','s10']
+replay {... 'search_query': 'Pink Floyd - Comfortably Numb' ...}: FAILED at t4 (action_error; unmet ['url_matches','selector_visible'])
+replay {... 'search_query': 'Metallica - Master of Puppets' ...}: FAILED at t4 (action_error; unmet ['url_matches','selector_visible'])
+replay_passed=False unseen_passed=0
+```
+
+Triage emitted four episodes — `positional_target` on column 5 at `t4`, **replay-confirmed**; two
+`conditional_step`; one `judge_unmet` — and `plan_next` returned three hints, two fresh variations and one
+scoped sub-task. Its hint for column 5, verbatim from `round-2/generalized.json`:
+
+```json
+{"column": 5, "intent": "positional", "param_name": null, "repeat_fold": null,
+ "why": "task text says 'play the first video that pops up'; replay FAILED at t4 for runs 2 and 3 because
+         run 1's literal title selector was kept instead of a position-based match — episode explicitly flags
+         this as list-like/positional"}
+```
+
+**Round 2.** The generator applied it, and — this is the part that matters — applied it *because code found a
+rung to apply it to*:
+
+```json
+{"status": "applied", "transition": "t4",
+ "reason": "structural rung '#dismissible > div > div a#video-title' + nth(0)"}
+```
+
+Column 5's disposition became `positional`, with the note *"switched to the structural rung + nth(0): the same
+position in every run"*. The gate then passed:
+
+```
+replay {... 'Dream Theater - Under a glass moon' ...}: ok states=10 last=['s9','s10']
+replay {... 'Pink Floyd - Comfortably Numb' ...}:      ok states=10 last=['s9','s10']
+replay {... 'Metallica - Master of Puppets' ...}:      ok states=10 last=['s9','s10']
+replay_passed=True unseen_passed=2
+```
+
+**Two of the three value sets had never been explored** — the artifact was compiled from run 1's trajectory and
+replays for queries whose first result has a different title. That is P1 closed, end to end, zero LLM at replay.
+
+## D.3 What this resolves, and what it costs
+
+**§E.3's load-bearing unknown is resolved in the affirmative.** The previous revision flagged as unverified
+whether `locator_candidates()` actually yields a *structure-keyed* rung for a YouTube result link. It does:
+`#dismissible > div > div a#video-title`. Note what makes it work — it is a **descendant CSS path**, not an
+`nth-of-type` chain, and the positional part comes from the appended `nth(0)`. So the mechanism is not "the
+ladder happens to contain an ordinal selector"; it is "the ladder contains a *container-relative* rung, and
+code adds the ordinal". That is a narrower and more robust claim than §C.2.1 made, and it is the one to carry
+forward.
+
+**Hint acceptance rate was 1/3** (`acceptance_rate` over `round-2/generalized.json.hints`). The two rejections
+are both `"column 7 is not a main-path column of this merge"` / `"column 9 is not a main-path column"` — the
+planner emitted `instance` hints for columns triage had reported as `conditional_step`, i.e. columns the merge
+had already turned into interrupts and removed from the main word. Compare ASI's 15.6 %: our rejections are not
+the validator catching hallucinated generalizations, they are the planner addressing columns that no longer
+exist. **That is a fixable interface bug, not evidence about LLM quality**, and it means the acceptance rate is
+not yet the health signal §C.7 #4 wanted it to be. Two candidate fixes: have triage omit `conditional_step`
+episodes for columns the merge already compiled to an `Interrupt`, or have `normalize_next_round_plan` drop
+hints whose column is not main-path (it already validates the column *exists*, `planner/models.py` L86-93).
+
+## D.4 The two things still open — and what the evidence says the cause is
+
+**(a) `fast_forward_time` never became a param, and no fold fired.** The user's report of this is confirmed,
+but the cause is not where §C.4 V7 assumed. The fold machinery is present and capable: `merge.py` (L567-599 on
+that branch) extends a `repeat_fold` hint's column into a block over adjacent same-signature columns and even
+steps over scroll-only gap columns (*"a run scrolled to the player mid-gesture, and scrolls are dropped
+whatever their support"*). It never ran because **no `repeat_fold` hint was ever proposed** — all three round-1
+hints carry `"repeat_fold": null`. The planner says why, in its own note:
+
+> `fast_forward_time` and `watch_time_2` never surfaced as confirmed param columns (all the candidate columns
+> 11,14-19 were dropped as inconsistent press/wait actions present in only 1-2/3 runs) — the fast-forward
+> gesture (repeated key presses vs. a single wait) was not stable across runs.
+
+So the chain is: the explorer presses a different number of times each run → the press columns get support
+1–2 of 3 → the merge drops them by the structural-intersection rule (correctly, and with a warning per column)
+→ the next round's planner sees eleven `dropped` warnings and no signal that any of them are one gesture →
+it proposes no fold. Round 2 confirms the upstream half independently: runs 4 and 5 were judged **not
+achieved** on exactly this — *"only a single 'l' keypress occurred"*, *"only four 'l' key presses"*.
+
+**The gap is in triage's vocabulary, not in the generator.** `dropped` conflates two different things: a step
+the other runs genuinely did not need, and a *gesture whose repetition count varies with a parameter*. The
+second is code-detectable — a maximal run of adjacent columns sharing one signature, present in **every** run
+at count ≥ 1, whose per-run counts differ — and it deserves its own episode kind (say `varying_gesture`),
+carrying the per-run counts so `plan_next` can propose the `repeat_fold` that already exists. That is a pure-code
+addition to `triage.py` and it is the highest-value next change this doc can name.
+
+Second-order: the explorer's own unreliability at the gesture is a separate defect and should not be papered
+over by the generator. `explorer/prompt.py`'s seek section already instructs it to verify each press against
+the next MEDIA reading and to count verified jumps; runs 4 and 5 show it not doing so.
+
+**(b) `accept_states` is empty, so the gate checks the state *sequence*, not the goal.** Verified:
+`dream-theater.workflow.yaml` L328 is `accept_states: []`. `replay_passed=True` in round 2 therefore means
+"every edge dispatched ok and all three runs walked the same ten states" — it does **not** mean the video was
+searched, played, fast-forwarded, paused and resumed for the requested durations. This is precisely
+SkillWeaver's D.2.1 failure mode (§B.6.3) and it is why §C.4 V11 exists. The run supplies its own illustration:
+run 3's judge caveat was that the video was not muted for ~12 s after the ad skip, and `triage` correctly kept
+it as a `judge_unmet` episode *because no passing replay contradicted it* — a passing replay cannot contradict
+a goal the artifact never encodes.
+
+Given the fold gap, this matters more than it looks: `fast_forward_time` is not a param, so **no replay ever
+varies the fast-forward**, and no accept state asserts the video advanced. A workflow that silently skipped the
+fast-forward entirely would still report `replay_passed=True`.
+
+## D.5 Revised recommendations
+
+| # | change | why, from this run |
+|---|---|---|
+| 1 | **Add a `varying_gesture` episode to `triage.py`** — adjacent same-signature columns present in every run with differing per-run counts — and let `plan_next` propose the `repeat_fold` that already exists | the fold machinery works and was never invoked; `dropped` hides the pattern (§D.4a) |
+| 2 | **Implement `accept` (V11).** No `accept_states` ⇒ not validated | measured shipping empty; the gate is currently the oracle §B.6.3 documents being gamed (§D.4b) |
+| 3 | **Do not hint columns that are not main-path** — filter in triage or in `normalize_next_round_plan` | 2 of 3 rejections in round 2 were this, which corrupts the acceptance-rate metric (§D.3) |
+| 4 | Keep §C.5's precedence table as written | round 1 → 2 is one clean confirmation of the `target-varies` row: code was measurably wrong, the LLM was right, and code still had the last word on whether the fix could be applied |
+| 5 | Fix the explorer's seek verification before blaming the generator for `fast_forward_time` | runs 4 and 5 under-pressed and were judged not achieved (§D.4a) |
+
+---
+
+# E. Unverified, uncertain, or could not confirm
 
 **About NetGent's own code**
 
@@ -1652,18 +1928,25 @@ not a rewrite.
    therefore states the *requirement* (a generalizer must not rescue a genuinely broken workflow) without
    citing the fixtures. If they exist informally, M1 should commit them as two trajectory bundles whose
    compile must fail the replay gate.
-2. **The design spans three unmerged branches.** `merge.py`, `plan_variations`, `agent/replay.py` and
-   `agent/store.py` are on `v2/multi-trajectory-parallel`; `AgentStep.media`/`AgentStep.t`, `MediaPlaying` and
-   the media gate are on `origin/v2-media-observation`; `eugene/v2-scaffold` has none of them. A generalizer
-   built against the union cannot ship before those land.
-3. **The load-bearing empirical claim of §C.6 is untested:** that `locator_candidates()` actually produces a
-   *structure-keyed* css rung (something like `ytd-video-renderer:nth-of-type(1) a#video-title`) for the
-   YouTube video-title link. The ladder's rung 5 is *"any css path"* (`locators.py` L54-56) and the css
-   candidates come from `browser/dom/scripts/snapshot.js::candidates` (L149), which I did not read. **M0 exists
-   precisely to falsify this**, and if it fails the fix is in the candidate generator, not in a prompt.
-4. **`AgentStep` field names in §C.2.1** (`locator_candidates`, `match_counts`, `element`) are a proposal, not
-   existing code. `unique_locator_for` computes the match counts and the bbox-chosen index internally
-   (L84-94) and discards them; I did not verify that surfacing them is free of a performance cost.
+2. **Branch state, updated 2026-09-02.** `eugene/v2-scaffold` @ `8c7217b` now carries the merge, the media
+   gate and `MediaPlaying`; the closed loop (`agent/triage.py`, `agent/generator/hints.py`, `plan_next`, the
+   rounds loop) is on **`v2/closed-loop-rounds`** and was **mid-merge into `eugene/v2-scaffold` when this was
+   written** — `.git/MERGE_HEAD` present, four conflicted paths including
+   `v2/src/netgent/agent/generator/compiler.py`. Line citations for `compiler.py`, `locators.py` and
+   `workflow.py` in this doc are against `eugene/v2-scaffold` @ `8c7217b` (i.e. `git show HEAD:…`), **not**
+   against the conflicted working tree. Citations for `triage.py`, `hints.py` and `planner/models.py` are
+   against `v2/closed-loop-rounds`. Once the merge lands, both sets move.
+3. **RESOLVED (was: the load-bearing empirical claim of §C.6 is untested).** `locator_candidates()` does yield
+   a structure-keyed rung for a YouTube result link — `#dismissible > div > div a#video-title`, applied with
+   `nth(0)`. Evidence and the corrected framing are in §D.3. The remaining nuance: it is a *container-relative
+   descendant path*, not an `nth-of-type` chain, so the ordinal is supplied by code, not found in the ladder.
+   Whether that holds on sites other than YouTube is untested.
+4. **`AgentStep` field names in §C.2.1 shipped, but not as proposed.** `v2/closed-loop-rounds` has
+   `locator_candidates`, `candidate_kinds` and `element` (`explorer/models.py` L83-89); there is **no
+   `match_counts`** field as §C.2.1 sketched. `triage._list_like` keys on `"structural" in step.candidate_kinds`
+   instead. The V5 check as written in §C.4 ("`match_counts[candidate] >= index+1`") therefore does not
+   correspond to shipped code — the shipped validation is inside the merge's positional path, which I did not
+   read line-by-line.
 5. **Whether a folded `press` repeat should be a self-loop edge** (so `state_signature` collapses it, as it
    does for dwells) is a design assertion, not something I tested. If it is not a self-loop, a different
    `alt_count` changes the signature and the metamorphic check would fail spuriously.
@@ -1696,17 +1979,29 @@ not a rewrite.
     confirms `"oa_status":"closed"`. Everything attributed to CoScripter in §B.5.1 comes from the Koala CHI
     2007 PDF, the GROUP '07 poster, IBM's shipped help pages, and the extension source. Nothing is quoted from
     CHI 2008.
-13. **§B.5.3 (version spaces) is not re-verified today.** It rests on `trajectory-memory.md` §B.2.6, which
+13. **Two named systems were never fetched:** *Reasoning Primitive Induction* (arXiv:2606.02994) and *SAGE*
+    (arXiv:2512.17102). Treat as unconfirmed. Also explicitly *not* examined: Cradle, Agent-Pro, LearnAct,
+    Optimus-1/2, Agent Symbolic Learning, WebGauntlet — unexamined, not absent.
+14. **The additions in §B.6.5 (WebXSkill, WALT, SGDR), the Voyager/ICAL corrections in §B.6.4 and the
+    artifact-metric table in §B.8.2** come from a verification pass I did not independently repeat. WebXSkill
+    has released code (`github.com/aiming-lab/WebXSkill`); WALT, SGDR, Skill-DisCo, MIND-Skill and W2S have
+    not. WebXSkill's Table 7 measures SkillWeaver third-party — useful, but one lab's measurement of another's
+    system.
+15. **§B.5.3 (version spaces) is not re-verified today.** It rests on `trajectory-memory.md` §B.2.6, which
     cites Lau/Wolfman/Domingos/Weld, *Machine Learning* 53 (2003). A dedicated re-check was still running when
     this doc was written; the claims used here (monotone narrowing, 1–2 demos under a strong prior, the late
     anomalous example, active learning as the fix) are the ones that doc already verified.
 
 **Judgement calls, not facts**
 
-14. **"Edit acceptance near 100 % means the validator is too weak"** (§C.7 #4) is a heuristic borrowed from
+16. **"Edit acceptance near 100 % means the validator is too weak"** (§C.7 #4) is a heuristic borrowed from
     ASI's 15.6 %, not a measured threshold for our setting.
-15. **Raising `_MIN_VALUE_LEN` from 2 to 3–4** (§C.9 #2) is inferred from Skyvern's independent choice of 4;
+17. **Raising `_MIN_VALUE_LEN` from 2 to 3–4** (§C.9 #2) is inferred from Skyvern's independent choice of 4;
     its effect on the existing merge is unmeasured and it should not be changed without running the sweep.
-16. **The precedence table in §C.5** encodes a judgement — cross-run evidence beats a single-run reading for
-    *structure*, the LLM wins on `target-varies` — grounded in one measured case (`e8932d9`). One case is
-    enough to justify trying it; it is not enough to call it settled.
+18. **The precedence table in §C.5** encodes a judgement — cross-run evidence beats a single-run reading for
+    *structure*, the LLM wins on `target-varies` — now grounded in two measured cases (`e8932d9` and the
+    round-1 → round-2 transition of §D.2). Two cases on one site and one task family is enough to justify
+    keeping it; it is not enough to call it settled.
+19. **§D is one run, one task, one site, one model** (`claude-code:sonnet`, YouTube, 3 runs × 2 rounds). The
+    positional fix is a single confirmation. Nothing here establishes a rate for anything, and §C.7's metrics
+    (false-param rate on the 21-form sweep, precision/recall on a labelled set) remain unmeasured.
