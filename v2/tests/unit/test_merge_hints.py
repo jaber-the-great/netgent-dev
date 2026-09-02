@@ -85,7 +85,9 @@ def test_positional_hint_switches_the_column_to_the_structural_rung_and_nth():
     assert acceptance_rate(out.generalized.hints) == 1.0
     # the state before the click anchors on the positional target — expressible as `css >> nth=0`
     (anchor,) = [c for c in out.workflow.state(click.source).conditions if c.type == "selector_visible"]
-    assert anchor.selector == f"{STRUCT} >> nth=0"
+    # The anchor carries the chain itself (media-platforms fix), not a rendered selector.
+    assert anchor.selector is None
+    assert [(st.fn, st.args) for st in anchor.locator] == [("locator", [STRUCT]), ("nth", [0])]
     assert not any("targets differ" in w for w in warnings)
 
 
