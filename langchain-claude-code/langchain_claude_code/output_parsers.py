@@ -41,6 +41,50 @@ def _extract_json_text(text: str) -> str:
     return text.strip()
 
 
+_ENVELOPE_KEYS = frozenset({"$PARAMETER_VALUE", "value", "values", "result", "output", "response"})
+
+
+def unwrap_envelope(data: Any, schema: dict[str, Any] | type) -> Any:
+    r"""Undo the CLI's structured-output envelope, when there is one.
+
+    Measured (Claude Code 2.1.x): for a schema with a dict-valued field the CLI may return
+    ``{"<field>": "<the whole answer as a JSON string>"}`` — e.g. a plan whose
+    ``variations[].values`` is a dict came back as ``{"values": "{\"variations\": [...]}"}`` —
+    or the ``$PARAMETER_VALUE`` wrapper. Rule: a single-key dict whose only value is a JSON
+    string decoding to an object, where the key is not a property of the schema or is a known
+    envelope key, is replaced by that object (recursively). A genuine single-field answer
+    whose value is not a JSON object is left alone.
+    """
+    properties = _schema_properties(schema)
+    for _ in range(4):  # bounded: envelopes nest at most a few levels
+        if not (isinstance(data, dict) and len(data) == 1):
+            break
+        ((key, value),) = data.items()
+        if not isinstance(value, str):
+            break
+        try:
+            inner = json.loads(value)
+        except (json.JSONDecodeError, ValueError):
+            break
+        if not isinstance(inner, dict):
+            break
+        # An envelope: a known wrapper key, a key the schema does not declare, or a declared
+        # key whose string value decodes to an object carrying the schema's own properties.
+        if key in _ENVELOPE_KEYS or key not in properties or (properties & set(inner)):
+            data = inner
+            continue
+        break
+    return data
+
+
+def _schema_properties(schema: dict[str, Any] | type) -> set[str]:
+    try:
+        js = schema_to_json_schema(schema)
+    except Exception:  # an unusual schema: no property knowledge
+        return set()
+    return set((js or {}).get("properties", {}) or {})
+
+
 def parse_structured_message(message: BaseMessage, schema: dict[str, Any] | type) -> Any:
     """The structured value carried by ``message``, validated against ``schema``.
 
@@ -61,6 +105,7 @@ def parse_structured_message(message: BaseMessage, schema: dict[str, Any] | type
                 "No structured_output in the CLI result and the message text is "
                 f"not valid JSON: {exc}"
             ) from exc
+    data = unwrap_envelope(data, schema)
     if isinstance(schema, type) and issubclass(schema, BaseModel):
         try:
             return schema.model_validate(data)

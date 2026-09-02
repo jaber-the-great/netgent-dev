@@ -97,6 +97,13 @@ async def draft_variations(state: VariationState, runtime: Runtime[PlannerContex
     ctx = runtime.context
     content = build_variations_content(state["task"], state["n"], state.get("url"), state.get("pinned"))
     plan: VariationPlan = await ctx.llm.judge(VARIATIONS_SYSTEM, content, VariationPlan)
+    if not plan.variations and state["n"] > 1:
+        # An empty plan is a wasted round (three identical runs infer nothing): ask once more,
+        # naming the shape — measured on the claude-code route, where an enveloped answer
+        # validated as a plan with no variations.
+        retry = [*content, {"type": "text", "text": f"\nYour previous answer contained no variations. Return exactly "
+                                                     f"{state['n']} variations, each with task_text and values."}]
+        plan = await ctx.llm.judge(VARIATIONS_SYSTEM, retry, VariationPlan)
     return {"plan": normalize_variation_plan(plan, state["task"], state["n"], state.get("pinned"))}
 
 
