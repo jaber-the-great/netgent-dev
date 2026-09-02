@@ -18,10 +18,18 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.runtime import Runtime
 
 from netgent.agent.planner.context import PlannerContext
-from netgent.agent.planner.models import Plan, VariationPlan, normalize_variation_plan
+from netgent.agent.planner.models import (
+    NextRoundPlan,
+    Plan,
+    VariationPlan,
+    normalize_next_round_plan,
+    normalize_variation_plan,
+)
 from netgent.agent.planner.prompt import (
+    NEXT_ROUND_SYSTEM,
     PLANNER_SYSTEM,
     VARIATIONS_SYSTEM,
+    build_next_round_content,
     build_planner_content,
     build_variations_content,
 )
@@ -123,4 +131,43 @@ async def plan_variations(
     final = await graph.ainvoke(
         {"task": task, "url": url, "n": n, "pinned": dict(pinned or {})}, context=PlannerContext(llm=llm)
     )
+    return final["plan"]
+
+
+class NextRoundState(TypedDict, total=False):
+    context: Any  # RoundContext (agent/rounds.py)
+    plan: Any  # NextRoundPlan (draft_next_round's output)
+
+
+async def draft_next_round(state: NextRoundState, runtime: Runtime[PlannerContext]) -> dict:
+    """RoundContext → NextRoundPlan: the ONE LLM call of the closed loop's planner, normalized
+    in code (≤ N runs, canonical names, values verbatim, hints on existing columns)."""
+    ctx = runtime.context
+    rc = state["context"]
+    plan: NextRoundPlan = await ctx.llm.judge(NEXT_ROUND_SYSTEM, build_next_round_content(rc), NextRoundPlan)
+    return {"plan": normalize_next_round_plan(
+        plan, n=rc.runs_per_round, canonical_names=rc.canonical_names, base_values=rc.base_values,
+        columns=[c.index for c in rc.latest_columns()],
+    )}
+
+
+def create_next_round_planner() -> CompiledStateGraph:
+    """Build and compile the next-round planner graph. Same shape as `create_planner_agent`."""
+    return (
+        StateGraph(NextRoundState, context_schema=PlannerContext)
+        .add_node("draft_next_round", draft_next_round)
+        .add_edge(START, "draft_next_round")
+        .add_edge("draft_next_round", END)
+        .compile(name="next_round_planner")
+    )
+
+
+NEXT_ROUND_PLANNER = create_next_round_planner()  # compiled ONCE
+
+
+async def plan_next(context, *, llm: "LLM", graph: CompiledStateGraph | None = None) -> NextRoundPlan:
+    """The ONE run API for round ≥ 2: the accumulated RoundContext in, the next round's
+    variations / scoped sub-tasks / generalization hints out. `graph` defaults to NEXT_ROUND_PLANNER."""
+    graph = NEXT_ROUND_PLANNER if graph is None else graph
+    final = await graph.ainvoke({"context": context}, context=PlannerContext(llm=llm))
     return final["plan"]
