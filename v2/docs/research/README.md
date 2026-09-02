@@ -21,6 +21,7 @@ Working notes derived from three design meetings (Eugene Vuong ↔ Manni Moghimi
 - [browser-agent-date-inputs.md](browser-agent-date-inputs.md) — date inputs and pickers: format signals, dispatch strategies, measured on the two failing sweep forms (implemented).
 - [trajectory-memory.md](trajectory-memory.md) — inducing one generalized workflow from N trajectories (ReUseIt corrected: no real merge; failures +8.7, fallbacks +20); the typed-key merge proposal and the runs-independence policy.
 - [generator-agent.md](generator-agent.md) — should the generator be an LLM agent? Survey of Workflow Use / Skyvern / ReUseIt / AWM parameter decisions; design: LLM emits a typed GeneralizationPlan, code re-derives and validates every edit, replay is the gate.
+- [generalization-papers.md](generalization-papers.md) — the literature on turning demonstrations into generalized procedures (SMARTedit/Ringer/Rousillon → AWM/ASI/NSI/Skill-DisCo): version-space merge, branch induction, positional locators, replay-on-held-out as the gate; a six-stage algorithm for our generator.
 - [agent-verification.md](agent-verification.md) — how agents verify task completion: judges vs deterministic oracles, feedback contracts; the NetGent verifier design.
 - [verification-papers.md](verification-papers.md) — the verification/judging literature, old and new (test oracles, LLM-as-judge limits, self-verification, replay determinism).
 - [stealth-after-patchright.md](stealth-after-patchright.md) — what Patchright covers, measured residuals, `BrowserProfile` verdict (implemented).
