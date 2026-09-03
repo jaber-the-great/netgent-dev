@@ -1,0 +1,11 @@
+{
+  "task_text": "Go to youtube.com search for AC/DC - Thunderstruck and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 12s then fast-forward for 25s and then watch for 18s. If at any point any pop-ups happen dismiss them",
+  "values": {
+    "video_query": "AC/DC - Thunderstruck",
+    "initial_watch_time": "12s",
+    "fast_forward_time": "25s",
+    "second_watch_time": "18s"
+  },
+  "round": 1,
+  "scoped": false
+}

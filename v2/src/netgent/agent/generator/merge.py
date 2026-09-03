@@ -74,10 +74,37 @@ class RunInput(BaseModel):
     scoped: bool = False
 
 
+class StepKey(BaseModel):
+    """A durable name for an aligned column: (action type, target SHAPE, occurrence among like
+    columns) — docs/research/generator-agent-v2.md §C.2.
+
+    The shape — not the instance — is what survives a value change: the MOP video click is
+    ``click:get_by_role|link#0`` whether the recorded name is Metallica or Linkin Park, and it
+    stays that whether the merge numbered the column 4, 6 or 7 as runs were added. Off-path
+    columns (dropped / interrupt / branch) count their occurrences apart and render with ``~``.
+    Not stable if the spine run changes or the prefix gains another column of the same shape —
+    both visible (the key simply fails to match), neither silent, unlike a column index.
+    """
+
+    action: str
+    shape: str  # "|".join(str(x) for x in _target_shape(spine_action))
+    occurrence: int = 0
+    main_path: bool = True
+
+    def render(self) -> str:
+        return f"{self.action}:{self.shape}{'#' if self.main_path else '~'}{self.occurrence}"
+
+
+def action_shape(action: Action) -> str:
+    """The `shape` half of a StepKey for an action."""
+    return "|".join(str(x) for x in _target_shape(action))
+
+
 class ColumnReport(BaseModel):
     """One aligned column's disposition — the merge's evidence trail."""
 
     index: int
+    key: str = ""  # StepKey.render(): stable across rounds where `index` is not (§C.2)
     # aligned | param | param-target | positional | folded | interrupt | branch | dropped |
     # value-diverges | target-varies
     disposition: str
@@ -565,6 +592,7 @@ def merge_trajectories(
     hint_by_col: dict[int, GeneralizationHint] = {}
     for h in hints:
         hint_by_col.setdefault(h.column, h)
+    shapes: dict[int, str] = {}  # column index -> the spine action's shape (for the StepKey)
     # Fold blocks first: a repeat_fold hint names ONE column of a run of identical presses;
     # the block extends both ways over columns whose every step shares that signature.
     # (a scroll-only gap column between two press columns does not break the block: a run
@@ -605,6 +633,7 @@ def merge_trajectories(
         values = {}
         if field is not None:
             values = {rid: str(getattr(st.action, field, "")) for rid, st in sorted(col.steps.items())}
+        shapes[i] = action_shape(spine_step.action)
         reports.append(ColumnReport(
             index=i, disposition=disposition, support=len(col.steps), runs=sorted(col.steps),
             action_type=spine_step.action.type, target=_target_selector(spine_step.action),
@@ -706,6 +735,7 @@ def merge_trajectories(
     )
     for rep in reports:
         rep.transition = edge_by_col.get(rep.index)
+    assign_keys(reports, shapes)
     judged = {id(o.hint) for o in outcomes}
     for h in hints:
         if id(h) not in judged:
@@ -728,6 +758,19 @@ def merge_trajectories(
         hints=outcomes,
     )
     return MergeOutcome(workflow=wf, generalized=generalized)
+
+
+def assign_keys(reports: list[ColumnReport], shapes: dict[int, str]) -> None:
+    """Set every column's StepKey: occurrence counted among MAIN-PATH columns of the same
+    (action, shape) — so adding a run, renumbering, or a new column of a different shape
+    leaves the key alone — and separately among off-path columns."""
+    seen: dict[tuple[str, str, bool], int] = {}
+    for rep in sorted(reports, key=lambda r: r.index):
+        on_path = rep.transition is not None
+        base = (rep.action_type, shapes.get(rep.index, rep.action_type), on_path)
+        occ = seen.get(base, 0)
+        seen[base] = occ + 1
+        rep.key = StepKey(action=base[0], shape=base[1], occurrence=occ, main_path=on_path).render()
 
 
 def _make_fold(block, members, hint, spine_rid, values_by_run, confirmed, confirm, report, warnings) -> _EmitStep | str:

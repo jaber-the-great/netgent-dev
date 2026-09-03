@@ -1,0 +1,188 @@
+{
+  "workflow_name": "mop",
+  "workflow_version": "1",
+  "started_at": "2026-09-03T03:23:36.377775Z",
+  "finished_at": "2026-09-03T03:25:21.703815Z",
+  "success": false,
+  "edges": [
+    {
+      "transition_id": "t1",
+      "source": "init",
+      "target": "s1",
+      "action_type": "goto",
+      "outcome": "ok",
+      "started_at": "2026-09-03T03:23:36.377868Z",
+      "duration_ms": 3018.31620791927,
+      "trigger_latency_ms": 38.12033298891038,
+      "conditions": [
+        {
+          "type": "url_matches",
+          "met": true
+        },
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/t1.png",
+      "media": null,
+      "error": null
+    },
+    {
+      "transition_id": "ti4",
+      "source": "i4",
+      "target": "i4_done",
+      "action_type": "click",
+      "outcome": "recovered",
+      "started_at": "2026-09-03T03:23:39.399479Z",
+      "duration_ms": 10578.206875012256,
+      "trigger_latency_ms": null,
+      "conditions": [
+        {
+          "type": "selector_hidden",
+          "met": false
+        }
+      ],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/ti4.png",
+      "media": null,
+      "error": "state 'i4_done' not recognized within 10000ms; unmet conditions: ['selector_hidden']"
+    },
+    {
+      "transition_id": "ti4",
+      "source": "i4",
+      "target": "i4_done",
+      "action_type": "click",
+      "outcome": "recovered",
+      "started_at": "2026-09-03T03:23:49.980349Z",
+      "duration_ms": 10464.127999963239,
+      "trigger_latency_ms": null,
+      "conditions": [
+        {
+          "type": "selector_hidden",
+          "met": false
+        }
+      ],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/ti4.png",
+      "media": null,
+      "error": "state 'i4_done' not recognized within 10000ms; unmet conditions: ['selector_hidden']"
+    },
+    {
+      "transition_id": "ti4",
+      "source": "i4",
+      "target": "i4_done",
+      "action_type": "click",
+      "outcome": "recovered",
+      "started_at": "2026-09-03T03:24:00.447582Z",
+      "duration_ms": 10581.38837502338,
+      "trigger_latency_ms": null,
+      "conditions": [
+        {
+          "type": "selector_hidden",
+          "met": false
+        }
+      ],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/ti4.png",
+      "media": null,
+      "error": "state 'i4_done' not recognized within 10000ms; unmet conditions: ['selector_hidden']"
+    },
+    {
+      "transition_id": "ti8",
+      "source": "i8",
+      "target": "i8_done",
+      "action_type": "click",
+      "outcome": "recovered",
+      "started_at": "2026-09-03T03:24:11.034299Z",
+      "duration_ms": 10559.80820802506,
+      "trigger_latency_ms": null,
+      "conditions": [
+        {
+          "type": "selector_hidden",
+          "met": false
+        }
+      ],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/ti8.png",
+      "media": null,
+      "error": "state 'i8_done' not recognized within 10000ms; unmet conditions: ['selector_hidden']"
+    },
+    {
+      "transition_id": "ti8",
+      "source": "i8",
+      "target": "i8_done",
+      "action_type": "click",
+      "outcome": "recovered",
+      "started_at": "2026-09-03T03:24:21.596085Z",
+      "duration_ms": 10535.650999983773,
+      "trigger_latency_ms": null,
+      "conditions": [
+        {
+          "type": "selector_hidden",
+          "met": false
+        }
+      ],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/ti8.png",
+      "media": null,
+      "error": "state 'i8_done' not recognized within 10000ms; unmet conditions: ['selector_hidden']"
+    },
+    {
+      "transition_id": "ti8",
+      "source": "i8",
+      "target": "i8_done",
+      "action_type": "click",
+      "outcome": "recovered",
+      "started_at": "2026-09-03T03:24:32.133951Z",
+      "duration_ms": 10569.372874917462,
+      "trigger_latency_ms": null,
+      "conditions": [
+        {
+          "type": "selector_hidden",
+          "met": false
+        }
+      ],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/ti8.png",
+      "media": null,
+      "error": "state 'i8_done' not recognized within 10000ms; unmet conditions: ['selector_hidden']"
+    },
+    {
+      "transition_id": "t2",
+      "source": "s1",
+      "target": "s2",
+      "action_type": "fill",
+      "outcome": "ok",
+      "started_at": "2026-09-03T03:24:42.706144Z",
+      "duration_ms": 403.28441595193,
+      "trigger_latency_ms": 0.008958042599260807,
+      "conditions": [],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/t2.png",
+      "media": null,
+      "error": null
+    },
+    {
+      "transition_id": "t3",
+      "source": "s2",
+      "target": "s3",
+      "action_type": "click",
+      "outcome": "action_error",
+      "started_at": "2026-09-03T03:24:43.109503Z",
+      "duration_ms": 38594.14054197259,
+      "trigger_latency_ms": null,
+      "conditions": [
+        {
+          "type": "url_matches",
+          "met": false
+        }
+      ],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/t3.png",
+      "media": null,
+      "error": "click failed via mouse (Locator.click: Timeout 5000ms exceeded.) and via JS dispatch: Locator.evaluate: Timeout 3000ms exceeded.\nCall log:\n  - waiting for get_by_role(\"link\", name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\").first\n"
+    }
+  ]
+}

@@ -52,6 +52,7 @@ class ReplaySummary(BaseModel):
 
 class ColumnSummary(BaseModel):
     index: int
+    key: str = ""  # the column's StepKey — how an episode is recognized next round (merge.StepKey)
     disposition: str
     action_type: str
     target: str | None = None
@@ -86,7 +87,7 @@ class GeneralizedSummary(BaseModel):
             params=[ParamSummary(name=p.name, default=p.default, values_by_run=dict(p.values_by_run))
                     for p in gen.params],
             columns=[ColumnSummary(
-                index=c.index, disposition=c.disposition, action_type=c.action_type,
+                index=c.index, key=c.key, disposition=c.disposition, action_type=c.action_type,
                 target=(c.target or None), param=c.param, field=c.field, support=c.support, runs=list(c.runs),
                 values_by_run=dict(c.values_by_run), transition=c.transition,
             ) for c in gen.columns],
@@ -109,6 +110,15 @@ class RoundRecord(BaseModel):
     next_plan: NextRoundPlan | None = None  # what plan_next proposed for the next round
     usage: dict[str, dict[str, int] | None] = Field(default_factory=dict)  # "plan" | "plan_next" | "run-k"
     exit: str = ""  # "" while the loop continues; passed | max_rounds | no_next_runs | unpassable | error
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def key_index(self) -> dict[str, int]:
+        """StepKey → this round's column index, for the main-path columns — so a reader can
+        follow one real step through context.json as the merge renumbers it (§C.3)."""
+        if self.generalized is None:
+            return {}
+        return {c.key: c.index for c in self.generalized.columns if c.transition is not None and c.key}
 
     @computed_field  # type: ignore[prop-decorator]
     @property

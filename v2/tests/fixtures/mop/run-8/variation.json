@@ -1,0 +1,8 @@
+{
+  "task_text": "Search for 'Coldplay - Yellow' on YouTube and click the first video result in the list.",
+  "values": {
+    "video_query": "Coldplay - Yellow"
+  },
+  "round": 2,
+  "scoped": true
+}

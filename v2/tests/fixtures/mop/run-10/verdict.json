@@ -1,0 +1,19 @@
+{
+  "achieved": true,
+  "attempts": 1,
+  "verdict": {
+    "achieved": true,
+    "confidence": "medium",
+    "unmet": [],
+    "evidence": [
+      "FINAL URL: https://www.youtube.com/watch?v=DyDfgMOUjCI... confirms YouTube video page reached.",
+      "Search box shows value=\"Billie Eilish - Bad Guy\" and TITLE: Billie Eilish - bad guy - YouTube \u2014 correct video ('bad guy' official, 1.3B views) opened and playing.",
+      "Timeline step 6 'click Skip ad' at t+31s (ad at 0:14/0:30) followed by step 7 at t+37s showing video reset to 0:00/3:25 \u2014 ad was successfully skipped and main video started.",
+      "Timeline steps 7\u21928: wall clock 37s\u219257s (\u039420s), position 0:00\u21920:20 (\u039420s) \u2014 video played continuously at real-time rate, satisfying the initial ~15s watch phase.",
+      "Step 8 'click No thanks' dismisses the YouTube Music promo pop-up; DIALOGS: (none) at final state confirms no lingering pop-ups.",
+      "Timeline steps 9-13 (presses of 'l', a 10s-seek hotkey) show position advancing faster than wall-clock: e.g. step10\u219211 wall 72\u219287s (\u039415s) vs position 45\u219270s (\u039425s), extra \u224810s per press, totaling \u224839-40s of extra advance across the 4 presses \u2014 a fast-forward action consistent with (slightly over) the requested 30s.",
+      "Step 13 'wait 20.0' to step 14 'done': wall clock 110s\u2192142s (\u039432s), position 1:53\u21922:25 (\u039432s) \u2014 video played at normal real-time rate (not paused, not seeking), satisfying the final ~20s watch phase.",
+      "Final screenshot shows the video actively PLAYING at 2:30/3:25 with playback controls and no ad/dialog overlay, confirming end state is a normally-playing correct video with all pop-ups dismissed."
+    ]
+  }
+}

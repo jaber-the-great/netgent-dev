@@ -1,0 +1,558 @@
+{
+  "task": "Go to youtube.com search for Metallica - Master of Puppets and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 15s then fast-forward for 30s and then watch for 20s. If at any point any pop-ups happen dismiss them\n\nPARAMETERS: ${video_query} = 'Metallica - Master of Puppets'; ${initial_watch_time} = '15s'; ${fast_forward_time} = '30s'; ${second_watch_time} = '20s'\nWhere the task refers to one of these, type or pick the value above exactly as given.\n\nA previous attempt was judged NOT achieved from the page evidence. Unmet: Pop-up dismissal: task explicitly requires dismissing any pop-ups, but the 'Where music meets your desktop' overlay (with 'No thanks'/'Check it out' buttons) is visible in ALL THREE screenshots including the final one, and elements [238] 'No thanks' and [239] 'Check it out' are still listed as interactive in the final observation - the pop-up was never dismissed.; initial_watch_time=15s: the wait=15.0 (step 7) was executed while the player was still showing a 75s-duration pre-roll ad (PLAYING 0:02/1:15 -> 0:26/1:15), not the real 8:35 target video, which only started playing at step 9 immediately followed by fast-forward key presses with no distinct 15s watch phase on the actual target video - so the 'watch the real video for 15s' step is not evidenced in the correct order/content.. Make sure the page visibly shows each requirement before declaring done.",
+  "runs": 7,
+  "achieved_runs": [
+    1,
+    2,
+    4,
+    6,
+    7
+  ],
+  "params": [
+    {
+      "name": "initial_watch_time",
+      "default": "15",
+      "values_by_run": {
+        "1": "15",
+        "2": "10",
+        "4": "12",
+        "6": "15",
+        "7": "10"
+      },
+      "description": ""
+    },
+    {
+      "name": "second_watch_time",
+      "default": "20",
+      "values_by_run": {
+        "1": "20",
+        "2": "15",
+        "4": "18",
+        "6": "20",
+        "7": "15"
+      },
+      "description": ""
+    },
+    {
+      "name": "video_query",
+      "default": "Metallica - Master of Puppets",
+      "values_by_run": {
+        "1": "Metallica - Master of Puppets",
+        "2": "Queen - Bohemian Rhapsody",
+        "4": "AC/DC - Thunderstruck",
+        "6": "Ed Sheeran - Shape of You",
+        "7": "Linkin Park - In the End"
+      },
+      "description": ""
+    }
+  ],
+  "columns": [
+    {
+      "index": 0,
+      "disposition": "aligned",
+      "support": 5,
+      "runs": [
+        1,
+        2,
+        4,
+        6,
+        7
+      ],
+      "action_type": "goto",
+      "target": null,
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "",
+        "2": "",
+        "4": "",
+        "6": "",
+        "7": ""
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t1"
+    },
+    {
+      "index": 1,
+      "disposition": "param",
+      "support": 5,
+      "runs": [
+        1,
+        2,
+        4,
+        6,
+        7
+      ],
+      "action_type": "fill",
+      "target": "role=combobox[name=\"Search\" i]",
+      "param": "video_query",
+      "note": "text varies with video_query",
+      "targets_by_run": {
+        "1": "role=combobox[name=\"Search\" i]",
+        "2": "role=combobox[name=\"Search\" i]",
+        "4": "role=combobox[name=\"Search\" i]",
+        "6": "role=combobox[name=\"Search\" i]",
+        "7": "role=combobox[name=\"Search\" i]"
+      },
+      "field": "text",
+      "values_by_run": {
+        "1": "Metallica - Master of Puppets",
+        "2": "Queen - Bohemian Rhapsody",
+        "4": "AC/DC - Thunderstruck",
+        "6": "Ed Sheeran - Shape of You",
+        "7": "Linkin Park - In the End"
+      },
+      "transition": "t2"
+    },
+    {
+      "index": 2,
+      "disposition": "aligned",
+      "support": 5,
+      "runs": [
+        1,
+        2,
+        4,
+        6,
+        7
+      ],
+      "action_type": "click",
+      "target": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+        "2": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+        "4": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+        "6": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+        "7": "#center > yt-searchbox > div:nth-of-type(1) > div > button"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t3"
+    },
+    {
+      "index": 3,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        7
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": null,
+      "note": "present in 1/5 runs, removable",
+      "targets_by_run": {
+        "7": ""
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 4,
+      "disposition": "dropped",
+      "support": 2,
+      "runs": [
+        2,
+        6
+      ],
+      "action_type": "press",
+      "target": "role=combobox[name=\"Search\" i]",
+      "param": null,
+      "note": "present in 2/5 runs, removable",
+      "targets_by_run": {
+        "2": "role=combobox[name=\"Search\" i]",
+        "6": "role=combobox[name=\"Search\" i]"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 5,
+      "disposition": "dropped",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        4
+      ],
+      "action_type": "click",
+      "target": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+      "param": null,
+      "note": "present in 3/5 runs, removable",
+      "targets_by_run": {
+        "1": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+        "2": "role=link[name=\"Queen – Bohemian Rhapsody (Official Video Remastered) 6 minutes\" i]",
+        "4": "#center > yt-searchbox > div:nth-of-type(1) > div > button"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 6,
+      "disposition": "target-varies",
+      "support": 5,
+      "runs": [
+        1,
+        2,
+        4,
+        6,
+        7
+      ],
+      "action_type": "click",
+      "target": "role=link[name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\" i]",
+      "param": null,
+      "note": "same action, different targets; kept run 1's",
+      "targets_by_run": {
+        "1": "role=link[name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\" i]",
+        "2": "#movie_player > div:nth-of-type(7) > button",
+        "4": "role=link[name=\"AC/DC - Thunderstruck (Official Video) 4 minutes, 53 seconds\" i]",
+        "6": "role=link[name=\"Ed Sheeran - Shape of You (Official Music Video) 4 minutes, 24 seconds\" i]",
+        "7": "role=link[name=\"In The End [Official HD Music Video] - Linkin Park 3 minutes, 39 seconds\" i]"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t4"
+    },
+    {
+      "index": 7,
+      "disposition": "dropped",
+      "support": 3,
+      "runs": [
+        1,
+        4,
+        7
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": null,
+      "note": "present in 3/5 runs, removable",
+      "targets_by_run": {
+        "1": "",
+        "4": "",
+        "7": ""
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 8,
+      "disposition": "interrupt",
+      "support": 3,
+      "runs": [
+        4,
+        6,
+        7
+      ],
+      "action_type": "click",
+      "target": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "param": null,
+      "note": "present in 3/5 runs, dismissal-shaped",
+      "targets_by_run": {
+        "4": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+        "6": "#player-container-inner > div a#thumbnail",
+        "7": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 9,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        1
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": null,
+      "note": "present in 1/5 runs, removable",
+      "targets_by_run": {
+        "1": ""
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 10,
+      "disposition": "param",
+      "support": 5,
+      "runs": [
+        1,
+        2,
+        4,
+        6,
+        7
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": "initial_watch_time",
+      "note": "dwell parameterized: Repeat(count=\"${initial_watch_time}\")",
+      "targets_by_run": {
+        "1": "",
+        "2": "",
+        "4": "",
+        "6": "",
+        "7": ""
+      },
+      "field": "seconds",
+      "values_by_run": {
+        "1": "15.0",
+        "2": "10.0",
+        "4": "12.0",
+        "6": "15.0",
+        "7": "10.0"
+      },
+      "transition": "t5"
+    },
+    {
+      "index": 11,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        7
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "present in 1/5 runs, removable",
+      "targets_by_run": {
+        "7": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 12,
+      "disposition": "dropped",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        7
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "present in 3/5 runs, removable",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "2": "#movie_player > div:nth-of-type(1) > video",
+        "7": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 13,
+      "disposition": "aligned",
+      "support": 5,
+      "runs": [
+        1,
+        2,
+        4,
+        6,
+        7
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "2": "#movie_player > div:nth-of-type(1) > video",
+        "4": "#movie_player > div:nth-of-type(1) > video",
+        "6": "#movie_player > div:nth-of-type(1) > video",
+        "7": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t6"
+    },
+    {
+      "index": 14,
+      "disposition": "aligned",
+      "support": 5,
+      "runs": [
+        1,
+        2,
+        4,
+        6,
+        7
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "2": "#movie_player > div:nth-of-type(1) > video",
+        "4": "#movie_player > div:nth-of-type(1) > video",
+        "6": "#movie_player > div:nth-of-type(1) > video",
+        "7": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t7"
+    },
+    {
+      "index": 15,
+      "disposition": "aligned",
+      "support": 5,
+      "runs": [
+        1,
+        2,
+        4,
+        6,
+        7
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "2": "#movie_player > div:nth-of-type(1) > video",
+        "4": "#movie_player > div:nth-of-type(1) > video",
+        "6": "#movie_player > div:nth-of-type(1) > video",
+        "7": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t8"
+    },
+    {
+      "index": 16,
+      "disposition": "param",
+      "support": 5,
+      "runs": [
+        1,
+        2,
+        4,
+        6,
+        7
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": "second_watch_time",
+      "note": "dwell parameterized: Repeat(count=\"${second_watch_time}\")",
+      "targets_by_run": {
+        "1": "",
+        "2": "",
+        "4": "",
+        "6": "",
+        "7": ""
+      },
+      "field": "seconds",
+      "values_by_run": {
+        "1": "20.0",
+        "2": "15.0",
+        "4": "18.0",
+        "6": "20.0",
+        "7": "15.0"
+      },
+      "transition": "t9"
+    }
+  ],
+  "interrupts": [
+    {
+      "selector": "role=button[name=\"Skip ad\" i]",
+      "support": 1,
+      "runs": [
+        1
+      ]
+    },
+    {
+      "selector": "role=button[name=\"No thanks\" i]",
+      "support": 5,
+      "runs": [
+        1,
+        2,
+        4,
+        6,
+        7
+      ]
+    },
+    {
+      "selector": "role=button[name=\"Skip ads\" i]",
+      "support": 1,
+      "runs": [
+        2
+      ]
+    },
+    {
+      "selector": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "support": 2,
+      "runs": [
+        4,
+        7
+      ]
+    },
+    {
+      "selector": "#player-container-inner > div a#thumbnail",
+      "support": 1,
+      "runs": [
+        6
+      ]
+    }
+  ],
+  "branches": [],
+  "warnings": [
+    "2 scoped sub-task run(s) kept as evidence, not merged",
+    "column 4: press present in 2/5 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 5: click present in 3/5 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 6: click targets differ across runs and match no planned value — kept run 1's selector; replay with other values may not find it",
+    "hint repeat_fold at column 11 rejected: per-run press counts {1: 4, 2: 4, 4: 3, 6: 3, 7: 5} do not match the planned fast_forward_time values {1: 30.0, 2: 45.0, 4: 25.0, 6: 30.0, 7: 50.0} exactly or by one constant factor",
+    "column 11: press present in 1/5 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 12: press present in 3/5 runs — the other runs achieved the task without it; dropped (another run can overrule this)"
+  ],
+  "hints": [
+    {
+      "hint": {
+        "column": 11,
+        "intent": "instance",
+        "param_name": null,
+        "repeat_fold": {
+          "kind": "press",
+          "count_param": "fast_forward_time"
+        },
+        "why": "runs 3 and 5 failed because only 5 and 3 'l' presses were dispatched instead of the needed 6 and 4 (each 'l' press ~10s); the repeated key-press steps should fold into one counted fast-forward gesture sized by fast_forward_time/10"
+      },
+      "status": "rejected",
+      "reason": "per-run press counts {1: 4, 2: 4, 4: 3, 6: 3, 7: 5} do not match the planned fast_forward_time values {1: 30.0, 2: 45.0, 4: 25.0, 6: 30.0, 7: 50.0} exactly or by one constant factor",
+      "transition": null
+    },
+    {
+      "hint": {
+        "column": 4,
+        "intent": "positional",
+        "param_name": null,
+        "repeat_fold": null,
+        "why": "task says 'play the first video that pops up'; the recorded click target (search button vs. a result link) differs across runs 1/2/4 and matches no planned param value, indicating it encodes list position not a fixed title/button"
+      },
+      "status": "rejected",
+      "reason": "column 4 is not a main-path column of this merge",
+      "transition": null
+    },
+    {
+      "hint": {
+        "column": 5,
+        "intent": "positional",
+        "param_name": null,
+        "repeat_fold": null,
+        "why": "replay failed at t5 (url_matches unmet) for AC/DC and Queen runs when reusing run 1's Metallica-specific result-link selector; task text explicitly asks for 'the first video that pops up' so this should resolve by position each run"
+      },
+      "status": "rejected",
+      "reason": "column 5 is not a main-path column of this merge",
+      "transition": null
+    }
+  ]
+}

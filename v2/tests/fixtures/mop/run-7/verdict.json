@@ -1,0 +1,19 @@
+{
+  "achieved": true,
+  "attempts": 2,
+  "verdict": {
+    "achieved": true,
+    "confidence": "medium",
+    "unmet": [],
+    "evidence": [
+      "Action 0-2: goto youtube.com, fill 'Search'='Linkin Park - In the End', click search \u2014 final page shows search box value 'Linkin Park - In the End' and results list.",
+      "Action 4: click 'In The End [Official HD Music Video] - Linkin Park 3 minutes, 39 seconds' \u2014 final observation TITLE: 'In The End [Official HD Music Video] - Linkin Park - YouTube', confirming correct video is playing.",
+      "Timeline step 6-7: skip-ad button clicked at t+19s; by t+25s the real video is PLAYING at 0:00/3:38, showing the ad was successfully skipped and real content started.",
+      "Timeline step 8: click 'No thanks' at t+42s dismissed a popup/prompt; no dialogs remain open per DIALOGS: (none) and screenshots show a clean player.",
+      "Watch phase: from real-video start (t+25s, pos 0:00) to first 'l' key effect (t+48s\u2192t+56s pos 0:23\u21920:41) the video played at normal 1:1 rate for ~23s (\u2265 requested 10s) before fast-forward began.",
+      "Fast-forward phase: five 'l' presses each added ~+10s beyond wall-clock (0:23\u21920:41 +10s extra over 8s wall; 0:41\u21921:04 +9s extra over 14s wall; 1:04\u21921:35 +10s extra over 21s wall; 1:35\u21922:05 +11s extra over 19s wall; 2:05\u21922:34 +9s extra over 20s wall), totaling \u224850s of fast-forward, matching fast_forward_time='50s'.",
+      "Second watch phase: step 14\u219215, position 2:34\u21922:57 over wall-clock 130s\u2192153s (23s), a 1:1 ratio indicating normal playback (no further fast-forward), satisfying second_watch_time='15s' (with minor overhead).",
+      "Final screenshots show the real Linkin Park 'In The End' video playing (progressing 2:04\u21922:33\u2192final ~3:15) with captions ('I've put my trust in you'), no ad banner or blocking pop-up visible."
+    ]
+  }
+}

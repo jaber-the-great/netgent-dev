@@ -1,0 +1,409 @@
+{
+  "task": "Go to youtube.com search for Metallica - Master of Puppets and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 15s then fast-forward for 30s and then watch for 20s. If at any point any pop-ups happen dismiss them\n\nPARAMETERS: ${video_query} = 'Metallica - Master of Puppets'; ${initial_watch_time} = '15s'; ${fast_forward_time} = '30s'; ${second_watch_time} = '20s'\nWhere the task refers to one of these, type or pick the value above exactly as given.\n\nA previous attempt was judged NOT achieved from the page evidence. Unmet: Pop-up dismissal: task explicitly requires dismissing any pop-ups, but the 'Where music meets your desktop' overlay (with 'No thanks'/'Check it out' buttons) is visible in ALL THREE screenshots including the final one, and elements [238] 'No thanks' and [239] 'Check it out' are still listed as interactive in the final observation - the pop-up was never dismissed.; initial_watch_time=15s: the wait=15.0 (step 7) was executed while the player was still showing a 75s-duration pre-roll ad (PLAYING 0:02/1:15 -> 0:26/1:15), not the real 8:35 target video, which only started playing at step 9 immediately followed by fast-forward key presses with no distinct 15s watch phase on the actual target video - so the 'watch the real video for 15s' step is not evidenced in the correct order/content.. Make sure the page visibly shows each requirement before declaring done.",
+  "runs": 5,
+  "achieved_runs": [
+    1,
+    2,
+    4
+  ],
+  "params": [
+    {
+      "name": "initial_watch_time",
+      "default": "15",
+      "values_by_run": {
+        "1": "15",
+        "2": "10",
+        "4": "12"
+      },
+      "description": ""
+    },
+    {
+      "name": "second_watch_time",
+      "default": "20",
+      "values_by_run": {
+        "1": "20",
+        "2": "15",
+        "4": "18"
+      },
+      "description": ""
+    },
+    {
+      "name": "video_query",
+      "default": "Metallica - Master of Puppets",
+      "values_by_run": {
+        "1": "Metallica - Master of Puppets",
+        "2": "Queen - Bohemian Rhapsody",
+        "4": "AC/DC - Thunderstruck"
+      },
+      "description": ""
+    }
+  ],
+  "columns": [
+    {
+      "index": 0,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        4
+      ],
+      "action_type": "goto",
+      "target": null,
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "",
+        "2": "",
+        "4": ""
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t1"
+    },
+    {
+      "index": 1,
+      "disposition": "param",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        4
+      ],
+      "action_type": "fill",
+      "target": "role=combobox[name=\"Search\" i]",
+      "param": "video_query",
+      "note": "text varies with video_query",
+      "targets_by_run": {
+        "1": "role=combobox[name=\"Search\" i]",
+        "2": "role=combobox[name=\"Search\" i]",
+        "4": "role=combobox[name=\"Search\" i]"
+      },
+      "field": "text",
+      "values_by_run": {
+        "1": "Metallica - Master of Puppets",
+        "2": "Queen - Bohemian Rhapsody",
+        "4": "AC/DC - Thunderstruck"
+      },
+      "transition": "t2"
+    },
+    {
+      "index": 2,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        4
+      ],
+      "action_type": "click",
+      "target": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+        "2": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+        "4": "#center > yt-searchbox > div:nth-of-type(1) > div > button"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t3"
+    },
+    {
+      "index": 3,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        2
+      ],
+      "action_type": "press",
+      "target": "role=combobox[name=\"Search\" i]",
+      "param": null,
+      "note": "present in 1/3 runs, removable",
+      "targets_by_run": {
+        "2": "role=combobox[name=\"Search\" i]"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 4,
+      "disposition": "target-varies",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        4
+      ],
+      "action_type": "click",
+      "target": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+      "param": null,
+      "note": "same action, different targets; kept run 1's",
+      "targets_by_run": {
+        "1": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+        "2": "role=link[name=\"Queen – Bohemian Rhapsody (Official Video Remastered) 6 minutes\" i]",
+        "4": "#center > yt-searchbox > div:nth-of-type(1) > div > button"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t4"
+    },
+    {
+      "index": 5,
+      "disposition": "target-varies",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        4
+      ],
+      "action_type": "click",
+      "target": "role=link[name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\" i]",
+      "param": null,
+      "note": "same action, different targets; kept run 1's",
+      "targets_by_run": {
+        "1": "role=link[name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\" i]",
+        "2": "#movie_player > div:nth-of-type(7) > button",
+        "4": "role=link[name=\"AC/DC - Thunderstruck (Official Video) 4 minutes, 53 seconds\" i]"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t5"
+    },
+    {
+      "index": 6,
+      "disposition": "dropped",
+      "support": 2,
+      "runs": [
+        1,
+        4
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": null,
+      "note": "present in 2/3 runs, removable",
+      "targets_by_run": {
+        "1": "",
+        "4": ""
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 7,
+      "disposition": "interrupt",
+      "support": 1,
+      "runs": [
+        4
+      ],
+      "action_type": "click",
+      "target": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "param": null,
+      "note": "present in 1/3 runs, dismissal-shaped",
+      "targets_by_run": {
+        "4": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 8,
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        1
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": null,
+      "note": "present in 1/3 runs, removable",
+      "targets_by_run": {
+        "1": ""
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 9,
+      "disposition": "param",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        4
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": "initial_watch_time",
+      "note": "dwell parameterized: Repeat(count=\"${initial_watch_time}\")",
+      "targets_by_run": {
+        "1": "",
+        "2": "",
+        "4": ""
+      },
+      "field": "seconds",
+      "values_by_run": {
+        "1": "15.0",
+        "2": "10.0",
+        "4": "12.0"
+      },
+      "transition": "t6"
+    },
+    {
+      "index": 10,
+      "disposition": "dropped",
+      "support": 2,
+      "runs": [
+        1,
+        2
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "present in 2/3 runs, removable",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "2": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 11,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        4
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "2": "#movie_player > div:nth-of-type(1) > video",
+        "4": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t7"
+    },
+    {
+      "index": 12,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        4
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "2": "#movie_player > div:nth-of-type(1) > video",
+        "4": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t8"
+    },
+    {
+      "index": 13,
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        4
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "2": "#movie_player > div:nth-of-type(1) > video",
+        "4": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t9"
+    },
+    {
+      "index": 14,
+      "disposition": "param",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        4
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": "second_watch_time",
+      "note": "dwell parameterized: Repeat(count=\"${second_watch_time}\")",
+      "targets_by_run": {
+        "1": "",
+        "2": "",
+        "4": ""
+      },
+      "field": "seconds",
+      "values_by_run": {
+        "1": "20.0",
+        "2": "15.0",
+        "4": "18.0"
+      },
+      "transition": "t10"
+    }
+  ],
+  "interrupts": [
+    {
+      "selector": "role=button[name=\"Skip ad\" i]",
+      "support": 1,
+      "runs": [
+        1
+      ]
+    },
+    {
+      "selector": "role=button[name=\"No thanks\" i]",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        4
+      ]
+    },
+    {
+      "selector": "role=button[name=\"Skip ads\" i]",
+      "support": 1,
+      "runs": [
+        2
+      ]
+    },
+    {
+      "selector": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "support": 1,
+      "runs": [
+        4
+      ]
+    }
+  ],
+  "branches": [],
+  "warnings": [
+    "column 3: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 4: click targets differ across runs and match no planned value — kept run 1's selector; replay with other values may not find it",
+    "column 5: click targets differ across runs and match no planned value — kept run 1's selector; replay with other values may not find it",
+    "column 10: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)"
+  ],
+  "hints": []
+}

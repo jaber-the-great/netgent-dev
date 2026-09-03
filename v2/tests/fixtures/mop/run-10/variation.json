@@ -1,0 +1,11 @@
+{
+  "task_text": "Go to youtube.com search for Billie Eilish - Bad Guy and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 15s then fast-forward for 30s and then watch for 20s. If at any point any pop-ups happen dismiss them",
+  "values": {
+    "video_query": "Billie Eilish - Bad Guy",
+    "initial_watch_time": "15s",
+    "fast_forward_time": "30s",
+    "second_watch_time": "20s"
+  },
+  "round": 3,
+  "scoped": false
+}

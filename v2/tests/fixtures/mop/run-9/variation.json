@@ -1,0 +1,8 @@
+{
+  "task_text": "Search for 'Eminem - Lose Yourself' on YouTube and click the first video result in the list.",
+  "values": {
+    "video_query": "Eminem - Lose Yourself"
+  },
+  "round": 2,
+  "scoped": true
+}

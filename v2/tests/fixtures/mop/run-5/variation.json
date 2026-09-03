@@ -1,0 +1,11 @@
+{
+  "task_text": "Go to youtube.com search for Guns N' Roses - Sweet Child O' Mine and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 8s then fast-forward for 40s and then watch for 25s. If at any point any pop-ups happen dismiss them",
+  "values": {
+    "video_query": "Guns N' Roses - Sweet Child O' Mine",
+    "initial_watch_time": "8s",
+    "fast_forward_time": "40s",
+    "second_watch_time": "25s"
+  },
+  "round": 1,
+  "scoped": false
+}

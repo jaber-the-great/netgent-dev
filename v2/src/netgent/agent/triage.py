@@ -43,7 +43,8 @@ _NTH_RE = re.compile(r":nth-(of-type|child)\(|>>\s*nth=")
 class Episode(BaseModel):
     kind: EpisodeKind
     source: Source
-    column: int | None = None  # generalized.json `columns[].index`
+    column: int | None = None  # generalized.json `columns[].index` (display; renumbered every merge)
+    key: str = ""  # the column's StepKey (merge.StepKey.render()) — stable across rounds
     transition: str | None = None  # the main-path edge (replay: where it stopped)
     action_type: str | None = None
     field: str | None = None  # unbound_value: the differing action field
@@ -58,6 +59,8 @@ class Episode(BaseModel):
     def as_line(self) -> str:
         """One compact line for the next-round planner (and the round log)."""
         where = f" column {self.column}" if self.column is not None else ""
+        if self.key:
+            where += f" (key {self.key})"
         edge = f" at {self.transition}" if self.transition else ""
         obs = "; ".join(f"run {r}: {v[:70]!r}" for r, v in sorted(self.observed.items()))
         bits = [f"{self.kind}{where}{edge} [{self.source}{', replay-confirmed' if self.confirmed_by_replay else ''}]"]
@@ -149,7 +152,7 @@ def triage(
             spine = min(col.targets_by_run) if col.targets_by_run else None
             if _list_like(steps.get(spine) if spine is not None else None, col.target or ""):
                 ep = Episode(
-                    kind="positional_target", source="merge", column=col.index, transition=col.transition,
+                    kind="positional_target", source="merge", column=col.index, key=col.key, transition=col.transition,
                     action_type="click", runs=col.runs, observed=dict(col.targets_by_run),
                     planned=_planned_values(runs, col.runs),
                     detail="targets differ across runs and match no planned value; a list-like target — "
@@ -159,7 +162,7 @@ def triage(
                 by_column[col.index] = ep
         elif col.disposition == "value-diverges":
             ep = Episode(
-                kind="unbound_value", source="merge", column=col.index, transition=col.transition,
+                kind="unbound_value", source="merge", column=col.index, key=col.key, transition=col.transition,
                 action_type=col.action_type, field=col.field, runs=col.runs, observed=dict(col.values_by_run),
                 planned=_planned_values(runs, col.runs),
                 detail=f"{col.action_type}.{col.field} differs across runs and matches no planned value; "
@@ -169,7 +172,7 @@ def triage(
             by_column[col.index] = ep
         elif col.disposition == "interrupt":
             ep = Episode(
-                kind="conditional_step", source="merge", column=col.index, action_type=col.action_type,
+                kind="conditional_step", source="merge", column=col.index, key=col.key, action_type=col.action_type,
                 runs=col.runs, observed=dict(col.targets_by_run),
                 detail=f"present in {col.support}/{len(achieved)} runs, dismissal-shaped: an interrupt candidate",
             )
@@ -192,6 +195,7 @@ def triage(
             continue
         ep = Episode(
             kind="flow_drift", source="replay", column=col_index, transition=rr.failed_edge,
+            key=next((c.key for c in generalized.columns if c.index == col_index), ""),
             action_type=next((c.action_type for c in generalized.columns if c.index == col_index), None),
             replay_values=dict(rr.values), unmet=list(rr.unmet), confirmed_by_replay=True,
             detail=f"replay stopped at {rr.failed_edge} ({rr.outcome}): {(rr.error or '')[:160]}",

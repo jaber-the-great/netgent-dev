@@ -1,0 +1,87 @@
+[
+  {
+    "kind": "positional_target",
+    "source": "merge",
+    "column": 6,
+    "transition": "t4",
+    "action_type": "click",
+    "field": null,
+    "runs": [
+      1,
+      2,
+      4,
+      6,
+      7
+    ],
+    "observed": {
+      "1": "role=link[name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\" i]",
+      "2": "#movie_player > div:nth-of-type(7) > button",
+      "4": "role=link[name=\"AC/DC - Thunderstruck (Official Video) 4 minutes, 53 seconds\" i]",
+      "6": "role=link[name=\"Ed Sheeran - Shape of You (Official Music Video) 4 minutes, 24 seconds\" i]",
+      "7": "role=link[name=\"In The End [Official HD Music Video] - Linkin Park 3 minutes, 39 seconds\" i]"
+    },
+    "planned": {
+      "fast_forward_time": {
+        "1": "30s",
+        "2": "45s",
+        "4": "25s",
+        "6": "30s",
+        "7": "50s"
+      },
+      "initial_watch_time": {
+        "1": "15s",
+        "2": "10s",
+        "4": "12s",
+        "6": "15s",
+        "7": "10s"
+      },
+      "second_watch_time": {
+        "1": "20s",
+        "2": "15s",
+        "4": "18s",
+        "6": "20s",
+        "7": "15s"
+      },
+      "video_query": {
+        "1": "Metallica - Master of Puppets",
+        "2": "Queen - Bohemian Rhapsody",
+        "4": "AC/DC - Thunderstruck",
+        "6": "Ed Sheeran - Shape of You",
+        "7": "Linkin Park - In the End"
+      }
+    },
+    "replay_values": {
+      "initial_watch_time": "10",
+      "second_watch_time": "15",
+      "video_query": "Queen - Bohemian Rhapsody"
+    },
+    "unmet": [
+      "url_matches"
+    ],
+    "confirmed_by_replay": true,
+    "detail": "targets differ across runs and match no planned value; a list-like target \u2014 the task may mean a position, not a title"
+  },
+  {
+    "kind": "conditional_step",
+    "source": "merge",
+    "column": 8,
+    "transition": null,
+    "action_type": "click",
+    "field": null,
+    "runs": [
+      4,
+      6,
+      7
+    ],
+    "observed": {
+      "4": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "6": "#player-container-inner > div a#thumbnail",
+      "7": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button"
+    },
+    "planned": {},
+    "replay_values": {},
+    "unmet": [],
+    "confirmed_by_replay": false,
+    "detail": "present in 3/5 runs, dismissal-shaped: an interrupt candidate"
+  }
+]

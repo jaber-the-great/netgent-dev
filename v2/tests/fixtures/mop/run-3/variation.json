@@ -1,0 +1,11 @@
+{
+  "task_text": "Go to youtube.com search for Nirvana - Smells Like Teen Spirit and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 20s then fast-forward for 60s and then watch for 30s. If at any point any pop-ups happen dismiss them",
+  "values": {
+    "video_query": "Nirvana - Smells Like Teen Spirit",
+    "initial_watch_time": "20s",
+    "fast_forward_time": "60s",
+    "second_watch_time": "30s"
+  },
+  "round": 1,
+  "scoped": false
+}

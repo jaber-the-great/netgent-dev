@@ -1,0 +1,11 @@
+{
+  "task_text": "Go to youtube.com search for Imagine Dragons - Believer and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 10s then fast-forward for 40s and then watch for 15s. If at any point any pop-ups happen dismiss them",
+  "values": {
+    "video_query": "Imagine Dragons - Believer",
+    "initial_watch_time": "10s",
+    "fast_forward_time": "40s",
+    "second_watch_time": "15s"
+  },
+  "round": 3,
+  "scoped": false
+}

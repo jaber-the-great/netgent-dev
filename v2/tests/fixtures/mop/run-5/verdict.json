@@ -1,0 +1,19 @@
+{
+  "achieved": false,
+  "attempts": 2,
+  "verdict": {
+    "achieved": false,
+    "confidence": "high",
+    "unmet": [
+      "Fast-forward requirement (40s): only 3 presses of 'l' were dispatched (steps 6,7,8), each advancing +10s, for a measured total excess-over-wall-clock of only 30s (computed per the MEDIA TIMELINE method: from t+0s pos 0:01 to t+59s pos 1:30 is 89s of position gain over 59s wall-clock = +30s of skip, not the requested +40s). This is a real 10s (25%) shortfall in the fast-forward amount, not attributable to normal drift, so the ${fast_forward_time}='40s' parameter was not fully honored."
+    ],
+    "evidence": [
+      "Navigated to https://www.youtube.com and searched 'Guns N' Roses - Sweet Child O' Mine' (search box shows exact query text in final observation).",
+      "Clicked and opened 'Guns N' Roses - Sweet Child O' Mine (Official Music Video)' \u2014 FINAL URL and TITLE confirm this is the video playing.",
+      "No pre-roll ad blocked playback \u2014 video was already at 0:01/5:02 at the very first reading (t+0s), so nothing needed to be skipped.",
+      "Initial watch phase: t+0s pos 0:01 \u2192 t+13s pos 0:14 (delta 13s over 13s wall-clock, i.e. normal continuous playback, satisfying ~8s watch with acceptable agent-decision drift).",
+      "Second watch phase (25s): t+59s pos 1:30 \u2192 t+124s (done) pos 2:33, delta 63s over 65s wall-clock \u2014 continuous PLAYING confirmed, exceeding the requested 25s dwell, so watching is satisfied.",
+      "No dialogs appeared during the run (DIALOGS: none) and no popups needed dismissal."
+    ]
+  }
+}
