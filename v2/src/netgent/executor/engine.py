@@ -128,7 +128,8 @@ class Executor:
                     self._interrupt_fires[interrupt.id], interrupt.max_fires,
                 )
                 for edge_id in interrupt.resolve:
-                    edge = await self._fire(self._workflow.transition(edge_id))
+                    edge = await self._fire(self._workflow.transition(edge_id),
+                                            timeout_ms=interrupt.resolve_timeout_ms)
                     if edge.outcome == "trigger_timeout":
                         # The action ran but the pop-up didn't settle (e.g. a chained ad
                         # re-showed the same skip button): re-check the anchor and re-fire.
@@ -200,8 +201,12 @@ class Executor:
         report = await self._session.condition_report(State(id="_probe", conditions=triggers))
         return all(met for _, met in report)
 
-    async def _fire(self, transition: Transition) -> EdgeRecord:
+    async def _fire(self, transition: Transition, timeout_ms: int | None = None) -> EdgeRecord:
         target_state = self._workflow.state(transition.target)
+        if timeout_ms is not None and timeout_ms < target_state.timeout_ms:
+            # An interrupt's resolve edge: its done state is a negative condition on an element
+            # just clicked, budgeted by Interrupt.resolve_timeout_ms, not the state's default.
+            target_state = target_state.model_copy(update={"timeout_ms": timeout_ms})
         started_at = utcnow()
         start = time.monotonic()
         outcome, error, latency = "ok", None, None

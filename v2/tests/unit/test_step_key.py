@@ -54,7 +54,8 @@ def test_episodes_and_round_records_carry_the_key():
     runs = mop_runs(ROUNDS[3])
     gen = merge_trajectories(runs, name="mop").generalized
     (pos,) = [e for e in triage(generalized=gen, replay=None, runs=runs) if e.kind == "positional_target"]
-    assert pos.column == 7 and pos.key == "click:get_by_role|link#0" and "(key click:get_by_role|link#0)" in pos.as_line()
+    assert pos.column == 7 and pos.key == "click:get_by_role|link#0"
+    assert "(key click:get_by_role|link#0)" in pos.as_line()
     rec = RoundRecord(round=3, generalized=GeneralizedSummary.from_generalized(gen))
     assert rec.key_index["click:get_by_role|link#0"] == 7
     assert json.loads(rec.model_dump_json())["key_index"]["click:get_by_role|link#0"] == 7

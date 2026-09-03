@@ -5,6 +5,7 @@ they parse to the same tree, so the format is a loader detail chosen by file ext
 """
 
 import json
+import math
 from pathlib import Path
 from typing import Self
 
@@ -12,7 +13,7 @@ import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from netgent.schema.actions import Action
-from netgent.schema.control import Branch, ControlNode, EdgeStep, Interrupt, Milestone, Param, Repeat
+from netgent.schema.control import Branch, ControlNode, EdgeStep, Interrupt, Milestone, Param, ParamDerivation, Repeat
 from netgent.schema.triggers import Trigger
 
 DEFAULT_STATE_TIMEOUT_MS = 10_000
@@ -173,15 +174,40 @@ class Workflow(BaseModel):
         raise KeyError(transition_id)
 
 
+def _number_in(value: str) -> float | None:
+    """The number a natural-language value carries ("35s" → 35.0), or None."""
+    import re
+
+    m = re.search(r"\d+(?:\.\d+)?", value)
+    return float(m.group()) if m else None
+
+
+def derive_value(source: str, derive: "ParamDerivation") -> str | None:
+    """A derived param's value from its source param's resolved value (None: not a number)."""
+    n = _number_in(source)
+    if n is None:
+        return None
+    q = n / derive.divide_by
+    if derive.rounding == "ceil":
+        q = math.ceil(q - 1e-9)
+    elif derive.rounding == "floor":
+        q = math.floor(q + 1e-9)
+    else:
+        q = round(q)
+    return str(max(derive.min, int(q)))
+
+
 def resolve_params(workflow: Workflow, values: dict[str, str] | None = None) -> Workflow:
     """Substitute ${name} in the workflow's string fields from params + provided values.
 
-    Missing required params raise ValueError. Returns a new, re-validated Workflow.
+    Missing required params raise ValueError. A derived param (`Param.derive`) is computed
+    from its source param after the static pass — a caller-supplied value for it is ignored.
+    Returns a new, re-validated Workflow.
     """
     values = dict(values or {})
     resolved: dict[str, str] = {}
     for p in workflow.params:
-        if p.source is not None:  # dynamic: extracted from the live page at dispatch, not here
+        if p.source is not None or p.derive is not None:  # dynamic / derived: not from the caller
             continue
         if p.name in values:
             resolved[p.name] = values[p.name]
@@ -189,6 +215,17 @@ def resolve_params(workflow: Workflow, values: dict[str, str] | None = None) -> 
             resolved[p.name] = p.default
         elif p.required:
             raise ValueError(f"missing required param {p.name!r}")
+    for p in workflow.params:
+        if p.derive is None:
+            continue
+        src = resolved.get(p.derive.from_param)
+        derived = derive_value(src, p.derive) if src is not None else None
+        if derived is None:
+            if p.default is not None:
+                resolved[p.name] = p.default
+                continue
+            raise ValueError(f"derived param {p.name!r}: {p.derive.from_param!r} carries no number to derive from")
+        resolved[p.name] = derived
 
     def sub(node: object) -> object:
         if isinstance(node, str):

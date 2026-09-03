@@ -92,3 +92,32 @@ def test_repeat_count_resolves_from_substituted_string():
         ex._resolve_count("${watch_time}")
     with pytest.raises(ExecutionError, match="did not resolve to a number"):
         ex._resolve_count("abc")
+
+
+def test_derived_param_is_computed_from_its_source_and_never_taken_from_the_caller():
+    """G2 (generator-agent-v2.md §D.4): the artifact's knob stays the task's knob — fast_forward_time
+    in seconds — and the press count is derived at resolve time: 35 s / 10 s per press → 4 (ceil)."""
+    from netgent.schema.actions import NoopAction
+    from netgent.schema.control import EdgeStep, Param, ParamDerivation, Repeat
+    from netgent.schema.workflow import State, Transition, Workflow, resolve_params
+
+    wf = Workflow(
+        name="w", start_state="init", states=[State(id="init"), State(id="s1")],
+        transitions=[Transition(id="t1", source="init", target="s1", action=NoopAction()),
+                     Transition(id="t1_rep", source="s1", target="s1", action=NoopAction())],
+        control=[EdgeStep(edge="t1"), Repeat(body=[EdgeStep(edge="t1_rep")], count="${presses}", max_iterations=12)],
+        params=[Param(name="fast_forward_time", default="30s"),
+                Param(name="presses", required=False,
+                      derive=ParamDerivation(from_param="fast_forward_time", divide_by=10, rounding="ceil", min=1))],
+    )
+    assert resolve_params(wf, {}).control[1].count == "3"
+    assert resolve_params(wf, {"fast_forward_time": "35"}).control[1].count == "4"
+    assert resolve_params(wf, {"fast_forward_time": "45 seconds", "presses": "99"}).control[1].count == "5"
+    assert resolve_params(wf, {"fast_forward_time": "3"}).control[1].count == "1"  # the floor
+    floor = wf.model_copy(update={"params": [wf.params[0], wf.params[1].model_copy(
+        update={"derive": ParamDerivation(from_param="fast_forward_time", divide_by=10, rounding="floor")})]})
+    assert resolve_params(floor, {"fast_forward_time": "35"}).control[1].count == "3"
+    import pytest
+
+    with pytest.raises(ValueError, match="carries no number"):
+        resolve_params(wf, {"fast_forward_time": "a while"})

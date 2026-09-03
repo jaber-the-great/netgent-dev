@@ -92,12 +92,28 @@ class ParamSource(BaseModel):
     group: int = 1  # which capture group, for kind=url_group
 
 
+class ParamDerivation(BaseModel):
+    """A param COMPUTED from another param at resolve time — never supplied by the caller.
+
+    The bridge between the task's vocabulary ("fast-forward 45 seconds") and the artifact's
+    ("press `l` five times"), for gestures whose unit the recordings measured. Closed and tiny
+    on purpose: one source param, one divisor, one rounding rule, a floor. No expressions.
+    (docs/research/generator-agent-v2.md §D.4)
+    """
+
+    from_param: str
+    divide_by: float = Field(default=1.0, gt=0)
+    rounding: Literal["ceil", "floor", "nearest"] = "ceil"
+    min: int = Field(default=1, ge=0)
+
+
 class Param(BaseModel):
     """A workflow parameter, substituted as ${name} in action string fields.
 
     Static (source=None): supplied by the caller / default. Dynamic (source set):
-    extracted from the page at runtime. `guard` is a regex the resolved value
-    must match — a failed extraction or validation is a healable drift signal.
+    extracted from the page at runtime. Derived (derive set): computed from another
+    param by `resolve_params`, never caller-supplied. `guard` is a regex the resolved
+    value must match — a failed extraction or validation is a healable drift signal.
     """
 
     name: str
@@ -107,6 +123,7 @@ class Param(BaseModel):
     secret: bool = False  # secret values never appear in logs/records; only the name may
     source: ParamSource | None = None  # None = static (caller-provided); set = dynamic
     guard: str | None = None  # regex the resolved value must match
+    derive: ParamDerivation | None = None  # set ⇒ computed at resolve time; the caller may not pass it
 
 
 class Interrupt(BaseModel):
@@ -121,6 +138,10 @@ class Interrupt(BaseModel):
     `scope` lists the main-path states the interrupt is armed from (in-scope ε-edges —
     never global). `max_fires` is the mandatory red-line backstop, like Repeat.max_iterations:
     it keeps the executed run statically bounded (|program| + Σ max_fires × |resolve|).
+    `resolve_timeout_ms` bounds how long each resolve edge waits for its done state: the done
+    state is a NEGATIVE condition on an element just clicked, so a full state timeout is the
+    wrong budget (measured: six phantom interrupts burned ~63 s of a ~104 s replay at 10 s
+    each; generator-agent-v2.md §F.3).
     """
 
     id: str
@@ -129,6 +150,7 @@ class Interrupt(BaseModel):
     resolve: list[str] = Field(min_length=1)  # transition ids, chained from `state`
     scope: list[str] = Field(min_length=1)  # main-path state ids this interrupt is armed from
     max_fires: int = Field(default=3, gt=0)
+    resolve_timeout_ms: int = Field(default=2000, gt=0)
 
 
 class Milestone(BaseModel):

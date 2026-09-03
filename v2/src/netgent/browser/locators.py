@@ -16,14 +16,20 @@ from netgent.schema.actions import LocatorStep
 # workflow could never replay them (measured: an ad-skip interrupt anchored on
 # `#skip-button\:2` never fired on the next replay's ad, whose button had a fresh suffix).
 _VOLATILE_ID = re.compile(r"\d{4,}|[0-9a-f]{8,}|^#(tw|ember|react)|[:\\]|[-_]?\d+$")
+# Framework-generated ids that change per render (Skyvern's `_FRAGILE_ID_PATTERNS`,
+# script_reviewer_v3/skills/validate.py): Ember, react-select, React's legacy data-reactid,
+# DotNetNuke. Anywhere in a selector, not only as a leading #id.
+_FRAGILE_ID_PATTERNS = re.compile(r"#ember-?\d+|#react-select-\d+|\[data-reactid\]|#dnn_\w+", re.IGNORECASE)
 
 
 def is_volatile_selector(selector: str) -> bool:
-    """True when a CSS selector is an #id that looks machine-generated (per-session/mount).
+    """True when a selector carries an id that looks machine-generated (per-session/mount/render).
 
     The compiler uses this to warn when an interrupt gets anchored on one: an interrupt
     exists to fire on a FUTURE instance of its overlay, which a per-mount id can never match.
     """
+    if _FRAGILE_ID_PATTERNS.search(selector) is not None:
+        return True
     return selector.startswith("#") and _VOLATILE_ID.search(selector) is not None
 
 
