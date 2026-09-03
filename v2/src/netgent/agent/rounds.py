@@ -1,9 +1,10 @@
 """The round context: what one `netgent generate --parallel N --rounds R` accumulates across rounds.
 
-Round r = plan → explore ×k → verify → merge (all runs so far) → compile → replay → triage →
-{END | plan_next}. Everything the next round's planner may read, and everything the eval
-bench scores per round (eval-framework.md §2.2 stage 7 — rounds_to_pass, episodes_per_round,
-hint_acceptance_rate, tokens per run), lives here as typed records and is persisted as
+Round r = plan → explore ×k → verify → merge (all runs so far) → generate (the agent, on the
+merge's alignment) → replay → triage → {END | plan_next}. Everything the next round's planner
+and generator may read, and everything the eval bench scores per round (eval-framework.md §2.2
+stage 7 — rounds_to_pass, episodes_per_round, draft_acceptance_rate, tokens per run), lives
+here as typed records and is persisted as
 `<name>.trajectories/context.json`. Pure pydantic; nothing here imports langchain.
 """
 
@@ -11,8 +12,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, computed_field
 
-from netgent.agent.generator.hints import HintOutcome, acceptance_rate
 from netgent.agent.generator.merge import GeneralizedTrajectory
+from netgent.agent.generator.models import DraftOutcome, acceptance_rate
 from netgent.agent.planner.models import NextRoundPlan, TaskVariation
 from netgent.agent.replay import ReplayReport
 from netgent.agent.triage import Episode
@@ -78,7 +79,6 @@ class GeneralizedSummary(BaseModel):
     columns: list[ColumnSummary] = Field(default_factory=list)
     interrupts: list[dict[str, Any]] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
-    hints: list[HintOutcome] = Field(default_factory=list)
 
     @classmethod
     def from_generalized(cls, gen: GeneralizedTrajectory) -> "GeneralizedSummary":
@@ -91,7 +91,7 @@ class GeneralizedSummary(BaseModel):
                 target=(c.target or None), param=c.param, field=c.field, support=c.support, runs=list(c.runs),
                 values_by_run=dict(c.values_by_run), transition=c.transition,
             ) for c in gen.columns],
-            interrupts=list(gen.interrupts), warnings=list(gen.warnings), hints=list(gen.hints),
+            interrupts=list(gen.interrupts), warnings=list(gen.warnings),
         )
 
 
@@ -104,9 +104,14 @@ class RoundRecord(BaseModel):
     replay_passed: bool = False
     unseen_passed: int = 0  # value sets other than the artifact's defaults that replayed
     episodes: list[Episode] = Field(default_factory=list)
-    # The hints THIS round's merge consumed (proposed by the previous round's plan_next), each
-    # applied or rejected with a reason — hint_acceptance_rate is applied ÷ proposed.
-    hints: list[HintOutcome] = Field(default_factory=list)
+    # What the generator agent's draft did this round: every item applied / rejected / degraded
+    # with a reason (draft_acceptance_rate is applied ÷ proposed), whether the merge's artifact
+    # was returned instead (used_fallback), how many repair turns it took, and whether a witnessed
+    # postcondition survived (validated). Empty draft_outcomes + used_fallback: no draft arrived.
+    draft_outcomes: list[DraftOutcome] = Field(default_factory=list)
+    used_fallback: bool = False
+    repairs_used: int = 0
+    validated: bool = True
     next_plan: NextRoundPlan | None = None  # what plan_next proposed for the next round
     usage: dict[str, dict[str, int] | None] = Field(default_factory=dict)  # "plan" | "plan_next" | "run-k"
     exit: str = ""  # "" while the loop continues; passed | max_rounds | no_next_runs | unpassable | error
@@ -122,15 +127,15 @@ class RoundRecord(BaseModel):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def hint_acceptance_rate(self) -> float | None:
-        """applied ÷ proposed for the hints this round's merge consumed (None: none proposed) —
-        serialized into context.json so the eval bench reads it per round."""
-        return acceptance_rate(self.hints)
+    def draft_acceptance_rate(self) -> float | None:
+        """applied ÷ proposed for the draft items this round's generator materialized (None: no
+        draft) — serialized into context.json so the eval bench reads it per round."""
+        return acceptance_rate(self.draft_outcomes)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def hints_applied(self) -> int:
-        return sum(1 for h in self.hints if h.status == "applied")
+    def draft_applied(self) -> int:
+        return sum(1 for o in self.draft_outcomes if o.status == "applied")
 
 
 class RoundContext(BaseModel):

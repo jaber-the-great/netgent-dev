@@ -287,13 +287,17 @@ class LangChainLLM:
 
 class FakeLLM:
     """Returns scripted decisions in order (tests). Raises if the script runs out.
-    `verdicts` scripts the judge the same way (default: every judgment is "achieved")."""
+    `verdicts` scripts the judge the same way (default: every judgment is "achieved").
+    `drafts` scripts the generator agent's WorkflowDraft calls separately, so a pipeline test
+    that scripts no draft still runs: the generator then falls back to the merge's artifact."""
 
-    def __init__(self, script: list[AgentDecision], verdicts: list | None = None):
+    def __init__(self, script: list[AgentDecision], verdicts: list | None = None, drafts: list | None = None):
         self._script = list(script)
         self._i = 0
         self._verdicts = list(verdicts or [])
+        self._drafts = list(drafts or [])
         self.judged: list[list[dict]] = []  # the content each judge() call received (tests inspect it)
+        self.drafted: list[list[dict]] = []  # the content each generator draft/repair call received
 
     def scoped(self) -> "FakeLLM":
         """The script is one ordered list: a scoped view is the same object (its usage is not
@@ -301,6 +305,12 @@ class FakeLLM:
         return self
 
     async def judge(self, system, content, schema):
+        if getattr(schema, "__name__", "") == "WorkflowDraft":
+            self.drafted.append(content)
+            if not self._drafts:
+                return None
+            d = self._drafts.pop(0)
+            return d(content) if callable(d) else d  # a callable reads the rendered evidence (tests)
         self.judged.append(content)
         if self._verdicts:
             return self._verdicts.pop(0)
