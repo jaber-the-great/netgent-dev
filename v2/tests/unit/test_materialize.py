@@ -24,7 +24,7 @@ from netgent.agent.generator.draft import (
     ParamWitness,
     WorkflowDraft,
 )
-from netgent.agent.generator.evidence import seek_between
+from netgent.agent.generator.evidence import gather_evidence, seek_between
 from netgent.agent.generator.materialize import materialize
 from netgent.agent.generator.merge import RunInput, merge_trajectories
 from netgent.agent.generator.models import acceptance_rate
@@ -325,3 +325,108 @@ def test_the_goal_gate_is_witnessed_never_asserted_from_the_task_text(ctx):
     final = out.workflow.state(out.workflow.accept_states[0])
     assert all(c.min_position_s is None for c in final.conditions if c.type == "media_playing")
     assert any("no seek knob" in w for w in out.warnings)
+
+
+def test_run_policy_refuses_excluding_too_many_and_keeps_every_run_instead(ctx):
+    draft = mop_draft(kept_runs=[1, 2], excluded=[])
+    out = materialize(draft, ctx)
+    (runs,) = [o for o in out.outcomes if o.item == "runs"]
+    assert runs.status == "rejected" and "at most 2 may be" in runs.reason
+    assert not out.used_fallback
+
+
+def test_main_path_must_follow_the_spine_in_order(ctx):
+    draft = mop_draft()
+    draft.main[2], draft.main[3] = draft.main[3], draft.main[2]  # the click before the submit
+    out = materialize(draft, ctx)
+    (bad,) = [o for o in out.outcomes if o.item == "main[3]" and o.status == "rejected"]
+    assert "step order" in bad.reason
+    other_run = mop_draft()
+    other_run.main[2] = DraftEdge(step="r2.s2.0")
+    (bad,) = [o for o in materialize(other_run, ctx).outcomes if o.item == "main[2]" and o.status == "rejected"]
+    assert "spine" in bad.reason
+
+
+def test_an_empty_main_falls_back_to_the_merge_artifact_byte_for_byte(ctx):
+    draft = mop_draft(main=[])
+    out = materialize(draft, ctx)
+    assert out.used_fallback and out.workflow == ctx.fallback
+    assert out.workflow.model_dump_json() == ctx.fallback.model_dump_json()
+    # and so does a draft most of whose steps point nowhere
+    nowhere = mop_draft(main=[DraftEdge(step="r1.s0.0"), DraftEdge(step="r1.s99.0"), DraftEdge(step="r1.s98.0")])
+    out = materialize(nowhere, ctx)
+    assert out.used_fallback and any("1 of 3 main nodes" in w for w in out.warnings)
+
+
+def test_unwitnessed_accept_reports_not_validated(ctx):
+    draft = mop_draft(accept=[DraftCondition(type="media_playing", witness="r1.s1.0")])  # no reading on the fill
+    out = materialize(draft, ctx)
+    assert not out.validated and out.workflow.accept_states == [] and not out.used_fallback
+    assert any("no postcondition" in w for w in out.warnings)
+
+
+def test_a_draft_needs_at_least_one_accept_condition():
+    with pytest.raises(ValueError):
+        WorkflowDraft(spine=1, kept_runs=[1], accept=[])
+
+
+def test_gather_renders_the_evidence_compactly_with_references_on_every_line(ctx):
+    ev = gather_evidence(ctx)
+    text = ev.render()
+    assert text.startswith(f"TASK: {TASK}")
+    assert "DECLARED VALUES: video_query, initial_watch_time, fast_forward_time, second_watch_time" in text
+    assert "run 1   achieved      15 steps" in text and "run 3   NOT achieved" in text
+    # the video click's line: reference, action, target, the ladder with kinds/counts/indices
+    line = next(ln for ln in ev.steps if ln.startswith("r1.s4.0"))
+    assert 'click -> link "Master of Puppets' in line and "0:id(18@0)" in line and "1:role*(1)" in line
+    assert "2:structural(18@0) '#dismissible > div > div a#video-title'" in line
+    # the press lines carry the measured seek
+    press = next(ln for ln in ev.steps if ln.startswith("r1.s10.0"))
+    assert "press 'l'" in press and "seek+11s" in press.replace("seek+10s", "seek+11s")
+    assert "media PLAYING 0:28/8:35" in press
+    # the alignment carries keys, not just indices; the merge's warnings; episodes when given
+    assert "key click:get_by_role|link#0" in text and "target-varies" in text
+    assert "warning: column 2: click present in 7/8 runs" in text
+    assert len(text) < 60_000  # ~15 k tokens for the whole MOP bundle (§G.3)
+    assert ev.steps_shown == ev.steps_total
+
+
+def test_a_dismissal_not_every_run_performed_is_refused_on_the_main_path_and_promoted(ctx):
+    """The live sonnet draft put the ad-skip click on the main path (6 of 7 kept runs saw an ad): a
+    replay with no pre-roll would fail that edge. Code refuses it and promotes it to an interrupt."""
+    draft = mop_draft()
+    skip = DraftEdge(step="r1.s7.0", corroborated_by=["r2.s6.0", "r10.s6.0"], why="'If an ad is shown skip the ad'")
+    draft.main.insert(4, skip)
+    draft.interrupts = [draft.interrupts[0]]  # only 'No thanks' declared
+    out = materialize(draft, ctx)
+    (bad,) = [o for o in out.outcomes if o.item == "main[4]" and o.status == "rejected"]
+    assert "belongs in `interrupts`" in bad.reason and "promoted" in bad.reason
+    assert not any(t.action.type == "click" and t.action.locator[-1].kwargs.get("name") == "Skip ad"
+                   for t in out.workflow.transitions if not t.id.startswith("ti"))
+    names = [out.workflow.transition(i.resolve[0]).action.locator[-1].kwargs["name"] for i in out.workflow.interrupts]
+    assert names == ["No thanks", "Skip ad"] and not out.used_fallback
+    (promoted,) = [o for o in out.outcomes if o.item == "interrupts[1]"]
+    assert promoted.status == "applied" and "support 3" in promoted.reason
+
+
+def test_dwells_and_the_seek_fold_run_from_states_gated_on_the_content_playing(ctx):
+    """The vacuous-pass case (live MOP artifact, 60 s replay): the initial dwell and all six presses
+    ran against a 0:15 pre-roll ad because only the accept state carried media_playing. The gate
+    is an invariant of materialize: each phase's state is gated on the content the recordings
+    show playing when that phase ran (min over runs of half the duration, capped at 120 s)."""
+    out = materialize(mop_draft(), ctx)
+    wf = out.workflow
+    control = wf.control
+    dwell1 = next(n for n in control if n.kind == "repeat" and n.body[0].edge.endswith("_dwell"))
+    fold = next(n for n in control if n.kind == "repeat" and n.body[0].edge.endswith("_rep"))
+    dwell_state = wf.state(wf.transition(dwell1.body[0].edge).target)
+    fold_state = wf.state(wf.transition(fold.body[0].edge).target)
+    for st in (dwell_state, fold_state):
+        (gate,) = [c for c in st.conditions if c.type == "media_playing"]
+        assert gate.min_duration_s == 102.0 and st.timeout_ms >= 130_000  # run 10's 3:25 content → 102 s
+    click_state = wf.state(wf.transition("t4").source)
+    assert not any(c.type == "media_playing" for c in click_state.conditions)  # the results page: no gate
+    gates = [o for o in out.outcomes if o.item.endswith(".gate")]
+    assert {o.item for o in gates} == {"main[4].gate", "main[5].gate", "main[6].gate"}
+    assert all(o.status == "degraded" for o in gates)
+    assert {c.type for c in wf.state(wf.accept_states[0]).conditions} >= {"url_matches", "media_playing"}
