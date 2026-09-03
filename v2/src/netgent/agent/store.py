@@ -1,4 +1,4 @@
-"""The trajectory store: every run of one `netgent generate --runs N`, persisted as memory.
+"""The trajectory store: every run of one `netgent generate --parallel N`, persisted as memory.
 
 Layout, under the workflow's memory folder `<out-dir>/<name>.trajectories/`:
 

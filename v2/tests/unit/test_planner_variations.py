@@ -1,4 +1,4 @@
-"""Variation planning for `--runs N`: one LLM call → N same-family tasks with proposed
+"""Variation planning for `--parallel N`: one LLM call → N same-family tasks with proposed
 param values, normalized in code (base first, consistent names, pinned values, padding)."""
 
 import asyncio

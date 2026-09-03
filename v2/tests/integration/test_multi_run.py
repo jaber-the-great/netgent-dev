@@ -1,4 +1,4 @@
-"""`--runs N` end to end on a local fixture with a scripted LLM: plan variations →
+"""`--parallel N` end to end on a local fixture with a scripted LLM: plan variations →
 explore ×N (fresh memory, verify per run) → typed merge (params inferred) → zero-LLM
 metamorphic replay with BOTH value sets. The replay proves zero-LLM by construction:
 FakeLLM raises once its script is exhausted."""

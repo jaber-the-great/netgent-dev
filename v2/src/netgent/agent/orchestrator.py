@@ -1,12 +1,12 @@
 """The orchestrator: NetGent's entry point that chains the agents into the pipeline.
 
-Single run (`--runs 1`, the default — unchanged):
+Single run (`--parallel 1` — unchanged):
 
     START → explore → verify → generate → END
                │          │
                └─ failed ─┴─ not achieved (retries spent) ► END
 
-Multi-run (`--runs N --rounds R`, the closed loop with a typed merge):
+Multi-run (`--parallel N --rounds R`, the default — the closed loop with a typed merge):
 
     START → plan → explore_run ×N (Send, parallel; fresh memory each; verify per run, private retry)
                  → merge (pure code: typed-key alignment of ALL runs so far → ONE generalized NFA,
@@ -70,14 +70,16 @@ class GenerateRequest(BaseModel):
     # appended to the task); "achieved" proceeds to generation.
     judge: bool = True
     verify_retries: int = 1
-    # Multi-run exploration (`--runs N`): the planner drafts N same-family task variations,
-    # each explored independently (fresh memory), judged per run; the achieved runs are merged
-    # by the typed-key merge into ONE generalized workflow, then replay-checked with zero LLM.
-    # runs=1 keeps the single-run pipeline above, byte-for-byte. The CLI defaults to 5 runs.
+    # Multi-run exploration: the planner drafts `runs` same-family task variations, each
+    # explored independently (fresh memory), judged per run; the achieved runs are merged by
+    # the typed-key merge into ONE generalized workflow, then replay-checked with zero LLM.
+    # runs=1 keeps the single-run pipeline above, byte-for-byte.
     runs: int = Field(default=1, ge=1)
-    # How many explorations run at once (each in its own browser). Runs are independent
-    # samples by design (trajectory-memory.md §C.4), so they can fan out with LangGraph `Send`;
-    # 1 = sequential (what the FakeLLM tests need: a scripted LLM is consumed in order).
+    # How many of those runs execute at once (each in its own browser). Runs are independent
+    # samples by design (trajectory-memory.md §C.4), so they fan out with LangGraph `Send` and
+    # concurrency cannot change the artifact — only wall-clock time. The CLI exposes ONE knob,
+    # `--parallel N`, which sets both to N (5 by default); the split survives here because a
+    # scripted FakeLLM is consumed in order, so the tests need runs=N with parallel=1.
     parallel: int = Field(default=1, ge=1)
     variation: dict[str, str] = Field(default_factory=dict)  # pin one variation's values (--variation)
     # The closed loop (`--rounds R`, runs > 1 only): after the replay check, triage → plan_next →

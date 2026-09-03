@@ -1,4 +1,4 @@
-"""The round context: what one `netgent generate --runs N --rounds R` accumulates across rounds.
+"""The round context: what one `netgent generate --parallel N --rounds R` accumulates across rounds.
 
 Round r = plan → explore ×k → verify → merge (all runs so far) → compile → replay → triage →
 {END | plan_next}. Everything the next round's planner may read, and everything the eval

@@ -25,7 +25,7 @@ class PlannerAgent:
     async def variations(
         self, task: str, n: int, url: str | None = None, pinned: dict[str, str] | None = None
     ) -> VariationPlan:
-        """N same-family variations of `task` for multi-run exploration (`--runs N`)."""
+        """N same-family variations of `task` for multi-run exploration (`--parallel N`)."""
         from netgent.agent.planner.graph import plan_variations  # lazy: langgraph
 
         return await plan_variations(task, llm=self.llm, n=n, url=url, pinned=pinned)

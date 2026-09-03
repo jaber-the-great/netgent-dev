@@ -130,7 +130,7 @@ async def plan_variations(
     pinned: dict[str, str] | None = None,
     graph: CompiledStateGraph | None = None,
 ) -> VariationPlan:
-    """The ONE run API for `--runs N`: N same-family task variations, each carrying its
+    """The ONE run API for `--parallel N`: N same-family task variations, each carrying its
     intended concrete values under proposed param names. `graph` defaults to VARIATION_PLANNER."""
     if n < 1:
         raise ValueError("n must be >= 1")

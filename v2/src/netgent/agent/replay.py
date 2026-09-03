@@ -1,5 +1,5 @@
 """The zero-LLM replay check: the compiled workflow must walk the SAME state sequence for
-every parameter value set (a metamorphic test — the output contract of `--runs N`).
+every parameter value set (a metamorphic test — the output contract of `--parallel N`).
 
 Replays use the executor and the browser only — no model anywhere (the old validator package
 was removed; this is the pipeline's replacement, kept deliberately small). The state

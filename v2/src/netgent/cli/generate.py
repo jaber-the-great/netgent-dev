@@ -37,20 +37,17 @@ def generate(
     judge: Annotated[
         bool, typer.Option("--judge/--no-judge", help="LLM judge of the exploration from page evidence (advisory).")
     ] = True,
-    runs: Annotated[
-        int, typer.Option("--runs", min=1, help="Explore N planned task variations independently and merge "
-                          "them into one generalized workflow (params inferred; zero-LLM replay check). "
-                          "--runs 1 = a single exploration, compiled as-is.")
-    ] = 5,
     parallel: Annotated[
-        int, typer.Option("--parallel", min=1, help="How many explorations run at once (one browser each).")
+        int, typer.Option("--parallel", min=1, help="Explore N planned task variations at once (one browser "
+                          "each) and merge them into one generalized workflow (params inferred; zero-LLM "
+                          "replay check). --parallel 1 = a single exploration, compiled as-is.")
     ] = 5,
     variation: Annotated[
         list[str] | None,
-        typer.Option("--variation", help="Pin one variation's value as name=value (repeatable; needs --runs > 1)."),
+        typer.Option("--variation", help="Pin one variation's value as name=value (repeatable; needs --parallel > 1)."),
     ] = None,
     rounds: Annotated[
-        int, typer.Option("--rounds", min=1, help="Closed-loop round budget (--runs > 1): after a failed replay "
+        int, typer.Option("--rounds", min=1, help="Closed-loop round budget (--parallel > 1): after a failed replay "
                           "check, triage → plan_next → another round of explorations merged with everything so "
                           "far, until the replay passes on 2 unseen value sets. 1 = a single round.")
     ] = 3,
@@ -78,7 +75,8 @@ def generate(
         out=out,
         trajectory_dir=trajectory_dir,
         judge=judge,
-        runs=runs,
+        # One knob: N variations, all N explored concurrently (one browser each).
+        runs=parallel,
         parallel=parallel,
         variation=dict(v.split("=", 1) for v in (variation or [])),
         max_rounds=rounds,

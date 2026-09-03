@@ -48,8 +48,8 @@ def test_doctor_runs_and_reports_checks(tmp_path, monkeypatch):
     assert "LLM API keys" in result.output
 
 
-def test_generate_parses_runs_and_variation(monkeypatch, tmp_path):
-    """--runs / --variation reach the GenerateRequest; the pipeline itself is stubbed."""
+def test_generate_parses_parallel_and_variation(monkeypatch, tmp_path):
+    """--parallel / --variation reach the GenerateRequest (--parallel sets runs AND concurrency)."""
     captured = {}
 
     async def fake_orchestrate(req, llm, listen=None):
@@ -64,10 +64,10 @@ def test_generate_parses_runs_and_variation(monkeypatch, tmp_path):
     monkeypatch.setattr("netgent.agent.make_llm", lambda model: object())
     result = runner.invoke(cli_app, [
         "generate", "watch a video", "--url", "https://youtube.com",
-        "--out", str(tmp_path / "yt.yaml"), "--runs", "3",
+        "--out", str(tmp_path / "yt.yaml"), "--parallel", "3",
         "--variation", "watch_time=10", "--variation", "video_query=cats", "--rounds", "2",
     ])
     assert result.exit_code == 1 and "stubbed" in result.output
     req = captured["req"]
-    assert req.runs == 3 and req.max_rounds == 2
+    assert req.runs == 3 and req.parallel == 3 and req.max_rounds == 2
     assert req.variation == {"watch_time": "10", "video_query": "cats"}
