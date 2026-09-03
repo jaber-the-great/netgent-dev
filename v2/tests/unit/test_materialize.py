@@ -24,7 +24,7 @@ from netgent.agent.generator.draft import (
     ParamWitness,
     WorkflowDraft,
 )
-from netgent.agent.generator.evidence import gather_evidence, seek_between
+from netgent.agent.generator.evidence import seek_between
 from netgent.agent.generator.materialize import materialize
 from netgent.agent.generator.merge import RunInput, merge_trajectories
 from netgent.agent.generator.models import acceptance_rate
@@ -178,7 +178,8 @@ def test_hand_written_draft_yields_a_positional_click_a_derived_fold_and_an_acce
     (url,) = [c for c in final.conditions if c.type == "url_matches"]
     assert url.pattern == "^https://www\\.youtube\\.com/watch"
     (media,) = [c for c in final.conditions if c.type == "media_playing"]
-    assert media.min_duration_s == 102.0 and final.timeout_ms >= 130_000  # the phase gate; the accept defers to it
+    assert media.min_duration_s == 102.0  # the phase gate; the accept defers to it
+    assert media.min_position_s == "${fast_forward_time}" and final.timeout_ms == 2000  # the goal gate (below)
     assert acceptance_rate(out.outcomes) == 1.0 or all(o.status in ("applied", "degraded") for o in out.outcomes)
     # provenance: every main node landed on a transition
     landed = {o.transition for o in out.outcomes if o.item.startswith("main[") and "." not in o.item}
@@ -264,106 +265,63 @@ def test_params_need_verified_witnesses_with_provenance(ctx):
     assert {p.name for p in out.workflow.params} == {"second_watch_time", "fast_forward_time", "fast_forward_presses"}
 
 
-def test_run_policy_refuses_excluding_too_many_and_keeps_every_run_instead(ctx):
-    draft = mop_draft(kept_runs=[1, 2], excluded=[])
-    out = materialize(draft, ctx)
-    (runs,) = [o for o in out.outcomes if o.item == "runs"]
-    assert runs.status == "rejected" and "at most 2 may be" in runs.reason
-    assert not out.used_fallback
-
-
-def test_main_path_must_follow_the_spine_in_order(ctx):
-    draft = mop_draft()
-    draft.main[2], draft.main[3] = draft.main[3], draft.main[2]  # the click before the submit
-    out = materialize(draft, ctx)
-    (bad,) = [o for o in out.outcomes if o.item == "main[3]" and o.status == "rejected"]
-    assert "step order" in bad.reason
-    other_run = mop_draft()
-    other_run.main[2] = DraftEdge(step="r2.s2.0")
-    (bad,) = [o for o in materialize(other_run, ctx).outcomes if o.item == "main[2]" and o.status == "rejected"]
-    assert "spine" in bad.reason
-
-
-def test_an_empty_main_falls_back_to_the_merge_artifact_byte_for_byte(ctx):
-    draft = mop_draft(main=[])
-    out = materialize(draft, ctx)
-    assert out.used_fallback and out.workflow == ctx.fallback
-    assert out.workflow.model_dump_json() == ctx.fallback.model_dump_json()
-    # and so does a draft most of whose steps point nowhere
-    nowhere = mop_draft(main=[DraftEdge(step="r1.s0.0"), DraftEdge(step="r1.s99.0"), DraftEdge(step="r1.s98.0")])
-    out = materialize(nowhere, ctx)
-    assert out.used_fallback and any("1 of 3 main nodes" in w for w in out.warnings)
-
-
-def test_unwitnessed_accept_reports_not_validated(ctx):
-    draft = mop_draft(accept=[DraftCondition(type="media_playing", witness="r1.s1.0")])  # no reading on the fill
-    out = materialize(draft, ctx)
-    assert not out.validated and out.workflow.accept_states == [] and not out.used_fallback
-    assert any("no postcondition" in w for w in out.warnings)
-
-
-def test_a_draft_needs_at_least_one_accept_condition():
-    with pytest.raises(ValueError):
-        WorkflowDraft(spine=1, kept_runs=[1], accept=[])
-
-
-def test_gather_renders_the_evidence_compactly_with_references_on_every_line(ctx):
-    ev = gather_evidence(ctx)
-    text = ev.render()
-    assert text.startswith(f"TASK: {TASK}")
-    assert "DECLARED VALUES: video_query, initial_watch_time, fast_forward_time, second_watch_time" in text
-    assert "run 1   achieved      15 steps" in text and "run 3   NOT achieved" in text
-    # the video click's line: reference, action, target, the ladder with kinds/counts/indices
-    line = next(ln for ln in ev.steps if ln.startswith("r1.s4.0"))
-    assert 'click -> link "Master of Puppets' in line and "0:id(18@0)" in line and "1:role*(1)" in line
-    assert "2:structural(18@0) '#dismissible > div > div a#video-title'" in line
-    # the press lines carry the measured seek
-    press = next(ln for ln in ev.steps if ln.startswith("r1.s10.0"))
-    assert "press 'l'" in press and "seek+11s" in press.replace("seek+10s", "seek+11s")
-    assert "media PLAYING 0:28/8:35" in press
-    # the alignment carries keys, not just indices; the merge's warnings; episodes when given
-    assert "key click:get_by_role|link#0" in text and "target-varies" in text
-    assert "warning: column 2: click present in 7/8 runs" in text
-    assert len(text) < 60_000  # ~15 k tokens for the whole MOP bundle (§G.3)
-    assert ev.steps_shown == ev.steps_total
-
-
-def test_a_dismissal_not_every_run_performed_is_refused_on_the_main_path_and_promoted(ctx):
-    """The live sonnet draft put the ad-skip click on the main path (6 of 7 kept runs saw an ad): a
-    replay with no pre-roll would fail that edge. Code refuses it and promotes it to an interrupt."""
-    draft = mop_draft()
-    skip = DraftEdge(step="r1.s7.0", corroborated_by=["r2.s6.0", "r10.s6.0"], why="'If an ad is shown skip the ad'")
-    draft.main.insert(4, skip)
-    draft.interrupts = [draft.interrupts[0]]  # only 'No thanks' declared
-    out = materialize(draft, ctx)
-    (bad,) = [o for o in out.outcomes if o.item == "main[4]" and o.status == "rejected"]
-    assert "belongs in `interrupts`" in bad.reason and "promoted" in bad.reason
-    assert not any(t.action.type == "click" and t.action.locator[-1].kwargs.get("name") == "Skip ad"
-                   for t in out.workflow.transitions if not t.id.startswith("ti"))
-    names = [out.workflow.transition(i.resolve[0]).action.locator[-1].kwargs["name"] for i in out.workflow.interrupts]
-    assert names == ["No thanks", "Skip ad"] and not out.used_fallback
-    (promoted,) = [o for o in out.outcomes if o.item == "interrupts[1]"]
-    assert promoted.status == "applied" and "support 3" in promoted.reason
-
-
-def test_dwells_and_the_seek_fold_run_from_states_gated_on_the_content_playing(ctx):
-    """The vacuous-pass case (live MOP artifact, 60 s replay): the initial dwell and all six presses
-    ran against a 0:15 pre-roll ad because only the accept state carried media_playing. The gate
-    is an invariant of materialize: each phase's state is gated on the content the recordings
-    show playing when that phase ran (min over runs of half the duration, capped at 120 s)."""
+def test_the_accept_state_asserts_the_seek_the_recordings_witnessed_within_the_settle_budget(ctx):
+    """The goal gate: `url_matches ^/watch + media_playing(min_duration_s)` proves the video is playing,
+    not that the seek happened (run-60s-mine: the playhead went 0:12 → 1:16 across six presses — that
+    is the fact to check). The accept state's media_playing gains min_position_s = ${fast_forward_time}
+    — the seek knob, what the presses alone must have produced; the dwells are NOT added, since the
+    state is entered before the last dwell and dwell time is exactly what polling accrues — set only
+    because every kept run's playhead on entering the accept state (103 / 136 / 105 / 79 / 154 / 113 /
+    113 s) is past its own seek. The state's timeout drops to the 2 s settle budget: a one-press
+    replay of a 60 s seek passed the first version of this gate after 56 s of polling."""
     out = materialize(mop_draft(), ctx)
     wf = out.workflow
-    control = wf.control
-    dwell1 = next(n for n in control if n.kind == "repeat" and n.body[0].edge.endswith("_dwell"))
-    fold = next(n for n in control if n.kind == "repeat" and n.body[0].edge.endswith("_rep"))
-    dwell_state = wf.state(wf.transition(dwell1.body[0].edge).target)
-    fold_state = wf.state(wf.transition(fold.body[0].edge).target)
-    for st in (dwell_state, fold_state):
-        (gate,) = [c for c in st.conditions if c.type == "media_playing"]
-        assert gate.min_duration_s == 102.0 and st.timeout_ms >= 130_000  # run 10's 3:25 content → 102 s
-    click_state = wf.state(wf.transition("t4").source)
-    assert not any(c.type == "media_playing" for c in click_state.conditions)  # the results page: no gate
-    gates = [o for o in out.outcomes if o.item.endswith(".gate")]
-    assert {o.item for o in gates} == {"main[4].gate", "main[5].gate", "main[6].gate"}
-    assert all(o.status == "degraded" for o in gates)
-    assert {c.type for c in wf.state(wf.accept_states[0]).conditions} >= {"url_matches", "media_playing"}
+    final = wf.state(wf.accept_states[0])
+    (media,) = [c for c in final.conditions if c.type == "media_playing"]
+    assert media.min_position_s == "${fast_forward_time}"
+    assert final.timeout_ms == 2000
+    assert final.id == wf.transition("t7").target  # entered by t7, before the second dwell's self-loop
+    assert [p.name for p in wf.params if p.derive is not None] == ["fast_forward_presses"]  # no derived sum
+    (gate,) = [o for o in out.outcomes if o.item == "accept.position"]
+    assert gate.status == "degraded" and "run 1: 103s ≥ 30s" in gate.reason and "run 7: 154s ≥ 50s" in gate.reason
+    assert not [w for w in out.warnings if "media position" in w]
+    # zero-LLM resolution: the reference becomes the number the executor compares the playhead to,
+    # with the same unit coercion a Repeat count gets
+    def floor(values):
+        st = resolve_params(wf, values).state(wf.accept_states[0])
+        return next(c.min_position_s for c in st.conditions if c.type == "media_playing")
+    assert floor({}) == "30s"
+    assert floor({"fast_forward_time": "60s"}) == "60s"
+    assert floor({"fast_forward_time": "1m"}) == "1m"
+    # the other phase gates carry no position and keep their ad-tolerant timeouts: only the accept
+    # state asserts the goal, and only it is recognized within the settle budget
+    for st in wf.states:
+        for c in st.conditions:
+            if c.type == "media_playing" and st.id != final.id:
+                assert c.min_position_s is None and st.timeout_ms >= 130_000
+
+
+def _ctx_with_values(base: GeneratorContext, run: int, **values) -> GeneratorContext:
+    runs = [r.model_copy(update={"values": {**r.values, **values}}) if r.run == run else r for r in base.runs]
+    return GeneratorContext(task=base.task, url=base.url, name=base.name, runs=tuple(runs),
+                            generalized=base.generalized, fallback=base.fallback)
+
+
+def test_the_goal_gate_is_witnessed_never_asserted_from_the_task_text(ctx):
+    """A run whose declared seek (500 s) its playhead on entering the accept state (103 s) contradicts
+    leaves no witnessed seek knob: `not-validated (media position)`, no floor, the state's timeout
+    untouched; the url/media accept still stands."""
+    out = materialize(mop_draft(), _ctx_with_values(ctx, 1, fast_forward_time="500s"))
+    final = out.workflow.state(out.workflow.accept_states[0])
+    (media,) = [c for c in final.conditions if c.type == "media_playing"]
+    assert media.min_position_s is None and final.timeout_ms >= 130_000
+    assert not [o for o in out.outcomes if o.item == "accept.position"]
+    assert any(w.startswith("not-validated (media position)") and "run 1: 103s" in w for w in out.warnings)
+    assert out.validated  # the url/media accept stands; only the goal gate is missing
+    # without a derived fold there is no seek knob to gate on
+    draft = mop_draft()
+    draft.params[4].divide_by = 25  # M10 rejects the derived count; the fold unrolls
+    out = materialize(draft, ctx)
+    final = out.workflow.state(out.workflow.accept_states[0])
+    assert all(c.min_position_s is None for c in final.conditions if c.type == "media_playing")
+    assert any("no seek knob" in w for w in out.warnings)

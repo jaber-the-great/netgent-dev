@@ -14,7 +14,9 @@ An NFA: **states carry conditions** (triggers: `url_matches`, `selector_visible`
 closed set (goto, click, fill, press, select, scroll, upload_file, go_back, wait, hover, noop).
 Pop-ups are ε-transitions (`noop`): scoped, bounded `Interrupt`s swept by the executor between
 atomic steps. Control flow is a bounded regular expression (`control_sequence`, `Branch`,
-`Repeat`) — no code in artifacts, ever.
+`Repeat`) — no code in artifacts, ever. A trigger field may hold a number or ONE `${param}`
+reference (`media_playing.min_position_s`, the goal gate — only on a state recognized within
+`GOAL_GATE_MAX_TIMEOUT_MS`, since a pollable position floor is vacuous), never arithmetic.
 
 ## The pipeline
 

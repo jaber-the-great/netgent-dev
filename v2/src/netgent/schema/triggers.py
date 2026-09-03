@@ -4,11 +4,19 @@ A state is recognized when ALL of its triggers hold (conjunction). Each trigger 
 structured, serializable predicate — never a fixed sleep, never prose.
 """
 
+import re
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from netgent.schema.actions import Locator
+from netgent.schema.units import coerce_number
+
+_PARAM_REF = re.compile(r"^\$\{\w+\}$")
+# The settle budget of a state that asserts a media position: long enough for the element's
+# properties to reflect the last action, far too short for normal playback to reach a floor
+# the phases did not (a seek is ≥ 5 s per gesture; a dwell is ≥ 1 s per slice).
+GOAL_GATE_MAX_TIMEOUT_MS = 2000
 
 
 class UrlMatches(BaseModel):
@@ -97,12 +105,36 @@ class MediaPlaying(BaseModel):
     resolved-only discipline as SelectorHidden). `frame_path` restricts the check to one
     iframe; empty = any frame (the compiler cannot tell which frame a player lives in from a
     step's reading, and a gate is about the page's playback).
+
+    `min_position_s` is the goal gate: the media's playhead must be at least this far in. A
+    replay that walked the right states but spent its dwells and seeks on nothing (or pressed
+    once where the task said a minute) has the content at the wrong position, and only the
+    position says so. A number, or ONE `${param}` reference resolved by `resolve_params` with
+    the same unit coercion a Repeat count gets ('60s', '1m') — never arithmetic in the artifact.
+    The materializer sets it on the accept state only where every kept recording's playhead
+    on entering that state witnessed it. State recognition POLLS, and 1× playback satisfies any
+    floor given time (measured: a one-press replay of a 60 s seek passed after 56 s of polling),
+    so a state carrying it must be recognized within GOAL_GATE_MAX_TIMEOUT_MS — the Workflow
+    validator refuses a longer `timeout_ms`, and no artifact can ship a pollable goal gate.
     """
 
     type: Literal["media_playing"] = "media_playing"
     playing: bool = True  # True: playing (not paused, not ended); False: paused
     min_duration_s: float | None = None  # only media at least this long counts (filters ads)
+    min_position_s: float | str | None = None  # playhead ≥ this many seconds; a number or "${param}"
     frame_path: list[str] = Field(default_factory=list)
+
+    @field_validator("min_position_s")
+    @classmethod
+    def _number_or_one_param_reference(cls, value: float | str | None) -> float | str | None:
+        if value is None or isinstance(value, (int, float)):
+            return value
+        if _PARAM_REF.match(value) or coerce_number(value) is not None:
+            return value
+        raise ValueError(
+            f"media_playing.min_position_s {value!r} must be a number (with an optional unit) or a single "
+            "${param} reference — no expressions in the artifact; derive a param for a sum"
+        )
 
 
 Trigger = Annotated[

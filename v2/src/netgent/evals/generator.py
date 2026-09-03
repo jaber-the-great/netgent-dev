@@ -80,6 +80,8 @@ def metrics(outcome: GenerateOutcome, names: list[str]) -> dict[str, Any]:
         "used_fallback": outcome.used_fallback,
         "validated": outcome.validated,
         "accept_states_nonempty": bool(wf.accept_states),
+        "media_position_gate": next((c.min_position_s for sid in wf.accept_states for c in wf.state(sid).conditions
+                                     if c.type == "media_playing" and c.min_position_s is not None), None),
         "transitions": len(wf.transitions),
         "interrupts": len(wf.interrupts),
         "params": bound,
@@ -145,6 +147,7 @@ def markdown(summary: dict[str, Any], outcome: GenerateOutcome) -> str:
              f"({summary['applied']} applied / {summary['rejected']} rejected / {summary['degraded']} degraded) |",
              f"| repairs_used | {summary['repairs_used']} |", f"| used_fallback | {summary['used_fallback']} |",
              f"| validated (witnessed accept) | {summary['validated']} |",
+             f"| media position gate | {summary.get('media_position_gate') or '(none)'} |",
              f"| transitions / interrupts | {summary['transitions']} / {summary['interrupts']} |",
              f"| params | {', '.join(summary['params']) or '(none)'} |",
              f"| derived params | {', '.join(summary['derived_params']) or '(none)'} |",
@@ -166,5 +169,6 @@ def table(summary: dict[str, Any]) -> str:
     rate = summary["draft_acceptance_rate"]
     return yaml.safe_dump({k: summary[k] for k in (
         "draft_acceptance_rate", "applied", "rejected", "degraded", "repairs_used", "used_fallback", "validated",
+        "media_position_gate",
         "transitions", "interrupts", "params", "derived_params", "param_recall", "positional_clicks")} | {
         "draft_acceptance_rate": None if rate is None else round(rate, 2)}, sort_keys=False)

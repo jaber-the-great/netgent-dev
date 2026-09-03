@@ -63,8 +63,8 @@ from netgent.agent.generator.models import DraftOutcome, GenerateOutcome
 from netgent.browser.locators import is_volatile_selector
 from netgent.schema.actions import Action, LocatorStep
 from netgent.schema.control import Param, ParamDerivation
-from netgent.schema.triggers import MediaPlaying
-from netgent.schema.units import UNIT_NOTE
+from netgent.schema.triggers import GOAL_GATE_MAX_TIMEOUT_MS, MediaPlaying
+from netgent.schema.units import UNIT_NOTE, coerce_number
 from netgent.schema.workflow import State, Workflow
 
 MIN_VALUE_LEN = 3  # a shorter literal substitutes everywhere (§B.3 M8)
@@ -895,6 +895,12 @@ def materialize(draft: WorkflowDraft, ctx: GeneratorContext) -> GenerateOutcome:
         if any(isinstance(c, MediaPlaying) for c in conditions):
             final.timeout_ms = max(final.timeout_ms, MEDIA_GATE_TIMEOUT_MS)
         wf.accept_states = [final.id]
+        # 7b. the goal gate (§E.2 revisited): a media accept proves the content is playing, not that
+        #     the phases ran. Where every kept recording entered the accept state with the playhead
+        #     past its seek knob, the accept state asserts that position — witnessed, never read off
+        #     the task text — and is recognized within the settle budget, never by polling.
+        last_main = next((e for e in reversed(emits) if isinstance(e, _EmitStep)), None)
+        _gate_position(wf, final, last_main, kept, params, out)
     else:
         out.warnings.append("not-validated (no postcondition): no accept condition could be witnessed")
         wf.accept_states = []
@@ -940,6 +946,58 @@ def _gate_media(wf: Workflow, emits: list, out: _Recorder) -> None:
         out.degraded(f"main[{emit.col_index}].gate", ref_of(min(emit.col.steps), spine_step) if spine_step else None,
                      f"{state.id} gated on media_playing(min_duration_s={threshold:g}) — the recordings show the "
                      f"content playing when this {emit.action.type} ran; the draft did not ask for it")
+
+
+def _entry_position(step: AgentStep | None) -> int | None:
+    """The playhead on ENTERING the state a step runs from: its reading is taken before it runs."""
+    r = media_reading(step) if step is not None else None
+    return r[1] if r is not None and r[0] == "PLAYING" else None
+
+
+def _gate_position(wf: Workflow, final: State, last: "_EmitStep | None", kept: set[int],
+                   params: dict[str, _Resolved], out: _Recorder) -> None:
+    """Set `min_position_s` on the accept state's media_playing condition: the seek knob (the source
+    of a derived fold count — what the presses alone must have produced), witnessed by every kept
+    run's playhead on entering the accept state; the state's timeout drops to the goal-gate settle
+    budget so recognition cannot poll its way to the floor. One `${param}`, no arithmetic; nothing
+    witnessed → `not-validated (media position)`. The dwells are NOT added: dwell time is exactly
+    what polling accrues, and the accept state is entered before the last dwell runs."""
+    media = next((c for c in final.conditions if isinstance(c, MediaPlaying)), None)
+    if media is None:
+        return
+    seek_knobs = {p.derive.from_param for p in wf.params if p.derive is not None}
+    knobs: dict[str, dict[int, float]] = {}
+    for name in sorted(seek_knobs):
+        r = params.get(name)
+        if r is None:
+            continue
+        # coerce_number, not _number_in: the whole value must be a number (+ unit)
+        values = {rid: coerce_number(r.report.values_by_run.get(rid, "")) for rid in sorted(kept)}
+        if all(v is not None for v in values.values()):
+            knobs[name] = values  # type: ignore[assignment]
+    if not knobs:
+        out.warnings.append("not-validated (media position): no seek knob (the source of a derived fold count) "
+                            "to gate the accept state on")
+        return
+    entry = {rid: _entry_position(last.col.steps.get(rid)) if last is not None else None for rid in sorted(kept)}
+    if any(v is None for v in entry.values()):
+        missing = [rid for rid, v in entry.items() if v is None]
+        out.warnings.append(f"not-validated (media position): run(s) {missing} recorded no playhead reading on "
+                            "entering the accept state")
+        return
+    for name in sorted(knobs, key=lambda n: -statistics.median(knobs[n].values())):
+        if all(entry[rid] >= knobs[name][rid] for rid in entry):
+            media.min_position_s = "${" + name + "}"
+            final.timeout_ms = GOAL_GATE_MAX_TIMEOUT_MS
+            out.degraded("accept.position", None,
+                         f"{final.id} gated on media_playing(min_position_s=${{{name}}}), timeout "
+                         f"{GOAL_GATE_MAX_TIMEOUT_MS} "
+                         "ms — every kept run's playhead on entering it was past its seek: "
+                         + ", ".join(f"run {rid}: {entry[rid]}s ≥ {knobs[name][rid]:g}s" for rid in entry)
+                         + "; the draft did not ask for it")
+            return
+    out.warnings.append("not-validated (media position): no seek knob is satisfied by every kept run's playhead on "
+                        "entering the accept state — " + ", ".join(f"run {rid}: {entry[rid]}s" for rid in entry))
 
 
 def _num_str(v: str) -> str:

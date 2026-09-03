@@ -26,7 +26,8 @@ def test_cached_draft_compiles_with_zero_llm_and_reports_the_metrics(tmp_path):
     summary, md = asyncio.run(run_generator_eval(FIX, tmp_path / "out", draft_path=draft_path))
     assert summary["draft_acceptance_rate"] is not None and summary["rejected"] == 0 and not summary["used_fallback"]
     assert summary["validated"] and summary["accept_states_nonempty"] and summary["interrupts"] == 2
-    assert summary["derived_params"] == ["fast_forward_presses"] and summary["param_recall"] == 1.0
+    assert summary["derived_params"] == ["fast_forward_presses"]
+    assert summary["param_recall"] == 1.0 and summary["media_position_gate"] == "${fast_forward_time}"
     assert summary["positional_clicks"] == ["t4"]
     assert "| repairs_used | 0 |" in md and "cached draft" in summary["source"]
     assert (tmp_path / "out" / "workflow.yaml").is_file() and (tmp_path / "out" / "summary.json").is_file()

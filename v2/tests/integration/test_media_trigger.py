@@ -46,6 +46,9 @@ def test_media_playing_trigger_and_summary():
             assert await holds()  # something is playing
             assert await holds(min_duration_s=1.0)  # ...and it is at least 1 s long
             assert not await holds(min_duration_s=600.0)  # the ad gate: too short does not count
+            assert await holds(min_position_s=0)  # the goal gate: the playhead is past 0 s
+            assert not await holds(min_position_s="1m")  # ...and not past a minute
+            assert not await holds(min_position_s="${expected_media_position}")  # unresolved: never holds
             assert not await holds(playing=False)  # nothing is paused
 
             summary = await s.media_summary()

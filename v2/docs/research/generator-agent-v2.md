@@ -1626,6 +1626,7 @@ deviations from the text above are listed so the doc stays honest.
 | `Interrupt.resolve_timeout_ms` | executor applies it to the done state | the executor overrides the target state's `timeout_ms` for resolve edges only |
 | §I.3 exit | ≥ 2 unseen + non-empty accept + no regression | ≥ 2 unseen + no regression; a missing postcondition is reported (`not-validated`) but does not fail the gate — the replay stays the only gate |
 | §I.4 single-run replay gate | ship in the same change | shipped after: `--parallel 1` goes explore → verify → generate → **replay** — the artifact is replayed with zero LLM on its recorded value set, twice when params are declared (one exploration has no unseen set, so the metamorphic check degenerates to determinism); a failure keeps the artifact on disk, prints the replay lines and exits non-zero (`tests/integration/test_orchestrator.py`: a page whose Go button is gone on the second visit fails at `t2` with `selector_visible` unmet) |
+| §E.2 "do not put timing in the gate yet" | the accept certifies the end state only; asserting elapsed playback "needs a trigger vocabulary NetGent does not have" | **superseded by the goal gate**: `media_playing.min_position_s` — a number or ONE `${param}` (the unit coercion a Repeat count gets), evaluated by the executor against the element's `currentTime`; no arithmetic in the artifact. The materializer sets it on the accept state only where every kept recording's playhead on ENTERING that state was past its seek knob (the source of the derived fold count — what the presses alone must have produced; the dwells are not added, dwell time is what polling accrues), and drops that state's `timeout_ms` to `GOAL_GATE_MAX_TIMEOUT_MS` = 2000; the Workflow validator refuses `min_position_s` on any state with a longer timeout, so no artifact can ship a pollable goal gate. Reported as `accept.position` (degraded: code-added) or `not-validated (media position)`; an unresolved `${…}` never holds. Trigger set still closed, zero LLM |
 | §E.2 milestones, §E.3 coverage / `suspicious_success`, §H prompt caching / per-node effort | follow-ups | not done |
 | §D.5 (iii) the explorer's overshoot bound | two lines in the seek prompt | **reverted**: "stop at the FIRST press whose verified total meets N" read as "stop after the first press" — on the live run, runs 1–3 pressed once and were judged NOT achieved; the original wording (8/13 achieved on MOP) stays, and the materializer's overshoot band absorbs the count noise |
 
@@ -1659,3 +1660,33 @@ at `r12.s17.0`, `param_recall` 4/4, positional `t4`, one interrupt, validated �
 - What the loop still does not check: the judge's exact-seconds strictness makes the explorer's private retries the
   expensive part (4 of 5 runs retried); and `fast_forward_presses` per-run counts are only band-checked (run 2
   recorded 1 press for 20 s), which the median-seek rule tolerates by design.
+
+**The goal gate** (the follow-up to the vacuous pass above). `accept = [url_matches ^/watch, media_playing(min 120 s)]`
+proves the video is playing, not that the seek happened: `run-60s-mine/record.json` shows the playhead going 0:12 →
+1:16 across six presses, and that is the fact to check. The first cut of this gate was itself vacuous — measured, not
+argued: with `min_position_s: ${fast_forward_time}` on `s7` under the phase gate's 130 s timeout, a scratch copy of the
+artifact with the seek Repeat forced to ONE press still passed (`t7: noop` recognized `s7` in 56,533 ms, final playhead
+1:08, exit 0): state recognition polls, and 1× playback reaches any floor given time. Hence the two invariants above —
+the seek knob only, on the state entered before the last dwell, and a 2 s settle budget the schema enforces. On the
+bundle (`netgent eval generator tests/fixtures/mop --draft evals/results/generator/mop/draft.json`, zero LLM) `s7`
+carries `min_position_s: ${fast_forward_time}`, `timeout_ms: 2000`, because every kept run entered it past its seek
+(run 1: 103 s ≥ 30 s, run 2: 136 ≥ 45, run 4: 105 ≥ 25, run 6: 79 ≥ 30, run 7: 154 ≥ 50, run 10: 113 ≥ 30, run 11:
+113 ≥ 40); `resolve_params` turns it into `60s` for `fast_forward_time=60s` and the executor compares `currentTime` to
+it. `tests/unit/test_materialize.py` pins the witness rule (run 1 declaring a 500 s seek its 103 s playhead contradicts →
+`not-validated (media position)`, no floor, timeout untouched; no derived fold → no seek knob → the same) and the
+placement (`s7` is `t7`'s target; `s5`/`s6` keep their 130 s ad-tolerant timeouts and carry no position).
+
+**Live, positive and negative** (`/tmp/gen-agent-4/`: the closed loop compiled MOP in round 2 — replay `ok` on the
+defaults and two unseen sets, `fast_forward_time` 30 / 10 / 40 s; the artifact was then recompiled with zero LLM from
+the stored bundle and the round-2 draft, `netgent eval generator mop.trajectories --draft round-2/draft.json`, which
+differs from the live artifact only in `s7.timeout_ms: 130000 → 2000`). Both runs: `video_query="Rush - Tom Sawyer"
+fast_forward_time=60s initial_watch_time=5 second_watch_time=5`, an unseen query and an unseen seek.
+
+- Positive (`run-positive-2/`): `✓ t6: noop (80756ms to recognize s6)` (the pre-roll), six `✓ t6_rep: press`
+  taking the playhead 0:14 → 0:24 → 0:35 → 0:46 → 0:57 → 1:08, then **`✓ t7: noop (228ms to recognize s7)`**
+  (`duration_ms=717`, `video PLAYING at 1:08 / 4:33`, 68 s ≥ 60 s), five dwells to 1:19, `workflow completed`, exit 0.
+  The margin over the floor is the initial dwell (~8 s) — the seek alone is 6 × ~10.8 s.
+- Negative (`mop-negative-2.yaml`, a scratch copy with the seek Repeat forced to `count: '1'`, never committed;
+  `run-negative-2/`): one `✓ t6_rep: press` (0:13 → 0:16), then **`✗ t7: noop — state 's7' not recognized within
+  2000ms; unmet conditions: ['media_playing']`** (`outcome=trigger_timeout`, `duration_ms=2662`, `video PLAYING at
+  0:16 / 4:33`), `success: false`, exit 1. The same copy passed the first, pollable version of the gate after 56,533 ms.

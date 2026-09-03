@@ -22,9 +22,20 @@ from netgent.schema.triggers import (
     Trigger,
     UrlMatches,
 )
+from netgent.schema.units import coerce_number
 from netgent.schema.workflow import State
 
 POLL_INTERVAL_S = 0.1
+_UNRESOLVED = object()
+
+
+def _min_position(trigger: MediaPlaying) -> float | None | object:
+    """The seconds `min_position_s` asks for: None when unset, `_UNRESOLVED` for a "${param}" that
+    `resolve_params` never substituted (or a value that is not a number)."""
+    if trigger.min_position_s is None:
+        return None
+    n = coerce_number(trigger.min_position_s)
+    return _UNRESOLVED if n is None else n
 
 
 class TriggerEngine:
@@ -89,6 +100,10 @@ class TriggerEngine:
                 # No media, or nothing loaded → does not hold (resolved-only, like
                 # SelectorHidden): a source-less element is neither playing nor "paused
                 # content". The duration gate tells content from an ad in the same element.
+                # The position gate tells "the phases ran" from "the right states were walked".
+                min_position = _min_position(trigger)
+                if min_position is _UNRESOLVED:
+                    return False  # a "${param}" nobody resolved never holds — never a vacuous pass
                 for m in await self._media():
                     if trigger.frame_path and m.frame_path != trigger.frame_path:
                         continue
@@ -98,7 +113,8 @@ class TriggerEngine:
                     duration_ok = trigger.min_duration_s is None or (
                         m.duration is not None and m.duration >= trigger.min_duration_s
                     )
-                    if state_ok and duration_ok:
+                    position_ok = min_position is None or m.current >= min_position
+                    if state_ok and duration_ok and position_ok:
                         return True
                 return False
         return False

@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from netgent.schema.actions import Action
 from netgent.schema.control import Branch, ControlNode, EdgeStep, Interrupt, Milestone, Param, ParamDerivation, Repeat
-from netgent.schema.triggers import Trigger
+from netgent.schema.triggers import GOAL_GATE_MAX_TIMEOUT_MS, Trigger
 from netgent.schema.units import coerce_number
 
 DEFAULT_STATE_TIMEOUT_MS = 10_000
@@ -126,6 +126,15 @@ class Workflow(BaseModel):
             unknown_s = _states_in(self.control) - known
             if unknown_s:
                 raise ValueError(f"control (branch) references unknown states: {sorted(unknown_s)}")
+        for state in self.states:
+            # A goal gate (media_playing.min_position_s) on a state recognition could poll for long
+            # enough that playback alone reaches the floor proves nothing: refuse it at the schema.
+            gated = [c for c in state.conditions if c.type == "media_playing" and c.min_position_s is not None]
+            if gated and state.timeout_ms > GOAL_GATE_MAX_TIMEOUT_MS:
+                raise ValueError(
+                    f"state {state.id!r}: media_playing.min_position_s needs timeout_ms <= "
+                    f"{GOAL_GATE_MAX_TIMEOUT_MS} (got {state.timeout_ms}) — a pollable goal gate is vacuous"
+                )
         for milestone in self.milestones:
             if milestone.state not in known:
                 raise ValueError(f"milestone {milestone.id!r}: unknown state {milestone.state!r}")

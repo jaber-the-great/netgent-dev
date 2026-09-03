@@ -408,3 +408,40 @@ def test_element_triggers_take_exactly_one_of_selector_or_locator():
     # round-trips through the artifact form
     dumped = SelectorVisible(locator=chain).model_dump(mode="json")
     assert SelectorVisible.model_validate(dumped).locator == chain
+
+
+def test_media_playing_min_position_is_a_number_or_one_param_reference():
+    """The goal gate stays code-free: a number (with the unit coercion a Repeat count gets) or ONE
+    ${param}; an expression is refused at the schema — a sum is a derived param."""
+    from netgent.schema.triggers import MediaPlaying
+
+    assert MediaPlaying(min_position_s=60).min_position_s == 60
+    assert MediaPlaying(min_position_s="60s").min_position_s == "60s"
+    assert MediaPlaying(min_position_s="${fast_forward_time}").min_position_s == "${fast_forward_time}"
+    for bad in ("${a}+${b}", "${a} ${b}", "sixty", "${a}s"):
+        with pytest.raises(ValidationError, match="single"):
+            MediaPlaying(min_position_s=bad)
+
+
+def test_a_goal_gate_must_be_recognized_within_the_settle_budget():
+    """State recognition polls up to timeout_ms, and 1× playback satisfies any position floor given
+    time (measured: a one-press replay of a 60 s seek passed after 56 s of polling). A state carrying
+    media_playing.min_position_s therefore needs timeout_ms <= GOAL_GATE_MAX_TIMEOUT_MS at the schema."""
+    from netgent.schema.triggers import GOAL_GATE_MAX_TIMEOUT_MS
+
+    gate = {"type": "media_playing", "min_position_s": "${fast_forward_time}"}
+    ok = make_workflow(states=[
+        State(id="home", conditions=[{"type": "url_matches", "pattern": "example\\.com"}]),
+        State(id="done", conditions=[gate], timeout_ms=GOAL_GATE_MAX_TIMEOUT_MS),
+    ])
+    assert ok.state("done").conditions[0].min_position_s == "${fast_forward_time}"
+    with pytest.raises(ValidationError, match="pollable goal gate is vacuous"):
+        make_workflow(states=[
+            State(id="home", conditions=[{"type": "url_matches", "pattern": "example\\.com"}]),
+            State(id="done", conditions=[gate]),  # the 10 s default
+        ])
+    # the same state without the floor may poll as long as it likes
+    make_workflow(states=[
+        State(id="home", conditions=[{"type": "url_matches", "pattern": "example\\.com"}]),
+        State(id="done", conditions=[{"type": "media_playing", "min_duration_s": 120}], timeout_ms=130_000),
+    ])
