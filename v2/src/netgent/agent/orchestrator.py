@@ -305,16 +305,26 @@ def _run_values(gen, rid: int) -> dict[str, str]:
 
 
 def select_replay_sets(wf, gen, achieved_runs: list[int], previous_failed: list[dict[str, str]],
-                       max_sets: int = 3) -> list[dict[str, str]]:
+                       max_sets: int = 3, run_values: dict[int, dict[str, str]] | None = None) -> list[dict[str, str]]:
     """The value sets to replay: the artifact's defaults first, then UNSEEN sets (≠ defaults):
     sets that failed last round come first (they must pass now), then the newest runs' values
     (the latest round's runs were planned to exercise the episodes). At most `max_sets`.
-    With no unseen set, the defaults twice (the determinism check)."""
+    With no unseen set, the defaults twice (the determinism check).
+
+    `run_values` (run → the planner's declared values) is where a run's value for a param the
+    AGENT bound but the merge did not (fast_forward_time, realized only through presses) comes
+    from; without it the gate would replay such a knob at its default every time."""
     # Derived params are computed from their source at resolve time (never caller-supplied), so
     # a value set names only the task's own knobs.
     defaults = {p.name: p.default or "" for p in wf.params if p.derive is None}
     unseen: list[dict[str, str]] = []
-    for values in [*previous_failed, *(_run_values(gen, rid) for rid in sorted(achieved_runs, reverse=True))]:
+    declared = run_values or {}
+
+    def _values_of(rid: int) -> dict[str, str]:
+        merged = _run_values(gen, rid)
+        return {name: merged.get(name) or declared.get(rid, {}).get(name) or defaults[name] for name in defaults}
+
+    for values in [*previous_failed, *(_values_of(rid) for rid in sorted(achieved_runs, reverse=True))]:
         values = {name: values.get(name, defaults[name]) for name in defaults}
         if values != defaults and values not in unseen:
             unseen.append(values)
@@ -554,7 +564,8 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
         round_ = _round_of(state)
         wf, gen = state["workflow"], state["generalized"]
         previous_failed = [r.values for rd in context.rounds[:-1] for r in rd.replay if not r.success]
-        value_sets = select_replay_sets(wf, gen, list(gen.achieved_runs), previous_failed)
+        run_values = {i.run: dict(i.values) for i in state["inputs"] if i.achieved and not i.scoped}
+        value_sets = select_replay_sets(wf, gen, list(gen.achieved_runs), previous_failed, run_values=run_values)
         emit("replay", f"zero-LLM replay × {len(value_sets)}: {value_sets}")
         report = await replay_check(wf, value_sets, headless=req.headless, run_dir_base=store.round_dir(round_))
         for r in report.runs:

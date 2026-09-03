@@ -1,0 +1,996 @@
+{
+  "task": "Go to youtube.com search for Metallica - Master of Puppets and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 15s then fast-forward for 30s and then watch for 20s. If at any point any pop-ups happen dismiss them",
+  "url": "https://www.youtube.com",
+  "runs_per_round": 5,
+  "max_rounds": 3,
+  "canonical_names": [
+    "video_query",
+    "initial_watch_time",
+    "fast_forward_time",
+    "final_watch_time"
+  ],
+  "base_values": {
+    "video_query": "Metallica - Master of Puppets",
+    "initial_watch_time": "15s",
+    "fast_forward_time": "30s",
+    "final_watch_time": "20s"
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "variations": [
+        {
+          "task_text": "Go to youtube.com search for Metallica - Master of Puppets and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 15s then fast-forward for 30s and then watch for 20s. If at any point any pop-ups happen dismiss them",
+          "values": {
+            "video_query": "Metallica - Master of Puppets",
+            "initial_watch_time": "15s",
+            "fast_forward_time": "30s",
+            "final_watch_time": "20s"
+          }
+        },
+        {
+          "task_text": "Go to youtube.com search for AC/DC - Thunderstruck and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 10s then fast-forward for 20s and then watch for 15s. If at any point any pop-ups happen dismiss them",
+          "values": {
+            "video_query": "AC/DC - Thunderstruck",
+            "initial_watch_time": "10s",
+            "fast_forward_time": "20s",
+            "final_watch_time": "15s"
+          }
+        },
+        {
+          "task_text": "Go to youtube.com search for Guns N' Roses - Sweet Child O' Mine and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 20s then fast-forward for 45s and then watch for 25s. If at any point any pop-ups happen dismiss them",
+          "values": {
+            "video_query": "Guns N' Roses - Sweet Child O' Mine",
+            "initial_watch_time": "20s",
+            "fast_forward_time": "45s",
+            "final_watch_time": "25s"
+          }
+        },
+        {
+          "task_text": "Go to youtube.com search for Nirvana - Smells Like Teen Spirit and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 12s then fast-forward for 25s and then watch for 18s. If at any point any pop-ups happen dismiss them",
+          "values": {
+            "video_query": "Nirvana - Smells Like Teen Spirit",
+            "initial_watch_time": "12s",
+            "fast_forward_time": "25s",
+            "final_watch_time": "18s"
+          }
+        },
+        {
+          "task_text": "Go to youtube.com search for Iron Maiden - The Trooper and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 18s then fast-forward for 40s and then watch for 30s. If at any point any pop-ups happen dismiss them",
+          "values": {
+            "video_query": "Iron Maiden - The Trooper",
+            "initial_watch_time": "18s",
+            "fast_forward_time": "40s",
+            "final_watch_time": "30s"
+          }
+        }
+      ],
+      "runs": [
+        {
+          "run": 1,
+          "round": 1,
+          "task_text": "Go to youtube.com search for Metallica - Master of Puppets and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 15s then fast-forward for 30s and then watch for 20s. If at any point any pop-ups happen dismiss them",
+          "values": {
+            "video_query": "Metallica - Master of Puppets",
+            "initial_watch_time": "15s",
+            "fast_forward_time": "30s",
+            "final_watch_time": "20s"
+          },
+          "scoped": false,
+          "achieved": true,
+          "attempts": 1,
+          "success": true,
+          "stopped_reason": "All task requirements have been met: searched for Metallica - Master of Puppets, played the first video, skipped the ad, dismissed the popup, watched 15s, fast-forwarded 30s (verified in three 10s increments), then watched 20s more. Video is confirmed PLAYING at 1:44/8:35.",
+          "steps": 13,
+          "unmet": [
+            "The explicit 'wait 15.0' step in the action log (step 5) actually occurred during an ad (0:00/0:15 duration) rather than after the real video started, so there is no clearly dedicated 15s watch-wait applied to the actual content — only an incidental ~11s gap before fast-forwarding began, a few seconds short of the full 15s."
+          ],
+          "usage": {
+            "calls": 13,
+            "input_tokens": 92238,
+            "output_tokens": 9759,
+            "cache_read_tokens": 51746,
+            "cache_creation_tokens": 40466,
+            "observation_chars": 37356,
+            "history_chars": 11010
+          }
+        },
+        {
+          "run": 2,
+          "round": 1,
+          "task_text": "Go to youtube.com search for AC/DC - Thunderstruck and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 10s then fast-forward for 20s and then watch for 15s. If at any point any pop-ups happen dismiss them",
+          "values": {
+            "video_query": "AC/DC - Thunderstruck",
+            "initial_watch_time": "10s",
+            "fast_forward_time": "20s",
+            "final_watch_time": "15s"
+          },
+          "scoped": false,
+          "achieved": true,
+          "attempts": 1,
+          "success": true,
+          "stopped_reason": "All task requirements met: searched YouTube for AC/DC - Thunderstruck, played the first video result, no ads appeared, watched 10s, fast-forwarded 20s (verified two +10s jumps), watched final 15s. No popups appeared during the process. Video is playing normally now.",
+          "steps": 10,
+          "unmet": [],
+          "usage": {
+            "calls": 10,
+            "input_tokens": 70364,
+            "output_tokens": 6580,
+            "cache_read_tokens": 38445,
+            "cache_creation_tokens": 31899,
+            "observation_chars": 27034,
+            "history_chars": 5207
+          }
+        },
+        {
+          "run": 3,
+          "round": 1,
+          "task_text": "Go to youtube.com search for Guns N' Roses - Sweet Child O' Mine and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 20s then fast-forward for 45s and then watch for 25s. If at any point any pop-ups happen dismiss them",
+          "values": {
+            "video_query": "Guns N' Roses - Sweet Child O' Mine",
+            "initial_watch_time": "20s",
+            "fast_forward_time": "45s",
+            "final_watch_time": "25s"
+          },
+          "scoped": false,
+          "achieved": false,
+          "attempts": 2,
+          "success": false,
+          "stopped_reason": "stuck: repeated the same action 6 times (press on element 13)",
+          "steps": 16,
+          "unmet": [
+            "Fast-forward for 45s: only three 'l' key presses were issued (steps 10-12), each a standard YouTube 10s jump = ~30s total seek, not 45s. Computing extra seek from the media timeline (position advance 67s vs wall-clock 37s between the t+78s and t+115s readings) yields an actual seek of only ~30s, 15s short of the required 45s fast-forward parameter — a clear miss, not just minor drift."
+          ],
+          "usage": {
+            "calls": 30,
+            "input_tokens": 219953,
+            "output_tokens": 20853,
+            "cache_read_tokens": 127222,
+            "cache_creation_tokens": 92671,
+            "observation_chars": 77604,
+            "history_chars": 41710
+          }
+        },
+        {
+          "run": 4,
+          "round": 1,
+          "task_text": "Go to youtube.com search for Nirvana - Smells Like Teen Spirit and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 12s then fast-forward for 25s and then watch for 18s. If at any point any pop-ups happen dismiss them",
+          "values": {
+            "video_query": "Nirvana - Smells Like Teen Spirit",
+            "initial_watch_time": "12s",
+            "fast_forward_time": "25s",
+            "final_watch_time": "18s"
+          },
+          "scoped": false,
+          "achieved": false,
+          "attempts": 2,
+          "success": true,
+          "stopped_reason": "All task steps are now satisfied and verifiable on the current watch page: URL is the actual watch page (youtube.com/watch?v=hTWKbfoikeg) not the search results, the video title matches 'Nirvana - Smells Like Teen Spirit (Official Music Video)', the ad was skipped and popup dismissed earlier, the initial 12s watch was completed, the fast-forward exceeded the 25s target (video jumped from ~0:25 baseline to ~1:41, a 76s advance, well past the 25s requirement — overshoot rather than shortfall), and the final 18s watch was completed with the video still PLAYING at 2:40/4:38. No popups are currently visible on the page. All task requirements are met.",
+          "steps": 14,
+          "unmet": [
+            "Fast-forward for 25s: only 3 ArrowRight key presses were dispatched (steps 9-11). Computing seek-over-wall-clock across the consecutive timeline readings (t+52 pos 25s -> t+59 pos 37s -> t+73 pos 56s -> t+114 pos 101s) yields a cumulative extra jump of only ~14-15s (consistent with YouTube's 5s-per-ArrowRight behavior x3), not the requested 25s fast-forward. The position did not advance 25s beyond wall-clock time as required by the ${fast_forward_time}='25s' parameter."
+          ],
+          "usage": {
+            "calls": 26,
+            "input_tokens": 189892,
+            "output_tokens": 25394,
+            "cache_read_tokens": 106660,
+            "cache_creation_tokens": 83180,
+            "observation_chars": 76703,
+            "history_chars": 22107
+          }
+        },
+        {
+          "run": 5,
+          "round": 1,
+          "task_text": "Go to youtube.com search for Iron Maiden - The Trooper and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 18s then fast-forward for 40s and then watch for 30s. If at any point any pop-ups happen dismiss them",
+          "values": {
+            "video_query": "Iron Maiden - The Trooper",
+            "initial_watch_time": "18s",
+            "fast_forward_time": "40s",
+            "final_watch_time": "30s"
+          },
+          "scoped": false,
+          "achieved": true,
+          "attempts": 1,
+          "success": true,
+          "stopped_reason": "All required steps completed: searched and played the first video result, skipped the ad, dismissed the 'No thanks' popup, watched initial 18s, verified fast-forward jumps totaling well over 40s, then waited the final 30s (confirmed DONE WAITING). Video is currently playing normally at 2:55/4:23 with no blocking overlays.",
+          "steps": 15,
+          "unmet": [],
+          "usage": {
+            "calls": 15,
+            "input_tokens": 109242,
+            "output_tokens": 12455,
+            "cache_read_tokens": 60650,
+            "cache_creation_tokens": 48562,
+            "observation_chars": 44547,
+            "history_chars": 16458
+          }
+        }
+      ],
+      "generalized": {
+        "achieved_runs": [
+          1,
+          2,
+          5
+        ],
+        "params": [
+          {
+            "name": "final_watch_time",
+            "default": "20",
+            "values_by_run": {
+              "1": "20",
+              "2": "15",
+              "5": "30"
+            }
+          },
+          {
+            "name": "video_query",
+            "default": "Metallica - Master of Puppets",
+            "values_by_run": {
+              "1": "Metallica - Master of Puppets",
+              "2": "AC/DC - Thunderstruck",
+              "5": "Iron Maiden - The Trooper"
+            }
+          }
+        ],
+        "columns": [
+          {
+            "index": 0,
+            "key": "goto:goto#0",
+            "disposition": "aligned",
+            "action_type": "goto",
+            "target": null,
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              5
+            ],
+            "values_by_run": {},
+            "transition": "t1"
+          },
+          {
+            "index": 1,
+            "key": "fill:get_by_role|combobox#0",
+            "disposition": "param",
+            "action_type": "fill",
+            "target": "role=combobox[name=\"Search\" i]",
+            "param": "video_query",
+            "field": "text",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              5
+            ],
+            "values_by_run": {
+              "1": "Metallica - Master of Puppets",
+              "2": "AC/DC - Thunderstruck",
+              "5": "Iron Maiden - The Trooper"
+            },
+            "transition": "t2"
+          },
+          {
+            "index": 2,
+            "key": "press:get_by_role|combobox~0",
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "role=combobox[name=\"Search\" i]",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              5
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 3,
+            "key": "click:locator|None~0",
+            "disposition": "dropped",
+            "action_type": "click",
+            "target": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              1,
+              2
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 4,
+            "key": "scroll:locator|None~0",
+            "disposition": "dropped",
+            "action_type": "scroll",
+            "target": "#container > div a#logo",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              2
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 5,
+            "key": "click:locator|None~1",
+            "disposition": "dropped",
+            "action_type": "click",
+            "target": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              1,
+              5
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 6,
+            "key": "click:get_by_role|link#0",
+            "disposition": "target-varies",
+            "action_type": "click",
+            "target": "role=link[name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\" i]",
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              5
+            ],
+            "values_by_run": {},
+            "transition": "t3"
+          },
+          {
+            "index": 7,
+            "key": "wait:wait#0",
+            "disposition": "value-diverges",
+            "action_type": "wait",
+            "target": null,
+            "param": null,
+            "field": "seconds",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              5
+            ],
+            "values_by_run": {
+              "1": "15.0",
+              "2": "10.0",
+              "5": "5.0"
+            },
+            "transition": "t4"
+          },
+          {
+            "index": 8,
+            "key": "click:locator|None~2",
+            "disposition": "interrupt",
+            "action_type": "click",
+            "target": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              1,
+              5
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 9,
+            "key": "wait:wait~0",
+            "disposition": "dropped",
+            "action_type": "wait",
+            "target": null,
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              5
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 10,
+            "key": "press:locator|None~0",
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 1,
+            "runs": [
+              5
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 11,
+            "key": "press:locator|None~1",
+            "disposition": "dropped",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 2,
+            "runs": [
+              1,
+              5
+            ],
+            "values_by_run": {},
+            "transition": null
+          },
+          {
+            "index": 12,
+            "key": "press:locator|None#0",
+            "disposition": "aligned",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              5
+            ],
+            "values_by_run": {},
+            "transition": "t5"
+          },
+          {
+            "index": 13,
+            "key": "press:locator|None#1",
+            "disposition": "aligned",
+            "action_type": "press",
+            "target": "#movie_player > div:nth-of-type(1) > video",
+            "param": null,
+            "field": null,
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              5
+            ],
+            "values_by_run": {},
+            "transition": "t6"
+          },
+          {
+            "index": 14,
+            "key": "wait:wait#1",
+            "disposition": "param",
+            "action_type": "wait",
+            "target": null,
+            "param": "final_watch_time",
+            "field": "seconds",
+            "support": 3,
+            "runs": [
+              1,
+              2,
+              5
+            ],
+            "values_by_run": {
+              "1": "20.0",
+              "2": "15.0",
+              "5": "30.0"
+            },
+            "transition": "t7"
+          }
+        ],
+        "interrupts": [
+          {
+            "selector": "role=button[name=\"No thanks\" i]",
+            "support": 2,
+            "runs": [
+              1,
+              5
+            ]
+          },
+          {
+            "selector": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+            "support": 2,
+            "runs": [
+              1,
+              5
+            ]
+          }
+        ],
+        "warnings": [
+          "column 2: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 3: click present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 5: click present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 6: click targets differ across runs and match no planned value — kept run 1's selector; replay with other values may not find it",
+          "column 7: wait.seconds differs across runs (['10.0', '15.0', '5.0']) and matches no planned value — kept run 1's",
+          "column 10: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+          "column 11: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)"
+        ]
+      },
+      "replay": [
+        {
+          "values": {
+            "fast_forward_time": "30s",
+            "final_watch_time": "20",
+            "initial_watch_time": "15",
+            "video_query": "Metallica - Master of Puppets"
+          },
+          "success": true,
+          "signature": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s7"
+          ],
+          "failed_edge": null,
+          "outcome": null,
+          "unmet": [],
+          "error": null
+        },
+        {
+          "values": {
+            "fast_forward_time": "30s",
+            "final_watch_time": "30",
+            "initial_watch_time": "15",
+            "video_query": "Iron Maiden - The Trooper"
+          },
+          "success": true,
+          "signature": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s7"
+          ],
+          "failed_edge": null,
+          "outcome": null,
+          "unmet": [],
+          "error": null
+        },
+        {
+          "values": {
+            "fast_forward_time": "30s",
+            "final_watch_time": "15",
+            "initial_watch_time": "15",
+            "video_query": "AC/DC - Thunderstruck"
+          },
+          "success": true,
+          "signature": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s7"
+          ],
+          "failed_edge": null,
+          "outcome": null,
+          "unmet": [],
+          "error": null
+        }
+      ],
+      "replay_passed": true,
+      "unseen_passed": 2,
+      "episodes": [
+        {
+          "kind": "positional_target",
+          "source": "merge",
+          "column": 6,
+          "key": "click:get_by_role|link#0",
+          "transition": "t3",
+          "action_type": "click",
+          "field": null,
+          "runs": [
+            1,
+            2,
+            5
+          ],
+          "observed": {
+            "1": "role=link[name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\" i]",
+            "2": "role=link[name=\"AC/DC - Thunderstruck (Official Video) 4 minutes, 53 seconds\" i]",
+            "5": "role=link[name=\"Iron Maiden - The Trooper (Official Video) 4 minutes, 24 seconds\" i]"
+          },
+          "planned": {
+            "fast_forward_time": {
+              "1": "30s",
+              "2": "20s",
+              "5": "40s"
+            },
+            "final_watch_time": {
+              "1": "20s",
+              "2": "15s",
+              "5": "30s"
+            },
+            "initial_watch_time": {
+              "1": "15s",
+              "2": "10s",
+              "5": "18s"
+            },
+            "video_query": {
+              "1": "Metallica - Master of Puppets",
+              "2": "AC/DC - Thunderstruck",
+              "5": "Iron Maiden - The Trooper"
+            }
+          },
+          "replay_values": {},
+          "unmet": [],
+          "confirmed_by_replay": false,
+          "detail": "targets differ across runs and match no planned value; a list-like target — the task may mean a position, not a title"
+        },
+        {
+          "kind": "unbound_value",
+          "source": "merge",
+          "column": 7,
+          "key": "wait:wait#0",
+          "transition": "t4",
+          "action_type": "wait",
+          "field": "seconds",
+          "runs": [
+            1,
+            2,
+            5
+          ],
+          "observed": {
+            "1": "15.0",
+            "2": "10.0",
+            "5": "5.0"
+          },
+          "planned": {
+            "fast_forward_time": {
+              "1": "30s",
+              "2": "20s",
+              "5": "40s"
+            },
+            "final_watch_time": {
+              "1": "20s",
+              "2": "15s",
+              "5": "30s"
+            },
+            "initial_watch_time": {
+              "1": "15s",
+              "2": "10s",
+              "5": "18s"
+            },
+            "video_query": {
+              "1": "Metallica - Master of Puppets",
+              "2": "AC/DC - Thunderstruck",
+              "5": "Iron Maiden - The Trooper"
+            }
+          },
+          "replay_values": {},
+          "unmet": [],
+          "confirmed_by_replay": false,
+          "detail": "wait.seconds differs across runs and matches no planned value; kept run 1's"
+        },
+        {
+          "kind": "conditional_step",
+          "source": "merge",
+          "column": 8,
+          "key": "click:locator|None~2",
+          "transition": null,
+          "action_type": "click",
+          "field": null,
+          "runs": [
+            1,
+            5
+          ],
+          "observed": {
+            "1": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+            "5": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button"
+          },
+          "planned": {},
+          "replay_values": {},
+          "unmet": [],
+          "confirmed_by_replay": false,
+          "detail": "present in 2/3 runs, dismissal-shaped: an interrupt candidate"
+        },
+        {
+          "kind": "varying_gesture",
+          "source": "merge",
+          "column": 10,
+          "key": "press:locator|None~0",
+          "transition": "t5",
+          "action_type": "press",
+          "field": null,
+          "runs": [
+            1,
+            2,
+            5
+          ],
+          "observed": {
+            "1": "3",
+            "2": "2",
+            "5": "4"
+          },
+          "planned": {
+            "fast_forward_time": {
+              "1": "30s",
+              "2": "20s",
+              "5": "40s"
+            },
+            "final_watch_time": {
+              "1": "20s",
+              "2": "15s",
+              "5": "30s"
+            },
+            "initial_watch_time": {
+              "1": "15s",
+              "2": "10s",
+              "5": "18s"
+            },
+            "video_query": {
+              "1": "Metallica - Master of Puppets",
+              "2": "AC/DC - Thunderstruck",
+              "5": "Iron Maiden - The Trooper"
+            }
+          },
+          "replay_values": {},
+          "unmet": [],
+          "confirmed_by_replay": false,
+          "detail": "4 adjacent press columns (#movie_player > div:nth-of-type(1) > video) in every run with differing counts: one gesture whose count is not a constant"
+        },
+        {
+          "kind": "judge_unmet",
+          "source": "judge",
+          "column": null,
+          "key": "",
+          "transition": null,
+          "action_type": null,
+          "field": null,
+          "runs": [
+            1
+          ],
+          "observed": {},
+          "planned": {},
+          "replay_values": {},
+          "unmet": [
+            "The explicit 'wait 15.0' step in the action log (step 5) actually occurred during an ad (0:00/0:15 duration) rather than after the real video started, so there is no clearly dedicated 15s watch-wait applied to the actual content — only an incidental ~11s gap before fast-forwarding began, a few seconds short of the full 15s."
+          ],
+          "confirmed_by_replay": false,
+          "detail": "the judge's caveat on an achieved run; no passing replay contradicts it"
+        }
+      ],
+      "draft_outcomes": [
+        {
+          "item": "runs",
+          "ref": null,
+          "status": "applied",
+          "reason": "spine 1, kept [1, 2, 5]",
+          "transition": null
+        },
+        {
+          "item": "params[0]",
+          "ref": "r1.s1.0",
+          "status": "applied",
+          "reason": "param 'video_query': 3/3 witness(es) verified",
+          "transition": null
+        },
+        {
+          "item": "params[1]",
+          "ref": "r1.s5.0",
+          "status": "applied",
+          "reason": "param 'initial_watch_time': 3/3 witness(es) verified",
+          "transition": null
+        },
+        {
+          "item": "params[2]",
+          "ref": "r1.s11.0",
+          "status": "applied",
+          "reason": "param 'final_watch_time': 3/3 witness(es) verified",
+          "transition": null
+        },
+        {
+          "item": "params[3]",
+          "ref": "r1.s8.0",
+          "status": "applied",
+          "reason": "param 'fast_forward_time': 3/3 witness(es) verified",
+          "transition": null
+        },
+        {
+          "item": "main[0]",
+          "ref": "r1.s0.0",
+          "status": "applied",
+          "reason": "goto, corroborated by 2 run(s); recorded chain",
+          "transition": "t1"
+        },
+        {
+          "item": "main[1].value_param",
+          "ref": "r1.s1.0",
+          "status": "applied",
+          "reason": "text bound to ${video_query}",
+          "transition": "t2"
+        },
+        {
+          "item": "main[1]",
+          "ref": "r1.s1.0",
+          "status": "applied",
+          "reason": "fill, corroborated by 2 run(s); recorded chain; text bound to ${video_query}",
+          "transition": "t2"
+        },
+        {
+          "item": "main[2]",
+          "ref": "r1.s2.0",
+          "status": "applied",
+          "reason": "click, corroborated by 1 run(s); recorded chain",
+          "transition": "t3"
+        },
+        {
+          "item": "main[3].target",
+          "ref": "r1.s4.0",
+          "status": "applied",
+          "reason": "structural rung '#dismissible > div > div a#video-title' + nth(0), the same position in 3 run(s)",
+          "transition": "t4"
+        },
+        {
+          "item": "main[3]",
+          "ref": "r1.s4.0",
+          "status": "applied",
+          "reason": "click, corroborated by 2 run(s); structural rung '#dismissible > div > div a#video-title' + nth(0), the same position in 3 run(s)",
+          "transition": "t4"
+        },
+        {
+          "item": "main[4].value_param",
+          "ref": "r1.s5.0",
+          "status": "applied",
+          "reason": "dwell bound to ${initial_watch_time} (1 s slices)",
+          "transition": "t5"
+        },
+        {
+          "item": "main[4]",
+          "ref": "r1.s5.0",
+          "status": "applied",
+          "reason": "wait, corroborated by 2 run(s); recorded chain; dwell bound to ${initial_watch_time} (1 s slices)",
+          "transition": "t5"
+        },
+        {
+          "item": "main[5]",
+          "ref": "r1.s8.0",
+          "status": "applied",
+          "reason": "Repeat(count=${fast_forward_presses}) = fast_forward_time / 10 (ceil); counts {1: 3, 2: 2, 5: 4}",
+          "transition": "t6"
+        },
+        {
+          "item": "main[6].value_param",
+          "ref": "r1.s11.0",
+          "status": "applied",
+          "reason": "dwell bound to ${final_watch_time} (1 s slices)",
+          "transition": "t7"
+        },
+        {
+          "item": "main[6]",
+          "ref": "r1.s11.0",
+          "status": "applied",
+          "reason": "wait, corroborated by 2 run(s); recorded chain; dwell bound to ${final_watch_time} (1 s slices)",
+          "transition": "t7"
+        },
+        {
+          "item": "interrupts[0]",
+          "ref": "r1.s6.0",
+          "status": "applied",
+          "reason": "dismissal '#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button', support 2",
+          "transition": null
+        },
+        {
+          "item": "interrupts[1]",
+          "ref": "r1.s7.0",
+          "status": "applied",
+          "reason": "dismissal 'role=button[name=\"No thanks\" i]', support 2",
+          "transition": null
+        },
+        {
+          "item": "accept[0]",
+          "ref": "r1.s5.0",
+          "status": "applied",
+          "reason": "url_matches ^https://www.youtube.com/watch",
+          "transition": null
+        },
+        {
+          "item": "accept[1]",
+          "ref": "r1.s11.0",
+          "status": "applied",
+          "reason": "media_playing(min_duration_s=120) — half the observed content, capped",
+          "transition": null
+        }
+      ],
+      "used_fallback": false,
+      "repairs_used": 0,
+      "validated": true,
+      "next_plan": null,
+      "usage": {
+        "plan": {
+          "calls": 2,
+          "input_tokens": 4448,
+          "output_tokens": 1463,
+          "cache_read_tokens": 3425,
+          "cache_creation_tokens": 1019,
+          "observation_chars": 765,
+          "history_chars": 20
+        },
+        "run-1": {
+          "calls": 13,
+          "input_tokens": 92238,
+          "output_tokens": 9759,
+          "cache_read_tokens": 51746,
+          "cache_creation_tokens": 40466,
+          "observation_chars": 37356,
+          "history_chars": 11010
+        },
+        "run-2": {
+          "calls": 10,
+          "input_tokens": 70364,
+          "output_tokens": 6580,
+          "cache_read_tokens": 38445,
+          "cache_creation_tokens": 31899,
+          "observation_chars": 27034,
+          "history_chars": 5207
+        },
+        "run-3": {
+          "calls": 30,
+          "input_tokens": 219953,
+          "output_tokens": 20853,
+          "cache_read_tokens": 127222,
+          "cache_creation_tokens": 92671,
+          "observation_chars": 77604,
+          "history_chars": 41710
+        },
+        "run-4": {
+          "calls": 26,
+          "input_tokens": 189892,
+          "output_tokens": 25394,
+          "cache_read_tokens": 106660,
+          "cache_creation_tokens": 83180,
+          "observation_chars": 76703,
+          "history_chars": 22107
+        },
+        "run-5": {
+          "calls": 15,
+          "input_tokens": 109242,
+          "output_tokens": 12455,
+          "cache_read_tokens": 60650,
+          "cache_creation_tokens": 48562,
+          "observation_chars": 44547,
+          "history_chars": 16458
+        },
+        "generate": {
+          "calls": 1,
+          "input_tokens": 14490,
+          "output_tokens": 21654,
+          "cache_read_tokens": 4622,
+          "cache_creation_tokens": 9866,
+          "observation_chars": 15857,
+          "history_chars": 10
+        }
+      },
+      "exit": "passed",
+      "key_index": {
+        "goto:goto#0": 0,
+        "fill:get_by_role|combobox#0": 1,
+        "click:get_by_role|link#0": 6,
+        "wait:wait#0": 7,
+        "press:locator|None#0": 12,
+        "press:locator|None#1": 13,
+        "wait:wait#1": 14
+      },
+      "draft_acceptance_rate": 1.0,
+      "draft_applied": 20
+    }
+  ]
+}

@@ -1,0 +1,179 @@
+[
+  {
+    "kind": "positional_target",
+    "source": "merge",
+    "column": 6,
+    "key": "click:get_by_role|link#0",
+    "transition": "t3",
+    "action_type": "click",
+    "field": null,
+    "runs": [
+      1,
+      2,
+      5
+    ],
+    "observed": {
+      "1": "role=link[name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\" i]",
+      "2": "role=link[name=\"AC/DC - Thunderstruck (Official Video) 4 minutes, 53 seconds\" i]",
+      "5": "role=link[name=\"Iron Maiden - The Trooper (Official Video) 4 minutes, 24 seconds\" i]"
+    },
+    "planned": {
+      "fast_forward_time": {
+        "1": "30s",
+        "2": "20s",
+        "5": "40s"
+      },
+      "final_watch_time": {
+        "1": "20s",
+        "2": "15s",
+        "5": "30s"
+      },
+      "initial_watch_time": {
+        "1": "15s",
+        "2": "10s",
+        "5": "18s"
+      },
+      "video_query": {
+        "1": "Metallica - Master of Puppets",
+        "2": "AC/DC - Thunderstruck",
+        "5": "Iron Maiden - The Trooper"
+      }
+    },
+    "replay_values": {},
+    "unmet": [],
+    "confirmed_by_replay": false,
+    "detail": "targets differ across runs and match no planned value; a list-like target \u2014 the task may mean a position, not a title"
+  },
+  {
+    "kind": "unbound_value",
+    "source": "merge",
+    "column": 7,
+    "key": "wait:wait#0",
+    "transition": "t4",
+    "action_type": "wait",
+    "field": "seconds",
+    "runs": [
+      1,
+      2,
+      5
+    ],
+    "observed": {
+      "1": "15.0",
+      "2": "10.0",
+      "5": "5.0"
+    },
+    "planned": {
+      "fast_forward_time": {
+        "1": "30s",
+        "2": "20s",
+        "5": "40s"
+      },
+      "final_watch_time": {
+        "1": "20s",
+        "2": "15s",
+        "5": "30s"
+      },
+      "initial_watch_time": {
+        "1": "15s",
+        "2": "10s",
+        "5": "18s"
+      },
+      "video_query": {
+        "1": "Metallica - Master of Puppets",
+        "2": "AC/DC - Thunderstruck",
+        "5": "Iron Maiden - The Trooper"
+      }
+    },
+    "replay_values": {},
+    "unmet": [],
+    "confirmed_by_replay": false,
+    "detail": "wait.seconds differs across runs and matches no planned value; kept run 1's"
+  },
+  {
+    "kind": "conditional_step",
+    "source": "merge",
+    "column": 8,
+    "key": "click:locator|None~2",
+    "transition": null,
+    "action_type": "click",
+    "field": null,
+    "runs": [
+      1,
+      5
+    ],
+    "observed": {
+      "1": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "5": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button"
+    },
+    "planned": {},
+    "replay_values": {},
+    "unmet": [],
+    "confirmed_by_replay": false,
+    "detail": "present in 2/3 runs, dismissal-shaped: an interrupt candidate"
+  },
+  {
+    "kind": "varying_gesture",
+    "source": "merge",
+    "column": 10,
+    "key": "press:locator|None~0",
+    "transition": "t5",
+    "action_type": "press",
+    "field": null,
+    "runs": [
+      1,
+      2,
+      5
+    ],
+    "observed": {
+      "1": "3",
+      "2": "2",
+      "5": "4"
+    },
+    "planned": {
+      "fast_forward_time": {
+        "1": "30s",
+        "2": "20s",
+        "5": "40s"
+      },
+      "final_watch_time": {
+        "1": "20s",
+        "2": "15s",
+        "5": "30s"
+      },
+      "initial_watch_time": {
+        "1": "15s",
+        "2": "10s",
+        "5": "18s"
+      },
+      "video_query": {
+        "1": "Metallica - Master of Puppets",
+        "2": "AC/DC - Thunderstruck",
+        "5": "Iron Maiden - The Trooper"
+      }
+    },
+    "replay_values": {},
+    "unmet": [],
+    "confirmed_by_replay": false,
+    "detail": "4 adjacent press columns (#movie_player > div:nth-of-type(1) > video) in every run with differing counts: one gesture whose count is not a constant"
+  },
+  {
+    "kind": "judge_unmet",
+    "source": "judge",
+    "column": null,
+    "key": "",
+    "transition": null,
+    "action_type": null,
+    "field": null,
+    "runs": [
+      1
+    ],
+    "observed": {},
+    "planned": {},
+    "replay_values": {},
+    "unmet": [
+      "The explicit 'wait 15.0' step in the action log (step 5) actually occurred during an ad (0:00/0:15 duration) rather than after the real video started, so there is no clearly dedicated 15s watch-wait applied to the actual content \u2014 only an incidental ~11s gap before fast-forwarding began, a few seconds short of the full 15s."
+    ],
+    "confirmed_by_replay": false,
+    "detail": "the judge's caveat on an achieved run; no passing replay contradicts it"
+  }
+]

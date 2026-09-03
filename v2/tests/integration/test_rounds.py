@@ -211,3 +211,10 @@ def test_select_replay_sets_never_asks_the_caller_for_a_derived_param():
         ParamReport(name="fast_forward_time", default="30s", values_by_run={1: "30s", 2: "45s"})])
     assert select_replay_sets(wf, gen, [1, 2], previous_failed=[]) == [
         {"fast_forward_time": "30s"}, {"fast_forward_time": "45s"}]
+    # a param the AGENT bound but the merge did not: its per-run values come from the runs' declared values
+    unmerged = GeneralizedTrajectory(task="t", runs=2, achieved_runs=[1, 2], params=[])
+    assert select_replay_sets(wf, unmerged, [1, 2], previous_failed=[],
+                              run_values={1: {"fast_forward_time": "30s"}, 2: {"fast_forward_time": "45s"}}) == [
+        {"fast_forward_time": "30s"}, {"fast_forward_time": "45s"}]
+    assert select_replay_sets(wf, unmerged, [1, 2], previous_failed=[]) == [
+        {"fast_forward_time": "30s"}, {"fast_forward_time": "30s"}]  # the old behaviour: the knob never varied

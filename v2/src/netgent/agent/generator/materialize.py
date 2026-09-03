@@ -857,6 +857,14 @@ def materialize(draft: WorkflowDraft, ctx: GeneratorContext) -> GenerateOutcome:
             new_params.append(p)
     wf = wf.model_copy(update={"params": new_params})
 
+    # 6b. media gates — an INVARIANT, not a draft choice (the compiler's _gate_media_states rule,
+    #     generalized off the trajectory): a dwell, a folded gesture or a press whose recorded
+    #     reading (taken just before the step ran, i.e. describing the state it runs FROM) shows the
+    #     long content playing must run from a state gated on media_playing(min_duration_s) — else a
+    #     replay spends the phase on a pre-roll ad in the same element while every selector holds
+    #     (measured: the live MOP artifact's 60 s replay pressed six times against a 0:15 ad).
+    _gate_media(wf, emits, out)
+
     # 7. accept (M13)
     conditions = [c for i, cond in enumerate(draft.accept)
                   if (c := _check_condition(i, cond, rec, kept, out)) is not None]
@@ -869,6 +877,8 @@ def materialize(draft: WorkflowDraft, ctx: GeneratorContext) -> GenerateOutcome:
         for c in State(id="_accept", conditions=conditions).conditions:  # validated Trigger models
             if c.model_dump(mode="json") in existing:
                 continue
+            if c.type == "media_playing" and any(e.type == "media_playing" for e in final.conditions):
+                continue  # the phase gate (6b) already holds the state to the content; one predicate suffices
             if c.type == "url_matches" and any(
                 e.type == "url_matches" and re.search(e.pattern, c.pattern.removeprefix("^").replace("\\", ""))
                 for e in final.conditions
@@ -889,6 +899,41 @@ def materialize(draft: WorkflowDraft, ctx: GeneratorContext) -> GenerateOutcome:
     except ValueError as exc:
         return _fallback(ctx, draft, out, f"the materialized workflow does not validate: {exc}")
     return GenerateOutcome(workflow=wf, draft=draft, outcomes=out.outcomes, warnings=out.warnings, validated=validated)
+
+
+def _media_threshold(steps: list[AgentStep]) -> float | None:
+    """min over the runs whose reading shows content ≥ MEDIA_GATE_MIN_CONTENT_S of half its duration,
+    capped — the compiler's ad/content separator, taken at its most permissive across runs."""
+    cands = []
+    for st in steps:
+        r = media_reading(st)
+        if r is not None and r[0] == "PLAYING" and r[2] is not None and r[2] >= MEDIA_GATE_MIN_CONTENT_S:
+            cands.append(min(round(r[2] / 2), MEDIA_GATE_CAP_S))
+    return float(min(cands)) if cands else None
+
+
+def _gate_media(wf: Workflow, emits: list, out: _Recorder) -> None:
+    k = 0
+    for emit in emits:
+        if not isinstance(emit, _EmitStep):
+            continue
+        k += 1  # _compile_emits numbers main-path transitions t1, t2, … one per _EmitStep
+        region = emit.dwell_param is not None or emit.repeat_param is not None or emit.repeat_count is not None
+        if not region and emit.action.type not in ("press", "wait"):
+            continue
+        threshold = _media_threshold(list(emit.col.steps.values()))
+        if threshold is None:
+            continue
+        t = wf.transition(f"t{k}")
+        state = wf.state(t.target if region else t.source)  # a region runs on its own (self-loop) state
+        if any(c.type == "media_playing" for c in state.conditions):
+            continue
+        state.conditions = [*state.conditions, MediaPlaying(min_duration_s=threshold)]
+        state.timeout_ms = max(state.timeout_ms, MEDIA_GATE_TIMEOUT_MS)
+        spine_step = emit.col.steps.get(min(emit.col.steps))
+        out.degraded(f"main[{emit.col_index}].gate", ref_of(min(emit.col.steps), spine_step) if spine_step else None,
+                     f"{state.id} gated on media_playing(min_duration_s={threshold:g}) — the recordings show the "
+                     f"content playing when this {emit.action.type} ran; the draft did not ask for it")
 
 
 def _num_str(v: str) -> str:

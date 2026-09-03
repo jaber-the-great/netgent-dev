@@ -178,7 +178,7 @@ def test_hand_written_draft_yields_a_positional_click_a_derived_fold_and_an_acce
     (url,) = [c for c in final.conditions if c.type == "url_matches"]
     assert url.pattern == "^https://www\\.youtube\\.com/watch"
     (media,) = [c for c in final.conditions if c.type == "media_playing"]
-    assert media.min_duration_s == 120.0 and final.timeout_ms >= 130_000
+    assert media.min_duration_s == 102.0 and final.timeout_ms >= 130_000  # the phase gate; the accept defers to it
     assert acceptance_rate(out.outcomes) == 1.0 or all(o.status in ("applied", "degraded") for o in out.outcomes)
     # provenance: every main node landed on a transition
     landed = {o.transition for o in out.outcomes if o.item.startswith("main[") and "." not in o.item}
@@ -344,3 +344,26 @@ def test_a_dismissal_not_every_run_performed_is_refused_on_the_main_path_and_pro
     assert names == ["No thanks", "Skip ad"] and not out.used_fallback
     (promoted,) = [o for o in out.outcomes if o.item == "interrupts[1]"]
     assert promoted.status == "applied" and "support 3" in promoted.reason
+
+
+def test_dwells_and_the_seek_fold_run_from_states_gated_on_the_content_playing(ctx):
+    """The vacuous-pass case (live MOP artifact, 60 s replay): the initial dwell and all six presses
+    ran against a 0:15 pre-roll ad because only the accept state carried media_playing. The gate
+    is an invariant of materialize: each phase's state is gated on the content the recordings
+    show playing when that phase ran (min over runs of half the duration, capped at 120 s)."""
+    out = materialize(mop_draft(), ctx)
+    wf = out.workflow
+    control = wf.control
+    dwell1 = next(n for n in control if n.kind == "repeat" and n.body[0].edge.endswith("_dwell"))
+    fold = next(n for n in control if n.kind == "repeat" and n.body[0].edge.endswith("_rep"))
+    dwell_state = wf.state(wf.transition(dwell1.body[0].edge).target)
+    fold_state = wf.state(wf.transition(fold.body[0].edge).target)
+    for st in (dwell_state, fold_state):
+        (gate,) = [c for c in st.conditions if c.type == "media_playing"]
+        assert gate.min_duration_s == 102.0 and st.timeout_ms >= 130_000  # run 10's 3:25 content → 102 s
+    click_state = wf.state(wf.transition("t4").source)
+    assert not any(c.type == "media_playing" for c in click_state.conditions)  # the results page: no gate
+    gates = [o for o in out.outcomes if o.item.endswith(".gate")]
+    assert {o.item for o in gates} == {"main[4].gate", "main[5].gate", "main[6].gate"}
+    assert all(o.status == "degraded" for o in gates)
+    assert {c.type for c in wf.state(wf.accept_states[0]).conditions} >= {"url_matches", "media_playing"}

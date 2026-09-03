@@ -1,0 +1,394 @@
+{
+  "task": "Go to youtube.com search for Metallica - Master of Puppets and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 15s then fast-forward for 30s and then watch for 20s. If at any point any pop-ups happen dismiss them\n\nPARAMETERS: ${video_query} = 'Metallica - Master of Puppets'; ${initial_watch_time} = '15s'; ${fast_forward_time} = '30s'; ${final_watch_time} = '20s'\nWhere the task refers to one of these, type or pick the value above exactly as given.",
+  "runs": 5,
+  "achieved_runs": [
+    1,
+    2,
+    5
+  ],
+  "params": [
+    {
+      "name": "final_watch_time",
+      "default": "20",
+      "values_by_run": {
+        "1": "20",
+        "2": "15",
+        "5": "30"
+      },
+      "description": ""
+    },
+    {
+      "name": "video_query",
+      "default": "Metallica - Master of Puppets",
+      "values_by_run": {
+        "1": "Metallica - Master of Puppets",
+        "2": "AC/DC - Thunderstruck",
+        "5": "Iron Maiden - The Trooper"
+      },
+      "description": ""
+    }
+  ],
+  "columns": [
+    {
+      "index": 0,
+      "key": "goto:goto#0",
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        5
+      ],
+      "action_type": "goto",
+      "target": null,
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "",
+        "2": "",
+        "5": ""
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t1"
+    },
+    {
+      "index": 1,
+      "key": "fill:get_by_role|combobox#0",
+      "disposition": "param",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        5
+      ],
+      "action_type": "fill",
+      "target": "role=combobox[name=\"Search\" i]",
+      "param": "video_query",
+      "note": "text varies with video_query",
+      "targets_by_run": {
+        "1": "role=combobox[name=\"Search\" i]",
+        "2": "role=combobox[name=\"Search\" i]",
+        "5": "role=combobox[name=\"Search\" i]"
+      },
+      "field": "text",
+      "values_by_run": {
+        "1": "Metallica - Master of Puppets",
+        "2": "AC/DC - Thunderstruck",
+        "5": "Iron Maiden - The Trooper"
+      },
+      "transition": "t2"
+    },
+    {
+      "index": 2,
+      "key": "press:get_by_role|combobox~0",
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        5
+      ],
+      "action_type": "press",
+      "target": "role=combobox[name=\"Search\" i]",
+      "param": null,
+      "note": "present in 1/3 runs, removable",
+      "targets_by_run": {
+        "5": "role=combobox[name=\"Search\" i]"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 3,
+      "key": "click:locator|None~0",
+      "disposition": "dropped",
+      "support": 2,
+      "runs": [
+        1,
+        2
+      ],
+      "action_type": "click",
+      "target": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+      "param": null,
+      "note": "present in 2/3 runs, removable",
+      "targets_by_run": {
+        "1": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+        "2": "#center > yt-searchbox > div:nth-of-type(1) > div > button"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 4,
+      "key": "scroll:locator|None~0",
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        2
+      ],
+      "action_type": "scroll",
+      "target": "#container > div a#logo",
+      "param": null,
+      "note": "present in 1/3 runs, removable",
+      "targets_by_run": {
+        "2": "#container > div a#logo"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 5,
+      "key": "click:locator|None~1",
+      "disposition": "dropped",
+      "support": 2,
+      "runs": [
+        1,
+        5
+      ],
+      "action_type": "click",
+      "target": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+      "param": null,
+      "note": "present in 2/3 runs, removable",
+      "targets_by_run": {
+        "1": "#center > yt-searchbox > div:nth-of-type(1) > div > button",
+        "5": "#center > yt-searchbox > div:nth-of-type(1) > div > button"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 6,
+      "key": "click:get_by_role|link#0",
+      "disposition": "target-varies",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        5
+      ],
+      "action_type": "click",
+      "target": "role=link[name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\" i]",
+      "param": null,
+      "note": "same action, different targets; kept run 1's",
+      "targets_by_run": {
+        "1": "role=link[name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\" i]",
+        "2": "role=link[name=\"AC/DC - Thunderstruck (Official Video) 4 minutes, 53 seconds\" i]",
+        "5": "role=link[name=\"Iron Maiden - The Trooper (Official Video) 4 minutes, 24 seconds\" i]"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t3"
+    },
+    {
+      "index": 7,
+      "key": "wait:wait#0",
+      "disposition": "value-diverges",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        5
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": null,
+      "note": "seconds differs across runs and matches no planned value; kept run 1's",
+      "targets_by_run": {
+        "1": "",
+        "2": "",
+        "5": ""
+      },
+      "field": "seconds",
+      "values_by_run": {
+        "1": "15.0",
+        "2": "10.0",
+        "5": "5.0"
+      },
+      "transition": "t4"
+    },
+    {
+      "index": 8,
+      "key": "click:locator|None~2",
+      "disposition": "interrupt",
+      "support": 2,
+      "runs": [
+        1,
+        5
+      ],
+      "action_type": "click",
+      "target": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "param": null,
+      "note": "present in 2/3 runs, dismissal-shaped",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+        "5": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 9,
+      "key": "wait:wait~0",
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        5
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": null,
+      "note": "present in 1/3 runs, removable",
+      "targets_by_run": {
+        "5": ""
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 10,
+      "key": "press:locator|None~0",
+      "disposition": "dropped",
+      "support": 1,
+      "runs": [
+        5
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "present in 1/3 runs, removable",
+      "targets_by_run": {
+        "5": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 11,
+      "key": "press:locator|None~1",
+      "disposition": "dropped",
+      "support": 2,
+      "runs": [
+        1,
+        5
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "present in 2/3 runs, removable",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "5": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": null
+    },
+    {
+      "index": 12,
+      "key": "press:locator|None#0",
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        5
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "2": "#movie_player > div:nth-of-type(1) > video",
+        "5": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t5"
+    },
+    {
+      "index": 13,
+      "key": "press:locator|None#1",
+      "disposition": "aligned",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        5
+      ],
+      "action_type": "press",
+      "target": "#movie_player > div:nth-of-type(1) > video",
+      "param": null,
+      "note": "",
+      "targets_by_run": {
+        "1": "#movie_player > div:nth-of-type(1) > video",
+        "2": "#movie_player > div:nth-of-type(1) > video",
+        "5": "#movie_player > div:nth-of-type(1) > video"
+      },
+      "field": null,
+      "values_by_run": {},
+      "transition": "t6"
+    },
+    {
+      "index": 14,
+      "key": "wait:wait#1",
+      "disposition": "param",
+      "support": 3,
+      "runs": [
+        1,
+        2,
+        5
+      ],
+      "action_type": "wait",
+      "target": null,
+      "param": "final_watch_time",
+      "note": "dwell parameterized: Repeat(count=\"${final_watch_time}\")",
+      "targets_by_run": {
+        "1": "",
+        "2": "",
+        "5": ""
+      },
+      "field": "seconds",
+      "values_by_run": {
+        "1": "20.0",
+        "2": "15.0",
+        "5": "30.0"
+      },
+      "transition": "t7"
+    }
+  ],
+  "interrupts": [
+    {
+      "selector": "role=button[name=\"No thanks\" i]",
+      "support": 2,
+      "runs": [
+        1,
+        5
+      ]
+    },
+    {
+      "selector": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "support": 2,
+      "runs": [
+        1,
+        5
+      ]
+    }
+  ],
+  "branches": [],
+  "warnings": [
+    "column 2: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 3: click present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 5: click present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 6: click targets differ across runs and match no planned value — kept run 1's selector; replay with other values may not find it",
+    "column 7: wait.seconds differs across runs (['10.0', '15.0', '5.0']) and matches no planned value — kept run 1's",
+    "column 10: press present in 1/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)",
+    "column 11: press present in 2/3 runs — the other runs achieved the task without it; dropped (another run can overrule this)"
+  ]
+}
