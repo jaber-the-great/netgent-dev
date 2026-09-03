@@ -1,0 +1,407 @@
+name: mop
+version: '1'
+start_state: init
+states:
+- id: init
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s1
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/
+  - frame_path: []
+    locator:
+    - fn: get_by_role
+      args:
+      - combobox
+      kwargs:
+        name: Search
+    type: selector_visible
+  timeout_ms: 10000
+- id: s2
+  description: ''
+  conditions:
+  - frame_path: []
+    locator:
+    - fn: locator
+      args:
+      - '#center > yt-searchbox > div:nth-of-type(1) > div > button'
+      kwargs: {}
+    type: selector_visible
+  timeout_ms: 10000
+- id: s3
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/results
+  - frame_path: []
+    locator:
+    - fn: locator
+      args:
+      - '#dismissible > div > div a#video-title'
+      kwargs: {}
+    - fn: nth
+      args:
+      - 0
+      kwargs: {}
+    type: selector_visible
+  timeout_ms: 10000
+- id: s4
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/watch
+  timeout_ms: 10000
+- id: s5
+  description: ''
+  conditions:
+  - frame_path: []
+    locator:
+    - fn: locator
+      args:
+      - '#movie_player > div:nth-of-type(1) > video'
+      kwargs: {}
+    type: selector_visible
+  - type: media_playing
+    playing: true
+    min_duration_s: 120.0
+    frame_path: []
+  timeout_ms: 130000
+- id: s6
+  description: ''
+  conditions:
+  - type: media_playing
+    playing: true
+    min_duration_s: 120.0
+    frame_path: []
+  timeout_ms: 130000
+- id: s7
+  description: ''
+  conditions:
+  - type: media_playing
+    playing: true
+    min_duration_s: 120.0
+    frame_path: []
+  - type: url_matches
+    pattern: ^https://www\.youtube\.com/watch
+  timeout_ms: 130000
+- id: i1
+  description: ''
+  conditions:
+  - frame_path: []
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: No thanks
+    type: selector_visible
+  timeout_ms: 10000
+- id: i1_done
+  description: ''
+  conditions:
+  - frame_path: []
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: No thanks
+    type: selector_hidden
+  timeout_ms: 10000
+- id: i2
+  description: ''
+  conditions:
+  - frame_path: []
+    locator:
+    - fn: locator
+      args:
+      - '#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button'
+      kwargs: {}
+    type: selector_visible
+  timeout_ms: 10000
+- id: i2_done
+  description: ''
+  conditions:
+  - frame_path: []
+    locator:
+    - fn: locator
+      args:
+      - '#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button'
+      kwargs: {}
+    type: selector_hidden
+  timeout_ms: 10000
+- id: i3
+  description: ''
+  conditions:
+  - frame_path: []
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: Close
+    type: selector_visible
+  timeout_ms: 10000
+- id: i3_done
+  description: ''
+  conditions:
+  - frame_path: []
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: Close
+    type: selector_hidden
+  timeout_ms: 10000
+transitions:
+- id: t1
+  source: init
+  target: s1
+  action:
+    timeout_ms: 30000
+    requires_closed_shadow: false
+    type: goto
+    url: https://www.youtube.com
+- id: t2
+  source: s1
+  target: s2
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: fill
+    locator:
+    - fn: get_by_role
+      args:
+      - combobox
+      kwargs:
+        name: Search
+    text: ${video_query}
+- id: t3
+  source: s2
+  target: s3
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: click
+    locator:
+    - fn: locator
+      args:
+      - '#center > yt-searchbox > div:nth-of-type(1) > div > button'
+      kwargs: {}
+- id: t4
+  source: s3
+  target: s4
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: click
+    locator:
+    - fn: locator
+      args:
+      - '#dismissible > div > div a#video-title'
+      kwargs: {}
+    - fn: nth
+      args:
+      - 0
+      kwargs: {}
+- id: t5
+  source: s4
+  target: s5
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: noop
+- id: t5_dwell
+  source: s5
+  target: s5
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: wait
+    seconds: 1.0
+- id: t6
+  source: s5
+  target: s6
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: noop
+- id: t6_rep
+  source: s6
+  target: s6
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: press
+    keys: l
+    locator:
+    - fn: locator
+      args:
+      - '#movie_player > div:nth-of-type(1) > video'
+      kwargs: {}
+- id: t7
+  source: s6
+  target: s7
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: noop
+- id: t7_dwell
+  source: s7
+  target: s7
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: wait
+    seconds: 1.0
+- id: ti1
+  source: i1
+  target: i1_done
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: No thanks
+- id: ti2
+  source: i2
+  target: i2_done
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: click
+    locator:
+    - fn: locator
+      args:
+      - '#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button'
+      kwargs: {}
+- id: ti3
+  source: i3
+  target: i3_done
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: Close
+params:
+- name: fast_forward_presses
+  description: 'derived: fast_forward_time / 10 (ceil), min 1; the recordings'' per-run
+    counts: run 1: 4, run 2: 1, run 3: 4, run 5: 4'
+  required: false
+  secret: false
+  derive:
+    from_param: fast_forward_time
+    divide_by: 10.0
+    rounding: ceil
+    min: 1
+- name: fast_forward_time
+  description: 'inferred from 4 runs; observed: run 1: ''30s'', run 2: ''20s'', run
+    3: ''45s'', run 5: ''40s'''
+  required: true
+  default: 30s
+  secret: false
+- name: initial_watch_time
+  description: 'inferred from 4 runs; observed: run 1: ''15'', run 2: ''10'', run
+    3: ''20'', run 5: ''30''; accepts a number with an optional unit (15, 15s, 1m)'
+  required: true
+  default: '15'
+  secret: false
+- name: post_ff_watch_time
+  description: 'inferred from 4 runs; observed: run 1: ''20'', run 2: ''15'', run
+    3: ''25'', run 5: ''10''; accepts a number with an optional unit (15, 15s, 1m)'
+  required: true
+  default: '20'
+  secret: false
+- name: video_query
+  description: 'inferred from 4 runs; observed: run 1: ''Metallica - Master of Puppets'',
+    run 2: ''Queen - Bohemian Rhapsody'', run 3: ''AC/DC - Thunderstruck'', run 5:
+    "Guns N'' Roses - Sweet Child O'' Mine"'
+  required: true
+  default: Metallica - Master of Puppets
+  secret: false
+control:
+- kind: edge
+  edge: t1
+- kind: edge
+  edge: t2
+- kind: edge
+  edge: t3
+- kind: edge
+  edge: t4
+- kind: edge
+  edge: t5
+- kind: repeat
+  body:
+  - kind: edge
+    edge: t5_dwell
+  max_iterations: 90
+  count: ${initial_watch_time}
+- kind: edge
+  edge: t6
+- kind: repeat
+  body:
+  - kind: edge
+    edge: t6_rep
+  max_iterations: 12
+  count: ${fast_forward_presses}
+- kind: edge
+  edge: t7
+- kind: repeat
+  body:
+  - kind: edge
+    edge: t7_dwell
+  max_iterations: 75
+  count: ${post_ff_watch_time}
+accept_states:
+- s7
+milestones: []
+interrupts:
+- id: int1
+  description: ''
+  state: i1
+  resolve:
+  - ti1
+  scope:
+  - s4
+  - s5
+  - s6
+  - s7
+  max_fires: 3
+  resolve_timeout_ms: 2000
+- id: int2
+  description: ''
+  state: i2
+  resolve:
+  - ti2
+  scope:
+  - s4
+  - s5
+  - s6
+  - s7
+  max_fires: 3
+  resolve_timeout_ms: 2000
+- id: int3
+  description: ''
+  state: i3
+  resolve:
+  - ti3
+  scope:
+  - s4
+  - s5
+  - s6
+  - s7
+  max_fires: 3
+  resolve_timeout_ms: 2000

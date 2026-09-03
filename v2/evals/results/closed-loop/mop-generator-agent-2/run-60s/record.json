@@ -1,0 +1,585 @@
+{
+  "workflow_name": "mop",
+  "workflow_version": "1",
+  "started_at": "2026-09-03T06:04:05.718456Z",
+  "finished_at": "2026-09-03T06:05:20.535943Z",
+  "success": true,
+  "edges": [
+    {
+      "transition_id": "t1",
+      "source": "init",
+      "target": "s1",
+      "action_type": "goto",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:04:05.718661Z",
+      "duration_ms": 1834.7630420466885,
+      "trigger_latency_ms": 42.41720901336521,
+      "conditions": [
+        {
+          "type": "url_matches",
+          "met": true
+        },
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/t1.png",
+      "media": null,
+      "error": null
+    },
+    {
+      "transition_id": "t2",
+      "source": "s1",
+      "target": "s2",
+      "action_type": "fill",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:04:07.553483Z",
+      "duration_ms": 579.9462080467492,
+      "trigger_latency_ms": 2.50841595698148,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/",
+      "screenshot": "screenshots/t2.png",
+      "media": null,
+      "error": null
+    },
+    {
+      "transition_id": "t3",
+      "source": "s2",
+      "target": "s3",
+      "action_type": "click",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:04:08.133471Z",
+      "duration_ms": 1201.663083047606,
+      "trigger_latency_ms": 993.3217079378664,
+      "conditions": [
+        {
+          "type": "url_matches",
+          "met": true
+        },
+        {
+          "type": "selector_visible",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/results?search_query=Rush+-+Tom+Sawyer",
+      "screenshot": "screenshots/t3.png",
+      "media": "video PLAYING at 0:00 / 0:15 [muted] [buffering]",
+      "error": null
+    },
+    {
+      "transition_id": "t4",
+      "source": "s3",
+      "target": "s4",
+      "action_type": "click",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:04:09.335224Z",
+      "duration_ms": 863.6005410226062,
+      "trigger_latency_ms": 0.13774994295090437,
+      "conditions": [
+        {
+          "type": "url_matches",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t4.png",
+      "media": "video NOT LOADED (no source); video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "ti3",
+      "source": "i3",
+      "target": "i3_done",
+      "action_type": "click",
+      "outcome": "recovered",
+      "started_at": "2026-09-03T06:04:10.298641Z",
+      "duration_ms": 2466.0606250399724,
+      "trigger_latency_ms": null,
+      "conditions": [
+        {
+          "type": "selector_hidden",
+          "met": false
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/ti3.png",
+      "media": "video PLAYING at 0:02 / 0:15; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": "state 'i3_done' not recognized within 2000ms; unmet conditions: ['selector_hidden']"
+    },
+    {
+      "transition_id": "ti3",
+      "source": "i3",
+      "target": "i3_done",
+      "action_type": "click",
+      "outcome": "recovered",
+      "started_at": "2026-09-03T06:04:12.771704Z",
+      "duration_ms": 2563.322625006549,
+      "trigger_latency_ms": null,
+      "conditions": [
+        {
+          "type": "selector_hidden",
+          "met": false
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/ti3.png",
+      "media": "video PLAYING at 0:04 / 0:15; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": "state 'i3_done' not recognized within 2000ms; unmet conditions: ['selector_hidden']"
+    },
+    {
+      "transition_id": "ti3",
+      "source": "i3",
+      "target": "i3_done",
+      "action_type": "click",
+      "outcome": "recovered",
+      "started_at": "2026-09-03T06:04:15.341952Z",
+      "duration_ms": 2515.4592080507427,
+      "trigger_latency_ms": null,
+      "conditions": [
+        {
+          "type": "selector_hidden",
+          "met": false
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/ti3.png",
+      "media": "video PLAYING at 0:07 / 0:15; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": "state 'i3_done' not recognized within 2000ms; unmet conditions: ['selector_hidden']"
+    },
+    {
+      "transition_id": "t5",
+      "source": "s4",
+      "target": "s5",
+      "action_type": "noop",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:04:17.857548Z",
+      "duration_ms": 38739.12495805416,
+      "trigger_latency_ms": 38364.555667038076,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        },
+        {
+          "type": "media_playing",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t5.png",
+      "media": "video PLAYING at 0:00 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t5_dwell",
+      "source": "s5",
+      "target": "s5",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:04:56.851928Z",
+      "duration_ms": 1562.1425419813022,
+      "trigger_latency_ms": 178.75087494030595,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        },
+        {
+          "type": "media_playing",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t5_dwell.png",
+      "media": "video PLAYING at 0:02 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t5_dwell",
+      "source": "s5",
+      "target": "s5",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:04:58.557494Z",
+      "duration_ms": 1521.4946669293568,
+      "trigger_latency_ms": 150.99774999544024,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        },
+        {
+          "type": "media_playing",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t5_dwell.png",
+      "media": "video PLAYING at 0:03 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t5_dwell",
+      "source": "s5",
+      "target": "s5",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:00.202566Z",
+      "duration_ms": 1581.617375020869,
+      "trigger_latency_ms": 150.39370802696794,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        },
+        {
+          "type": "media_playing",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t5_dwell.png",
+      "media": "video PLAYING at 0:05 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t5_dwell",
+      "source": "s5",
+      "target": "s5",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:01.911767Z",
+      "duration_ms": 1552.5094170589,
+      "trigger_latency_ms": 153.23579194955528,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        },
+        {
+          "type": "media_playing",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t5_dwell.png",
+      "media": "video PLAYING at 0:07 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t5_dwell",
+      "source": "s5",
+      "target": "s5",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:03.583909Z",
+      "duration_ms": 1588.8512081000954,
+      "trigger_latency_ms": 146.88970800489187,
+      "conditions": [
+        {
+          "type": "selector_visible",
+          "met": true
+        },
+        {
+          "type": "media_playing",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t5_dwell.png",
+      "media": "video PLAYING at 0:09 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6",
+      "source": "s5",
+      "target": "s6",
+      "action_type": "noop",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:05.289671Z",
+      "duration_ms": 546.7069169972092,
+      "trigger_latency_ms": 144.85904201865196,
+      "conditions": [
+        {
+          "type": "media_playing",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t6.png",
+      "media": "video PLAYING at 0:09 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_rep",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "press",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:06.081503Z",
+      "duration_ms": 640.5716250883415,
+      "trigger_latency_ms": 156.84566693380475,
+      "conditions": [
+        {
+          "type": "media_playing",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t6_rep.png",
+      "media": "video PLAYING at 0:20 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_rep",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "press",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:06.873119Z",
+      "duration_ms": 700.0517079140991,
+      "trigger_latency_ms": 196.7097920132801,
+      "conditions": [
+        {
+          "type": "media_playing",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t6_rep.png",
+      "media": "video PLAYING at 0:31 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_rep",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "press",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:07.703775Z",
+      "duration_ms": 731.522708083503,
+      "trigger_latency_ms": 158.49733294453472,
+      "conditions": [
+        {
+          "type": "media_playing",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t6_rep.png",
+      "media": "video PLAYING at 0:42 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_rep",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "press",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:08.563122Z",
+      "duration_ms": 775.1746249850839,
+      "trigger_latency_ms": 266.1075000651181,
+      "conditions": [
+        {
+          "type": "media_playing",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t6_rep.png",
+      "media": "video PLAYING at 0:52 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_rep",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "press",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:09.518423Z",
+      "duration_ms": 721.309999935329,
+      "trigger_latency_ms": 168.20287494920194,
+      "conditions": [
+        {
+          "type": "media_playing",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t6_rep.png",
+      "media": "video PLAYING at 1:03 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t6_rep",
+      "source": "s6",
+      "target": "s6",
+      "action_type": "press",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:10.367287Z",
+      "duration_ms": 669.3255419377238,
+      "trigger_latency_ms": 176.3406250393018,
+      "conditions": [
+        {
+          "type": "media_playing",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t6_rep.png",
+      "media": "video PLAYING at 1:14 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t7",
+      "source": "s6",
+      "target": "s7",
+      "action_type": "noop",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:11.162630Z",
+      "duration_ms": 560.4827499482781,
+      "trigger_latency_ms": 162.56170894484967,
+      "conditions": [
+        {
+          "type": "media_playing",
+          "met": true
+        },
+        {
+          "type": "url_matches",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t7.png",
+      "media": "video PLAYING at 1:15 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t7_dwell",
+      "source": "s7",
+      "target": "s7",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:11.973384Z",
+      "duration_ms": 1613.7312499340624,
+      "trigger_latency_ms": 168.4078749967739,
+      "conditions": [
+        {
+          "type": "media_playing",
+          "met": true
+        },
+        {
+          "type": "url_matches",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t7_dwell.png",
+      "media": "video PLAYING at 1:16 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t7_dwell",
+      "source": "s7",
+      "target": "s7",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:13.712052Z",
+      "duration_ms": 1578.3844999969006,
+      "trigger_latency_ms": 159.75699992850423,
+      "conditions": [
+        {
+          "type": "media_playing",
+          "met": true
+        },
+        {
+          "type": "url_matches",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t7_dwell.png",
+      "media": "video PLAYING at 1:18 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t7_dwell",
+      "source": "s7",
+      "target": "s7",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:15.413757Z",
+      "duration_ms": 1556.693125050515,
+      "trigger_latency_ms": 165.45124992262572,
+      "conditions": [
+        {
+          "type": "media_playing",
+          "met": true
+        },
+        {
+          "type": "url_matches",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t7_dwell.png",
+      "media": "video PLAYING at 1:20 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t7_dwell",
+      "source": "s7",
+      "target": "s7",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:17.096442Z",
+      "duration_ms": 1575.1688330201432,
+      "trigger_latency_ms": 163.5891670593992,
+      "conditions": [
+        {
+          "type": "media_playing",
+          "met": true
+        },
+        {
+          "type": "url_matches",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t7_dwell.png",
+      "media": "video PLAYING at 1:21 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    },
+    {
+      "transition_id": "t7_dwell",
+      "source": "s7",
+      "target": "s7",
+      "action_type": "wait",
+      "outcome": "ok",
+      "started_at": "2026-09-03T06:05:18.792716Z",
+      "duration_ms": 1583.80008302629,
+      "trigger_latency_ms": 154.00662494357675,
+      "conditions": [
+        {
+          "type": "media_playing",
+          "met": true
+        },
+        {
+          "type": "url_matches",
+          "met": true
+        }
+      ],
+      "url_after": "https://www.youtube.com/watch?v=auLBLk4ibAk&list=RDauLBLk4ibAk&start_radio=1",
+      "screenshot": "screenshots/t7_dwell.png",
+      "media": "video PLAYING at 1:23 / 4:33; video PAUSED at 0:00 / 0:15 [muted]",
+      "error": null
+    }
+  ]
+}

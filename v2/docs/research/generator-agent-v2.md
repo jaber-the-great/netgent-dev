@@ -1639,3 +1639,23 @@ returns the merge's artifact byte-for-byte. **Measured with the model** (`netgen
 --model claude-code:sonnet`): 25 items, 20 applied / 0 rejected / 5 degraded, 0 repairs, spine run 4, run 12 excluded
 at `r12.s17.0`, `param_recall` 4/4, positional `t4`, one interrupt, validated — ~31 k input tokens, one call
 (§G.3's estimate was ~16 k; the ladder lines and the eight runs' reasoning clauses are the difference).
+
+**Live, end to end** (`netgent generate … --model claude-code:sonnet --allow press --max-steps 35`, defaults
+`--parallel 5 --rounds 3`; `evals/results/closed-loop/mop-generator-agent*/`):
+
+- The first live compile **passed the gate in round 1 and was vacuous**: `run-60s.json` shows all five initial
+  dwells and all six presses executed against the 0:15 pre-roll (`video PLAYING at 0:0x / 0:15`); the 4:33 content
+  appeared only at `t7`, because the accept state was the only one carrying `media_playing`. The state sequence was
+  right and the goal was not. Two code fixes followed: every timed phase's state is gated on the content the
+  recordings show playing (an invariant of `materialize`, reported as a degraded `main[i].gate`), and replay value
+  sets take the runs' declared values so the agent's own params are varied — which surfaced the second bug,
+  `repeat.count '30s'`, now absorbed by one unit coercion (`schema/units.py`).
+- The re-run (`mop-generator-agent-2/`) **passed in round 1**: 4/5 runs achieved, draft 21/24 applied (the three
+  degraded items are the code-added gates), one repair, 13 transitions, 3 interrupts, `accept_states=['s7']`;
+  replay `ok` on the defaults and two unseen sets with `fast_forward_time` 30 / 40 / 45 s, watches 15/30/20 and
+  20/10/25, same `s1…s7` signature, zero LLM. A direct `netgent run … fast_forward_time=60s initial_watch_time=5
+  post_ff_watch_time=5` (`run-60s/record.json`): the ad-skip interrupt fired three times at `s4`, `t5` waited
+  38.7 s for the 4:33 content, the six presses ran on it (`0:09 → 1:14`), final position `1:23`.
+- What the loop still does not check: the judge's exact-seconds strictness makes the explorer's private retries the
+  expensive part (4 of 5 runs retried); and `fast_forward_presses` per-run counts are only band-checked (run 2
+  recorded 1 press for 20 s), which the median-seek rule tolerates by design.

@@ -1,0 +1,467 @@
+{
+  "draft": {
+    "spine": 1,
+    "kept_runs": [
+      1,
+      2,
+      3,
+      5
+    ],
+    "excluded": [],
+    "params": [
+      {
+        "name": "video_query",
+        "kind": "user",
+        "witnesses": [
+          {
+            "step": "r1.s1.0",
+            "field": "text",
+            "literal": "Metallica - Master of Puppets"
+          },
+          {
+            "step": "r2.s1.0",
+            "field": "text",
+            "literal": "Queen - Bohemian Rhapsody"
+          },
+          {
+            "step": "r3.s1.0",
+            "field": "text",
+            "literal": "AC/DC - Thunderstruck"
+          },
+          {
+            "step": "r5.s1.0",
+            "field": "text",
+            "literal": "Guns N' Roses - Sweet Child O' Mine"
+          }
+        ],
+        "derived_from": null,
+        "divide_by": null,
+        "rounding": "ceil",
+        "why": "The search text the task supplies; every run used a different query."
+      },
+      {
+        "name": "initial_watch_time",
+        "kind": "user",
+        "witnesses": [
+          {
+            "step": "r1.s9.0",
+            "field": "seconds",
+            "literal": "15s"
+          },
+          {
+            "step": "r3.s9.0",
+            "field": "seconds",
+            "literal": "20s"
+          },
+          {
+            "step": "r5.s9.0",
+            "field": "seconds",
+            "literal": "30s"
+          }
+        ],
+        "derived_from": null,
+        "divide_by": null,
+        "rounding": "ceil",
+        "why": "How long to watch before fast-forwarding; differs per run, matching the declared value. Run 2 is not witnessed here: its recorded wait step (r2.s9.0) is only 2s (a top-off wait after several ad-handling waits already consumed most of the 10s), not the full 10s literal, so it cannot serve as a witness for this param."
+      },
+      {
+        "name": "fast_forward_time",
+        "kind": "user",
+        "witnesses": [
+          {
+            "step": "r1.s10.0",
+            "field": "media_jump",
+            "literal": "10s"
+          }
+        ],
+        "derived_from": null,
+        "divide_by": null,
+        "rounding": "ceil",
+        "why": "The total seek-forward duration requested by the task. Not typed anywhere directly (it is achieved via repeated 10s-seek key presses), so its witness is the per-press media jump amount (+10s) recorded on the first fast-forward press, which anchors the derived press-count parameter below."
+      },
+      {
+        "name": "fast_forward_presses",
+        "kind": "derived",
+        "witnesses": [],
+        "derived_from": "fast_forward_time",
+        "divide_by": 10.0,
+        "rounding": "ceil",
+        "why": "Each 'l' keypress advances the video by 10s (per the recorded seek deltas). The number of presses needed is fast_forward_time divided by the 10s per-press amount, rounded up so the fast-forward covers at least the requested duration."
+      },
+      {
+        "name": "post_ff_watch_time",
+        "kind": "user",
+        "witnesses": [
+          {
+            "step": "r1.s14.0",
+            "field": "seconds",
+            "literal": "20s"
+          },
+          {
+            "step": "r2.s18.0",
+            "field": "seconds",
+            "literal": "15s"
+          },
+          {
+            "step": "r3.s14.0",
+            "field": "seconds",
+            "literal": "25s"
+          },
+          {
+            "step": "r5.s14.0",
+            "field": "seconds",
+            "literal": "10s"
+          }
+        ],
+        "derived_from": null,
+        "divide_by": null,
+        "rounding": "ceil",
+        "why": "How long to watch after fast-forwarding completes; differs per run, matching the declared value."
+      }
+    ],
+    "main": [
+      {
+        "kind": "edge",
+        "step": "r1.s0.0",
+        "target": null,
+        "value_param": null,
+        "corroborated_by": [
+          "r2.s0.0",
+          "r3.s0.0",
+          "r5.s0.0"
+        ],
+        "why": "Navigate to the declared starting URL, youtube.com."
+      },
+      {
+        "kind": "edge",
+        "step": "r1.s1.0",
+        "target": null,
+        "value_param": "video_query",
+        "corroborated_by": [
+          "r2.s1.0",
+          "r3.s1.0",
+          "r5.s1.0"
+        ],
+        "why": "Fill the YouTube search box with the task's video query."
+      },
+      {
+        "kind": "edge",
+        "step": "r1.s2.0",
+        "target": null,
+        "value_param": null,
+        "corroborated_by": [
+          "r3.s2.0"
+        ],
+        "why": "Submit the search query by clicking the search button, navigating to /results. Runs 2 and 5 achieved the identical submission by pressing Enter in the search combobox instead of clicking the button (same effect, different action type, so not listed as corroboration here \u2014 see notes)."
+      },
+      {
+        "kind": "edge",
+        "step": "r1.s4.0",
+        "target": {
+          "step": "r1.s4.0",
+          "rung": 2,
+          "nth": 0,
+          "name_param": null
+        },
+        "value_param": null,
+        "corroborated_by": [
+          "r2.s4.0",
+          "r3.s4.0",
+          "r5.s4.0"
+        ],
+        "why": "Task says 'play the first video that pops up' \u2014 a positional instruction, not a specific title. Use the structural rung (18 matches) with nth=0 to pick the first result regardless of its title/query."
+      },
+      {
+        "kind": "edge",
+        "step": "r1.s9.0",
+        "target": null,
+        "value_param": "initial_watch_time",
+        "corroborated_by": [
+          "r3.s9.0",
+          "r5.s9.0"
+        ],
+        "why": "Watch the now-playing main video for the initial period specified by the task before fast-forwarding. Run 2's r2.s9.0 was removed from corroboration: it recorded only a 2s wait (a top-off after prior ad-handling waits already elapsed most of the 10s target), which does not witness the declared 10s value required for a value_param edge."
+      },
+      {
+        "kind": "repeat",
+        "body": [
+          {
+            "kind": "edge",
+            "step": "r1.s10.0",
+            "target": null,
+            "value_param": null,
+            "corroborated_by": [
+              "r2.s10.0",
+              "r3.s10.0",
+              "r5.s10.0"
+            ],
+            "why": "Press 'l' on the video element to seek forward 10 seconds per press (YouTube's standard seek-forward shortcut), repeated until the requested fast_forward_time has been covered."
+          }
+        ],
+        "count": {
+          "constant": null,
+          "param": "fast_forward_presses"
+        },
+        "covers": [
+          "r1.s10.0",
+          "r1.s11.0",
+          "r1.s12.0",
+          "r1.s13.0",
+          "r2.s10.0",
+          "r3.s10.0",
+          "r3.s11.0",
+          "r3.s12.0",
+          "r3.s13.0",
+          "r5.s10.0",
+          "r5.s11.0",
+          "r5.s12.0",
+          "r5.s13.0"
+        ],
+        "why": "Fast-forwarding is performed as a repeated 'l' keypress gesture (each press seeks +10s per the recorded media lines), not a single action. Run 2's second press (r2.s17.0) was dropped from covers: it is separated from r2.s10.0 by a non-contiguous stretch of unrelated recovery actions (companion-overlay close clicks, an Escape press, a scroll, and a 'k' resume press), so the two presses cannot form one contiguous covered chunk. Only r2.s10.0 (a trivially-contiguous singleton) is kept for run 2; the second press is left unmodeled here (see notes)."
+      },
+      {
+        "kind": "edge",
+        "step": "r1.s14.0",
+        "target": null,
+        "value_param": "post_ff_watch_time",
+        "corroborated_by": [
+          "r2.s18.0",
+          "r3.s14.0",
+          "r5.s14.0"
+        ],
+        "why": "Watch the video for the final period after fast-forwarding, completing the task's watch sequence."
+      }
+    ],
+    "interrupts": [
+      {
+        "step": "r1.s7.0",
+        "rung": null,
+        "also_seen": [
+          "r2.s7.0",
+          "r3.s7.0",
+          "r5.s7.0"
+        ],
+        "why": "Task: 'If an ad is shown skip the ad.' This click dismisses the pre-roll ad overlay via its Skip button. Run 5 clicked a differently-laddered but semantically identical 'Skip ad' button."
+      },
+      {
+        "step": "r1.s8.0",
+        "rung": null,
+        "also_seen": [
+          "r2.s8.0",
+          "r3.s8.0",
+          "r5.s8.0"
+        ],
+        "why": "Task: 'If at any point any pop-ups happen dismiss them.' This click dismisses the 'No thanks' upsell prompt shown right after the ad, in every kept run."
+      },
+      {
+        "step": "r2.s11.0",
+        "rung": null,
+        "also_seen": [
+          "r2.s12.0",
+          "r2.s13.0"
+        ],
+        "why": "Task: dismiss any pop-ups. Run 2 additionally hit a companion ad overlay banner beside the player and repeatedly clicked its Close button to dismiss it before continuing the fast-forward sequence."
+      }
+    ],
+    "accept": [
+      {
+        "type": "media_playing",
+        "witness": "r1.s14.0",
+        "rung": null,
+        "playing": true,
+        "why": "The final post-fast-forward watch step shows the main video PLAYING (2:13/8:35), confirming the task's watch sequence completed with real content playing, not an ad or a stalled/paused player."
+      },
+      {
+        "type": "url_matches",
+        "witness": "r1.s4.0",
+        "rung": null,
+        "playing": true,
+        "why": "The task must end on YouTube's /watch page for the selected video, which this step's navigation establishes and which persists through the rest of the run."
+      }
+    ],
+    "notes": [
+      "Submission of the search query is action-varies across runs: run 1 and run 3 clicked the search button (r1.s2.0, r3.s2.0), while run 2 and run 5 pressed Enter in the combobox (r2.s2.0, r5.s2.0). Both achieve the same /results navigation; kept the spine's click edge with only run 3 as corroborated_by since DraftEdge ties to one action type, and documented the Enter-key alternative here rather than inventing a merged action.",
+      "Exploratory 'scroll' steps (r1.s3.0, r2.s3.0, r5.s3.0, r2.s15.0) were left off the main path: agents scrolled because the results/player appeared not yet rendered, not because the task required scrolling; these are page-load artifacts, not durable task steps.",
+      "The two ad-buffering waits before the skip button appears (e.g. r1.s5.0, r1.s6.0 and equivalents in runs 2/3/5) were left off the main path as ad-wait noise per instructions; only the skip click itself is modeled, as an interrupt.",
+      "Fast-forward press counts recorded do not perfectly match ceil(fast_forward_time/10) in every run: run 1 pressed 4 times for a 30s target (ceil=3, one extra press/overshoot), run 3 pressed only 4 times for a 45s target (ceil=5, undershoot), while run 2 (2 presses/20s, though only 1 is coverable \u2014 see below) and run 5 (4 presses/40s) are closer. Kept divide_by=10 as the best-supported value and flagged the mismatch here.",
+      "Run 2's press 'l' gesture is split (r2.s10.0 then r2.s17.0) by a struggle to dismiss a companion ad overlay (clicks r2.s11-13, an Escape press r2.s14.0, a scroll r2.s15.0, and a 'k' press r2.s16.0 to resume playback). Code rejected the prior draft's covers because r2.s10.0 and r2.s17.0 are not contiguous in the recording. Fixed by dropping r2.s17.0 from the Repeat's covers, keeping only r2.s10.0 (a valid singleton chunk) for run 2; the second press in run 2 is not represented in the repeat and is not modeled elsewhere \u2014 this is a real gap in run 2's coverage of the fast-forward gesture that the available evidence cannot cleanly close without either inventing a merge or dropping run 2 from the repeat's corroboration entirely (chose the more conservative partial-coverage fix). Only the three Close-button clicks were modeled as an interrupt (schema expects a dismissing click); the Escape press, scroll, and resume press are run-2-specific recovery actions not required by other runs and remain outside both main path and interrupts.",
+      "The first-video click target was set to the structural rung (nth=0) rather than the recorded id/role rung, since the task means 'the first video result' positionally and every run's accessible name necessarily differed (it echoes each run's distinct query/title).",
+      "main[4] (initial_watch_time edge): code rejected r2.s9.0 as corroborating this value_param edge because that step recorded only a 2s wait against the declared 10s value \u2014 it doesn't witness the param's literal. Fixed by dropping r2.s9.0 from corroborated_by (it was also never listed as a param witness). Run 2's actual initial-watch accounting is spread across several waits during ad handling (r2.s5.0 5s, r2.s6.0 4s, r2.s9.0 2s) that together approximate 10s of elapsed time but do not cleanly correspond to a single 'watch the main video' step; no clean single-step fix was available, so run 2 no longer corroborates this edge.",
+      "Run 4 exclusion: the prior draft cited r4.s14.0 as evidence for excluding run 4 (reason: truncated), but code rejected this because r4.s14.0 is not a step of run 4 in the recordings (no per-step lines for run 4 were provided in this transcript, so a valid step address could not be constructed). Per instructions, dropped the ExcludedRun entry entirely rather than inventing a step reference. Run 4 remains outside kept_runs simply because it is marked NOT achieved and contributes no accepted corroboration; the harness does not require an ExcludedRun entry to keep it out of kept_runs."
+    ]
+  },
+  "outcomes": [
+    {
+      "item": "runs",
+      "ref": null,
+      "status": "applied",
+      "reason": "spine 1, kept [1, 2, 3, 5]",
+      "transition": null
+    },
+    {
+      "item": "params[0]",
+      "ref": "r1.s1.0",
+      "status": "applied",
+      "reason": "param 'video_query': 4/4 witness(es) verified",
+      "transition": null
+    },
+    {
+      "item": "params[1]",
+      "ref": "r1.s9.0",
+      "status": "applied",
+      "reason": "param 'initial_watch_time': 3/3 witness(es) verified",
+      "transition": null
+    },
+    {
+      "item": "params[2]",
+      "ref": "r1.s10.0",
+      "status": "applied",
+      "reason": "param 'fast_forward_time': 1/1 witness(es) verified",
+      "transition": null
+    },
+    {
+      "item": "params[4]",
+      "ref": "r1.s14.0",
+      "status": "applied",
+      "reason": "param 'post_ff_watch_time': 4/4 witness(es) verified",
+      "transition": null
+    },
+    {
+      "item": "main[0]",
+      "ref": "r1.s0.0",
+      "status": "applied",
+      "reason": "goto, corroborated by 3 run(s); recorded chain",
+      "transition": "t1"
+    },
+    {
+      "item": "main[1].value_param",
+      "ref": "r1.s1.0",
+      "status": "applied",
+      "reason": "text bound to ${video_query}",
+      "transition": "t2"
+    },
+    {
+      "item": "main[1]",
+      "ref": "r1.s1.0",
+      "status": "applied",
+      "reason": "fill, corroborated by 3 run(s); recorded chain; text bound to ${video_query}",
+      "transition": "t2"
+    },
+    {
+      "item": "main[2]",
+      "ref": "r1.s2.0",
+      "status": "applied",
+      "reason": "click, corroborated by 1 run(s); recorded chain",
+      "transition": "t3"
+    },
+    {
+      "item": "main[3].target",
+      "ref": "r1.s4.0",
+      "status": "applied",
+      "reason": "structural rung '#dismissible > div > div a#video-title' + nth(0), the same position in 4 run(s)",
+      "transition": "t4"
+    },
+    {
+      "item": "main[3]",
+      "ref": "r1.s4.0",
+      "status": "applied",
+      "reason": "click, corroborated by 3 run(s); structural rung '#dismissible > div > div a#video-title' + nth(0), the same position in 4 run(s)",
+      "transition": "t4"
+    },
+    {
+      "item": "main[4].value_param",
+      "ref": "r1.s9.0",
+      "status": "applied",
+      "reason": "dwell bound to ${initial_watch_time} (1 s slices)",
+      "transition": "t5"
+    },
+    {
+      "item": "main[4]",
+      "ref": "r1.s9.0",
+      "status": "applied",
+      "reason": "wait, corroborated by 2 run(s); recorded chain; dwell bound to ${initial_watch_time} (1 s slices)",
+      "transition": "t5"
+    },
+    {
+      "item": "main[5]",
+      "ref": "r1.s10.0",
+      "status": "applied",
+      "reason": "Repeat(count=${fast_forward_presses}) = fast_forward_time / 10 (ceil); counts {1: 4, 2: 1, 3: 4, 5: 4}",
+      "transition": "t6"
+    },
+    {
+      "item": "main[6].value_param",
+      "ref": "r1.s14.0",
+      "status": "applied",
+      "reason": "dwell bound to ${post_ff_watch_time} (1 s slices)",
+      "transition": "t7"
+    },
+    {
+      "item": "main[6]",
+      "ref": "r1.s14.0",
+      "status": "applied",
+      "reason": "wait, corroborated by 3 run(s); recorded chain; dwell bound to ${post_ff_watch_time} (1 s slices)",
+      "transition": "t7"
+    },
+    {
+      "item": "interrupts[0]",
+      "ref": "r1.s7.0",
+      "status": "applied",
+      "reason": "dismissal '#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button', support 3",
+      "transition": null
+    },
+    {
+      "item": "interrupts[1]",
+      "ref": "r1.s8.0",
+      "status": "applied",
+      "reason": "dismissal 'role=button[name=\"No thanks\" i]', support 4",
+      "transition": null
+    },
+    {
+      "item": "interrupts[2]",
+      "ref": "r2.s11.0",
+      "status": "applied",
+      "reason": "dismissal 'role=button[name=\"Close\" i]', support 1",
+      "transition": null
+    },
+    {
+      "item": "main[4].gate",
+      "ref": "r1.s9.0",
+      "status": "degraded",
+      "reason": "s5 gated on media_playing(min_duration_s=120) \u2014 the recordings show the content playing when this wait ran; the draft did not ask for it",
+      "transition": null
+    },
+    {
+      "item": "main[5].gate",
+      "ref": "r1.s10.0",
+      "status": "degraded",
+      "reason": "s6 gated on media_playing(min_duration_s=120) \u2014 the recordings show the content playing when this press ran; the draft did not ask for it",
+      "transition": null
+    },
+    {
+      "item": "main[6].gate",
+      "ref": "r1.s14.0",
+      "status": "degraded",
+      "reason": "s7 gated on media_playing(min_duration_s=120) \u2014 the recordings show the content playing when this wait ran; the draft did not ask for it",
+      "transition": null
+    },
+    {
+      "item": "accept[0]",
+      "ref": "r1.s14.0",
+      "status": "applied",
+      "reason": "media_playing(min_duration_s=120) \u2014 half the observed content, capped",
+      "transition": null
+    },
+    {
+      "item": "accept[1]",
+      "ref": "r1.s4.0",
+      "status": "applied",
+      "reason": "url_matches ^https://www.youtube.com/watch",
+      "transition": null
+    }
+  ],
+  "warnings": [],
+  "validated": true,
+  "used_fallback": false,
+  "repairs_used": 1
+}

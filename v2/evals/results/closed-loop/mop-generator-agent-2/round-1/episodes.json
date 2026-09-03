@@ -1,0 +1,179 @@
+[
+  {
+    "kind": "positional_target",
+    "source": "merge",
+    "column": 6,
+    "key": "click:get_by_role|link#0",
+    "transition": "t3",
+    "action_type": "click",
+    "field": null,
+    "runs": [
+      1,
+      2,
+      3,
+      5
+    ],
+    "observed": {
+      "1": "role=link[name=\"Master of Puppets (Remastered) 8 minutes, 36 seconds\" i]",
+      "2": "role=link[name=\"Queen \u2013 Bohemian Rhapsody (Official Video Remastered) 6 minutes\" i]",
+      "3": "role=link[name=\"AC/DC - Thunderstruck (Official Video) 4 minutes, 53 seconds\" i]",
+      "5": "role=link[name=\"Guns N' Roses - Sweet Child O' Mine (Official Music Video) 5 minutes, 3 seconds\" i]"
+    },
+    "planned": {
+      "fast_forward_time": {
+        "1": "30s",
+        "2": "20s",
+        "3": "45s",
+        "5": "40s"
+      },
+      "initial_watch_time": {
+        "1": "15s",
+        "2": "10s",
+        "3": "20s",
+        "5": "30s"
+      },
+      "post_ff_watch_time": {
+        "1": "20s",
+        "2": "15s",
+        "3": "25s",
+        "5": "10s"
+      },
+      "video_query": {
+        "1": "Metallica - Master of Puppets",
+        "2": "Queen - Bohemian Rhapsody",
+        "3": "AC/DC - Thunderstruck",
+        "5": "Guns N' Roses - Sweet Child O' Mine"
+      }
+    },
+    "replay_values": {},
+    "unmet": [],
+    "confirmed_by_replay": false,
+    "detail": "targets differ across runs and match no planned value; a list-like target \u2014 the task may mean a position, not a title"
+  },
+  {
+    "kind": "unbound_value",
+    "source": "merge",
+    "column": 8,
+    "key": "wait:wait#1",
+    "transition": "t5",
+    "action_type": "wait",
+    "field": "seconds",
+    "runs": [
+      1,
+      2,
+      3,
+      5
+    ],
+    "observed": {
+      "1": "5.0",
+      "2": "4.0",
+      "3": "7.0",
+      "5": "5.0"
+    },
+    "planned": {
+      "fast_forward_time": {
+        "1": "30s",
+        "2": "20s",
+        "3": "45s",
+        "5": "40s"
+      },
+      "initial_watch_time": {
+        "1": "15s",
+        "2": "10s",
+        "3": "20s",
+        "5": "30s"
+      },
+      "post_ff_watch_time": {
+        "1": "20s",
+        "2": "15s",
+        "3": "25s",
+        "5": "10s"
+      },
+      "video_query": {
+        "1": "Metallica - Master of Puppets",
+        "2": "Queen - Bohemian Rhapsody",
+        "3": "AC/DC - Thunderstruck",
+        "5": "Guns N' Roses - Sweet Child O' Mine"
+      }
+    },
+    "replay_values": {},
+    "unmet": [],
+    "confirmed_by_replay": false,
+    "detail": "wait.seconds differs across runs and matches no planned value; kept run 1's"
+  },
+  {
+    "kind": "conditional_step",
+    "source": "merge",
+    "column": 9,
+    "key": "click:locator|None~2",
+    "transition": null,
+    "action_type": "click",
+    "field": null,
+    "runs": [
+      1,
+      2,
+      3
+    ],
+    "observed": {
+      "1": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "2": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button",
+      "3": "#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button"
+    },
+    "planned": {},
+    "replay_values": {},
+    "unmet": [],
+    "confirmed_by_replay": false,
+    "detail": "present in 3/4 runs, dismissal-shaped: an interrupt candidate"
+  },
+  {
+    "kind": "unbound_value",
+    "source": "merge",
+    "column": 10,
+    "key": "wait:wait#2",
+    "transition": "t6",
+    "action_type": "wait",
+    "field": "seconds",
+    "runs": [
+      1,
+      2,
+      3,
+      5
+    ],
+    "observed": {
+      "1": "15.0",
+      "2": "2.0",
+      "3": "20.0",
+      "5": "30.0"
+    },
+    "planned": {
+      "fast_forward_time": {
+        "1": "30s",
+        "2": "20s",
+        "3": "45s",
+        "5": "40s"
+      },
+      "initial_watch_time": {
+        "1": "15s",
+        "2": "10s",
+        "3": "20s",
+        "5": "30s"
+      },
+      "post_ff_watch_time": {
+        "1": "20s",
+        "2": "15s",
+        "3": "25s",
+        "5": "10s"
+      },
+      "video_query": {
+        "1": "Metallica - Master of Puppets",
+        "2": "Queen - Bohemian Rhapsody",
+        "3": "AC/DC - Thunderstruck",
+        "5": "Guns N' Roses - Sweet Child O' Mine"
+      }
+    },
+    "replay_values": {},
+    "unmet": [],
+    "confirmed_by_replay": false,
+    "detail": "wait.seconds differs across runs and matches no planned value; kept run 1's"
+  }
+]
