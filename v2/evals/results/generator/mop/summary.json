@@ -1,0 +1,38 @@
+{
+  "bundle": "tests/fixtures/mop",
+  "source": "model claude-code:sonnet usage {'calls': 1, 'input_tokens': 30896, 'output_tokens': 29402, 'cache_read_tokens': 0, 'cache_creation_tokens': 30894, 'observation_chars': 54258, 'history_chars': 10}",
+  "task": "Go to youtube.com search for Metallica - Master of Puppets and play the first video that pops up. If an ad is shown skip the ad. When the video starts playing watch for 15s then fast-forward for 30s and then watch for 20s. If at any point any pop-ups happen dismiss them",
+  "canonical_names": [
+    "video_query",
+    "initial_watch_time",
+    "fast_forward_time",
+    "second_watch_time"
+  ],
+  "draft_acceptance_rate": 0.8,
+  "items": 25,
+  "applied": 20,
+  "rejected": 0,
+  "degraded": 5,
+  "rejection_reasons": {},
+  "repairs_used": 0,
+  "used_fallback": false,
+  "validated": true,
+  "accept_states_nonempty": true,
+  "transitions": 12,
+  "interrupts": 1,
+  "params": [
+    "fast_forward_presses",
+    "fast_forward_time",
+    "initial_watch_time",
+    "second_watch_time",
+    "video_query"
+  ],
+  "derived_params": [
+    "fast_forward_presses"
+  ],
+  "param_recall": 1.0,
+  "positional_clicks": [
+    "t4"
+  ],
+  "warnings": []
+}

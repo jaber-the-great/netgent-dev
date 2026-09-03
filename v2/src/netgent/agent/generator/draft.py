@@ -139,7 +139,10 @@ class DraftBranch(BaseModel):
     why: str = ""
 
 
-DraftNode = Annotated[Union[DraftEdge, DraftRepeat, DraftBranch], Field(discriminator="kind")]
+# A plain union, NOT a pydantic discriminated one: `Field(discriminator="kind")` emits the OpenAPI
+# `discriminator` keyword into the JSON schema, which the claude-code route's strict validator
+# rejects ("unknown keyword"). Each node's `kind` Literal disambiguates the union on its own.
+DraftNode = Union[DraftEdge, DraftRepeat, DraftBranch]
 
 
 # ── interrupts, accept, run policy ───────────────────────────────────────────

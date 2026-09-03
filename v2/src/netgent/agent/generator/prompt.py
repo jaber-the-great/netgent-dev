@@ -40,7 +40,9 @@ WHAT TO DECIDE, in order:
    the evidence that the step is part of the task and not one run's accident. A step that only the spine
    took is still legal if the task needs it; say so in `why`. A step that no run needed twice is probably
    noise: leave it out. Leave out ad-waits and duplicate clicks; keep the navigation, the input, the
-   submit, the selection, the timed watches.
+   submit, the selection, the timed watches. A main-path edge must succeed on EVERY replay: a click
+   that dismisses something not every run saw (an ad-skip, a consent dialog, a promo) is never a main
+   edge — it goes in `interrupts` (rule 6), and code refuses it on the main path.
 
 3. TARGETS. Each edge keeps its recorded locator chain unless you say otherwise. Say otherwise when:
    - THE TASK MEANS A POSITION, not an identity ("the first result", "the top row"). Then set `target`

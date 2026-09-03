@@ -11,7 +11,8 @@ from typing import Annotated
 
 import typer
 
-eval_app = typer.Typer(no_args_is_help=True, help="Reproducible evals (dataset, observation, stress, matrix).")
+eval_app = typer.Typer(no_args_is_help=True,
+                       help="Reproducible evals (dataset, observation, stress, matrix, generator).")
 
 RESULTS = Path("evals/results")
 
@@ -153,3 +154,39 @@ def matrix(
     (out_dir / "matrix.md").write_text("# Backend matrix\n\n" + md + "\n")
     typer.echo(md)
     typer.secho(f"\nwrote {out_dir / 'matrix.md'}", bold=True)
+
+
+@eval_app.command("generator")
+def generator(
+    bundle: Annotated[Path, typer.Argument(exists=True, file_okay=False,
+                                           help="A stored <name>.trajectories/ bundle (run-k/ dirs, context.json).")],
+    model: Annotated[str | None, typer.Option(
+        help="The generator agent's model, provider:model (default: NETGENT_GENERATOR_AGENT_MODEL, else "
+             "NETGENT_GENERATOR_MODEL).")] = None,
+    draft: Annotated[Path | None, typer.Option("--draft", exists=True, dir_okay=False,
+                                               help="A cached draft.json: materialize it with ZERO LLM.")] = None,
+    max_repairs: Annotated[int, typer.Option(min=0, help="Repair turns the agent may take.")] = 2,
+    out: Annotated[Path | None, typer.Option(help="Results dir (default: evals/results/generator/<bundle>/).")] = None,
+) -> None:
+    """The offline compile eval: merge a stored bundle, draft (a model, or a cached draft.json), materialize.
+
+    No browser. Reports draft_acceptance_rate, rejections, repairs, fallback, accept states, params,
+    positional clicks; writes workflow.yaml, draft.json, summary.{json,md}. Never exits on a score.
+    """
+    from netgent.core.settings import get_settings
+    from netgent.evals import generator as mod
+
+    settings = get_settings()
+    resolved_model = None if draft is not None else (
+        model or settings.generator_agent_model or settings.generator_model)
+    results_dir = out or (RESULTS / "generator" / bundle.name.removesuffix(".trajectories"))
+    try:
+        summary, _md = asyncio.run(mod.run_generator_eval(
+            bundle, results_dir, model=resolved_model, draft_path=draft, max_repairs=max_repairs, progress=typer.echo))
+    except ValueError as exc:
+        typer.secho(str(exc), fg="red", err=True)
+        raise typer.Exit(2) from exc
+    typer.echo(mod.table(summary))
+    for w in summary["warnings"]:
+        typer.secho(f"warning: {w}", fg="yellow")
+    typer.secho(f"\nwrote {results_dir}/summary.md (+ workflow.yaml, draft.json, summary.json)", bold=True)

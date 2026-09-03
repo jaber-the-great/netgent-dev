@@ -326,3 +326,21 @@ def test_gather_renders_the_evidence_compactly_with_references_on_every_line(ctx
     assert "warning: column 2: click present in 7/8 runs" in text
     assert len(text) < 60_000  # ~15 k tokens for the whole MOP bundle (§G.3)
     assert ev.steps_shown == ev.steps_total
+
+
+def test_a_dismissal_not_every_run_performed_is_refused_on_the_main_path_and_promoted(ctx):
+    """The live sonnet draft put the ad-skip click on the main path (6 of 7 kept runs saw an ad): a
+    replay with no pre-roll would fail that edge. Code refuses it and promotes it to an interrupt."""
+    draft = mop_draft()
+    skip = DraftEdge(step="r1.s7.0", corroborated_by=["r2.s6.0", "r10.s6.0"], why="'If an ad is shown skip the ad'")
+    draft.main.insert(4, skip)
+    draft.interrupts = [draft.interrupts[0]]  # only 'No thanks' declared
+    out = materialize(draft, ctx)
+    (bad,) = [o for o in out.outcomes if o.item == "main[4]" and o.status == "rejected"]
+    assert "belongs in `interrupts`" in bad.reason and "promoted" in bad.reason
+    assert not any(t.action.type == "click" and t.action.locator[-1].kwargs.get("name") == "Skip ad"
+                   for t in out.workflow.transitions if not t.id.startswith("ti"))
+    names = [out.workflow.transition(i.resolve[0]).action.locator[-1].kwargs["name"] for i in out.workflow.interrupts]
+    assert names == ["No thanks", "Skip ad"] and not out.used_fallback
+    (promoted,) = [o for o in out.outcomes if o.item == "interrupts[1]"]
+    assert promoted.status == "applied" and "support 3" in promoted.reason

@@ -650,6 +650,7 @@ def materialize(draft: WorkflowDraft, ctx: GeneratorContext) -> GenerateOutcome:
     main_refs: set[str] = set()
     main_targets: set[str] = set()
     referenced: set[str] = set()
+    promoted: list[tuple[str, list[str]]] = []  # main-path dismissals moved to the interrupt candidates
     last_pos = -1
     applied_nodes = 0
     if not draft.main:
@@ -685,6 +686,15 @@ def materialize(draft: WorkflowDraft, ctx: GeneratorContext) -> GenerateOutcome:
                              f"a {s2.action.type} on {_target_shape(s2.action)} is not the spine step's shape")
                 continue
             column[r2] = s2
+        if len(kept) > 1 and len(column) < len(kept) and _dismissal_step(step):
+            # A dismissal-shaped click that some kept run never performed cannot be a main-path
+            # requirement: the overlay may not appear on replay. It is interrupt-shaped (M4/I4).
+            missing = sorted(kept - set(column))
+            out.no(item, node.step, f"a dismissal-shaped click that kept run(s) {missing} never performed belongs in "
+                                    "`interrupts`, not on the main path (an ad may not show on replay); "
+                                    "promoted to an interrupt candidate")
+            promoted.append((node.step, [ref_of(r, s) for r, s in column.items() if r != rid]))
+            return None
         action = step.action
         anchor_ok = len({_sig(s) for s in column.values()}) == 1
         what = ["recorded chain"]
@@ -790,7 +800,12 @@ def materialize(draft: WorkflowDraft, ctx: GeneratorContext) -> GenerateOutcome:
 
     # 4. interrupts (I1–I6)
     cands: list[tuple[int, int, AgentStep, int]] = []  # (support, order, step, run)
-    for i, intr in enumerate(draft.interrupts):
+    interrupts = list(draft.interrupts)
+    declared_refs = {i.step for i in interrupts} | {r for i in interrupts for r in i.also_seen}
+    for ref, also in promoted:
+        if ref not in declared_refs:
+            interrupts.append(DraftInterrupt(step=ref, also_seen=also, why="promoted from the main path"))
+    for i, intr in enumerate(interrupts):
         got_i = _check_interrupt(i, intr, rec, kept, main_refs, main_targets, ctx, out)
         if got_i is not None:
             rid, step, support = got_i
@@ -807,12 +822,13 @@ def materialize(draft: WorkflowDraft, ctx: GeneratorContext) -> GenerateOutcome:
 
     # 5. params → reports (M14: only referenced params reach the artifact; a derived param
     #    references its source)
+    for name in list(referenced):  # a derived param references its source
+        if (p := params.get(name)) is not None and p.derive is not None:
+            referenced.add(p.derive.from_param)
     confirmed: dict[str, ParamReport] = {}
     for name, p in params.items():
         if name in referenced:
             confirmed[name] = p.report
-            if p.derive is not None:
-                confirmed.setdefault(p.derive.from_param, params[p.derive.from_param].report)
         else:
             out.degraded(f"params[{name}]", None, "declared but referenced by no edge, target or count — dropped")
 

@@ -1,0 +1,596 @@
+{
+  "draft": {
+    "spine": 4,
+    "kept_runs": [
+      1,
+      2,
+      4,
+      6,
+      7,
+      10,
+      11
+    ],
+    "excluded": [
+      {
+        "run": 12,
+        "reason": "restarted",
+        "evidence": "r12.s17.0",
+        "why": "After autoplay drifted to a different video, the agent clicked 'YouTube Home' (r12.s17.0) which navigates back to the homepage and restarts the whole search/select/watch flow from scratch, then repeats goto/fill/search steps again. This is a mid-task restart, not a clean single pass through the task."
+      }
+    ],
+    "params": [
+      {
+        "name": "video_query",
+        "kind": "user",
+        "witnesses": [
+          {
+            "step": "r4.s1.0",
+            "field": "text",
+            "literal": "AC/DC - Thunderstruck"
+          },
+          {
+            "step": "r1.s1.0",
+            "field": "text",
+            "literal": "Metallica - Master of Puppets"
+          },
+          {
+            "step": "r2.s1.0",
+            "field": "text",
+            "literal": "Queen - Bohemian Rhapsody"
+          },
+          {
+            "step": "r6.s1.0",
+            "field": "text",
+            "literal": "Ed Sheeran - Shape of You"
+          },
+          {
+            "step": "r7.s1.0",
+            "field": "text",
+            "literal": "Linkin Park - In the End"
+          },
+          {
+            "step": "r10.s1.0",
+            "field": "text",
+            "literal": "Billie Eilish - Bad Guy"
+          },
+          {
+            "step": "r11.s1.0",
+            "field": "text",
+            "literal": "Imagine Dragons - Believer"
+          }
+        ],
+        "derived_from": null,
+        "divide_by": null,
+        "rounding": "ceil",
+        "why": "The search query text differs per run and is supplied by the task."
+      },
+      {
+        "name": "initial_watch_time",
+        "kind": "user",
+        "witnesses": [
+          {
+            "step": "r4.s8.0",
+            "field": "seconds",
+            "literal": "12s"
+          },
+          {
+            "step": "r1.s9.0",
+            "field": "seconds",
+            "literal": "15s"
+          },
+          {
+            "step": "r2.s7.0",
+            "field": "seconds",
+            "literal": "10s"
+          },
+          {
+            "step": "r6.s7.0",
+            "field": "seconds",
+            "literal": "15s"
+          },
+          {
+            "step": "r7.s7.0",
+            "field": "seconds",
+            "literal": "10s"
+          },
+          {
+            "step": "r10.s7.0",
+            "field": "seconds",
+            "literal": "15s"
+          },
+          {
+            "step": "r11.s8.0",
+            "field": "seconds",
+            "literal": "10s"
+          }
+        ],
+        "derived_from": null,
+        "divide_by": null,
+        "rounding": "ceil",
+        "why": "The initial watch duration before fast-forwarding differs per run."
+      },
+      {
+        "name": "fast_forward_time",
+        "kind": "user",
+        "witnesses": [
+          {
+            "step": "r4.s10.0",
+            "field": "media_jump",
+            "literal": "10s"
+          },
+          {
+            "step": "r6.s9.0",
+            "field": "media_jump",
+            "literal": "10s"
+          },
+          {
+            "step": "r2.s9.0",
+            "field": "media_jump",
+            "literal": "10s"
+          },
+          {
+            "step": "r10.s10.0",
+            "field": "media_jump",
+            "literal": "10s"
+          },
+          {
+            "step": "r11.s10.0",
+            "field": "media_jump",
+            "literal": "10s"
+          },
+          {
+            "step": "r7.s12.0",
+            "field": "media_jump",
+            "literal": "10s"
+          }
+        ],
+        "derived_from": null,
+        "divide_by": null,
+        "rounding": "ceil",
+        "why": "The total fast-forward amount differs per run and is realized via repeated 'l' presses rather than a single wait; witnessed via the per-press seek amount recorded on the media line, per the derived-param convention."
+      },
+      {
+        "name": "second_watch_time",
+        "kind": "user",
+        "witnesses": [
+          {
+            "step": "r4.s12.0",
+            "field": "seconds",
+            "literal": "18s"
+          },
+          {
+            "step": "r1.s14.0",
+            "field": "seconds",
+            "literal": "20s"
+          },
+          {
+            "step": "r2.s13.0",
+            "field": "seconds",
+            "literal": "15s"
+          },
+          {
+            "step": "r6.s11.0",
+            "field": "seconds",
+            "literal": "20s"
+          },
+          {
+            "step": "r7.s14.0",
+            "field": "seconds",
+            "literal": "15s"
+          },
+          {
+            "step": "r10.s13.0",
+            "field": "seconds",
+            "literal": "20s"
+          },
+          {
+            "step": "r11.s13.0",
+            "field": "seconds",
+            "literal": "15s"
+          }
+        ],
+        "derived_from": null,
+        "divide_by": null,
+        "rounding": "ceil",
+        "why": "The final watch duration after fast-forwarding differs per run."
+      },
+      {
+        "name": "fast_forward_presses",
+        "kind": "derived",
+        "witnesses": [],
+        "derived_from": "fast_forward_time",
+        "divide_by": 10.0,
+        "rounding": "ceil",
+        "why": "Each 'l' press seeks +10s (per the media_jump witnesses on fast_forward_time). The number of presses needed to reach or exceed fast_forward_time is ceil(fast_forward_time / 10)."
+      }
+    ],
+    "main": [
+      {
+        "kind": "edge",
+        "step": "r4.s0.0",
+        "target": null,
+        "value_param": null,
+        "corroborated_by": [
+          "r1.s0.0",
+          "r2.s0.0",
+          "r6.s0.0",
+          "r7.s0.0",
+          "r10.s0.0",
+          "r11.s0.0"
+        ],
+        "why": "Starting navigation to youtube.com, required by every run."
+      },
+      {
+        "kind": "edge",
+        "step": "r4.s1.0",
+        "target": null,
+        "value_param": "video_query",
+        "corroborated_by": [
+          "r1.s1.0",
+          "r2.s1.0",
+          "r6.s1.0",
+          "r7.s1.0",
+          "r10.s1.0",
+          "r11.s1.0"
+        ],
+        "why": "Fill the search box with the video query; the literal text differs per run so it is parameterized."
+      },
+      {
+        "kind": "edge",
+        "step": "r4.s2.0",
+        "target": null,
+        "value_param": null,
+        "corroborated_by": [
+          "r1.s2.0",
+          "r2.s2.0",
+          "r6.s2.0",
+          "r7.s2.0",
+          "r10.s2.0",
+          "r11.s2.0"
+        ],
+        "why": "Submit the search by clicking the search button; every kept run performs this click to move from '/' to '/results'."
+      },
+      {
+        "kind": "edge",
+        "step": "r4.s4.0",
+        "target": {
+          "step": "r4.s4.0",
+          "rung": 2,
+          "nth": 0,
+          "name_param": null
+        },
+        "value_param": null,
+        "corroborated_by": [
+          "r1.s4.0",
+          "r2.s4.0",
+          "r6.s4.0",
+          "r7.s4.0",
+          "r10.s4.0",
+          "r11.s4.0"
+        ],
+        "why": "Click the first video result to open and play it. The task says 'the first video that pops up', a POSITION not an identity, so target is overridden to the structural rung at the index (0) every run actually acted on, instead of the recorded per-run video title."
+      },
+      {
+        "kind": "edge",
+        "step": "r4.s6.0",
+        "target": null,
+        "value_param": null,
+        "corroborated_by": [
+          "r1.s7.0",
+          "r2.s6.0",
+          "r7.s6.0",
+          "r10.s6.0",
+          "r11.s6.0"
+        ],
+        "why": "Skip the pre-roll ad when shown, as the task explicitly requires ('If an ad is shown skip the ad'). Corroborated by 5 of 6 other kept runs; run6 encountered a short preview instead of a skip-ad button and used a different mechanism (noted)."
+      },
+      {
+        "kind": "edge",
+        "step": "r4.s8.0",
+        "target": null,
+        "value_param": "initial_watch_time",
+        "corroborated_by": [
+          "r1.s9.0",
+          "r2.s7.0",
+          "r6.s7.0",
+          "r7.s7.0",
+          "r10.s7.0",
+          "r11.s8.0"
+        ],
+        "why": "Watch the real video for the initial watch period before fast-forwarding; duration is parameterized since runs used different values."
+      },
+      {
+        "kind": "repeat",
+        "body": [
+          {
+            "kind": "edge",
+            "step": "r4.s9.0",
+            "target": null,
+            "value_param": null,
+            "corroborated_by": [
+              "r1.s10.0",
+              "r2.s9.0",
+              "r6.s8.0",
+              "r7.s9.0",
+              "r10.s9.0",
+              "r11.s9.0"
+            ],
+            "why": "One press of 'l' seeks the video forward ~10s, verified by the seek+10s annotation on the media line."
+          }
+        ],
+        "count": {
+          "constant": null,
+          "param": "fast_forward_presses"
+        },
+        "covers": [
+          "r1.s10.0",
+          "r1.s11.0",
+          "r1.s12.0",
+          "r1.s13.0",
+          "r2.s9.0",
+          "r2.s10.0",
+          "r2.s11.0",
+          "r2.s12.0",
+          "r4.s9.0",
+          "r4.s10.0",
+          "r4.s11.0",
+          "r6.s8.0",
+          "r6.s9.0",
+          "r6.s10.0",
+          "r7.s9.0",
+          "r7.s10.0",
+          "r7.s11.0",
+          "r7.s12.0",
+          "r7.s13.0",
+          "r10.s9.0",
+          "r10.s10.0",
+          "r10.s11.0",
+          "r10.s12.0",
+          "r11.s9.0",
+          "r11.s10.0",
+          "r11.s11.0",
+          "r11.s12.0"
+        ],
+        "why": "Fast-forward by repeatedly pressing 'l' (YouTube's +10s seek shortcut). The number of presses needed is derived from fast_forward_time divided by the per-press seek amount observed in the recordings (~10s per press), rounded up."
+      },
+      {
+        "kind": "edge",
+        "step": "r4.s12.0",
+        "target": null,
+        "value_param": "second_watch_time",
+        "corroborated_by": [
+          "r1.s14.0",
+          "r2.s13.0",
+          "r6.s11.0",
+          "r7.s14.0",
+          "r10.s13.0",
+          "r11.s13.0"
+        ],
+        "why": "Watch the video for the final watch period after fast-forwarding completes; duration is parameterized since runs used different values."
+      }
+    ],
+    "interrupts": [
+      {
+        "step": "r4.s7.0",
+        "rung": null,
+        "also_seen": [
+          "r1.s8.0",
+          "r2.s8.0",
+          "r6.s6.0",
+          "r7.s8.0",
+          "r10.s8.0",
+          "r11.s7.0"
+        ],
+        "why": "A 'No thanks' promo pop-up ('Where music meets your desktop' / newsletter card) appears over the video after the ad/preview and must be dismissed, per the task's 'If at any point any pop-ups happen dismiss them'. It appears at a different point in the sequence in different runs (sometimes before, sometimes after the initial watch wait), confirming it is an interrupt rather than a fixed main-path step."
+      }
+    ],
+    "accept": [
+      {
+        "type": "media_playing",
+        "witness": "r4.s12.0",
+        "rung": null,
+        "playing": true,
+        "why": "The final watch step shows the real video (not an ad/preview) actively PLAYING at a position well past 0:00, confirming the whole sequence (ad-skip, initial watch, fast-forward, final watch) succeeded without silently stalling."
+      },
+      {
+        "type": "url_matches",
+        "witness": "r4.s4.0",
+        "rung": null,
+        "playing": true,
+        "why": "Clicking the first video result navigates from /results to /watch, confirming the correct video page was reached."
+      }
+    ],
+    "notes": [
+      "Runs 3, 5, and 13 recorded 0 steps (NOT achieved) and provide no step references, so they cannot be cited as ExcludedRun evidence per the schema; they are simply omitted from kept_runs. Run 3 drifted to a different video ('Come As You Are'), and runs 5/13 got stuck repeating a press on the same element 6 times \u2014 consistent with the fast-forward phase being fragile when the seek key stops landing.",
+      "Runs 8 and 9 are 'scoped' with 0 steps (no exploration recorded) and are excluded from consideration entirely; kept only as evidence of declared values, per the harness's own note.",
+      "Run 12 (achieved, 32 steps) was excluded: after 5 fast-forward presses it drifted via autoplay to a different video, then clicked 'YouTube Home' (r12.s17.0) and redid goto/search/click three more times before finally completing. This is a restart-and-retry pattern, not a single clean pass.",
+      "The search-submission phase varies a lot across runs: some double-click the search button (runs 1, 4), some press Escape to close the suggestions dropdown (runs 2, 6, 12), some just wait (runs 7, 11), one presses Enter (run 10). None of these variants is common to all kept runs, so none was included on the main path beyond the single required search-button click; they are UI-settling noise, not task-required actions.",
+      "Run 6 did not show an explicit 'Skip ad'/'Skip ads' button; instead the first load was a short muted preview and the agent clicked a 'Watch full video' thumbnail (r6.s5.0) to reach the real video. This was treated as a run-specific workaround, not corroboration for the skip-ad edge nor a genuine interrupt, and left off the main path.",
+      "Run 2 and run 12 each needed an extra 'click Play' step (e.g. r2.s5.0) to actually start playback after the video-title click. Only run 2 (of the kept runs) needed this, so per the single-run-noise rule it was left off the main path.",
+      "The video-selection click's locator ladder differs in *identity* across runs (different video titles/roles), but the structural rung consistently matched many candidates with the acted element always at index 0 in every run \u2014 this strongly supports treating 'first video result' as a positional selection (structural rung, nth=0) rather than a name-parameterized role rung.",
+      "fast_forward_time has no direct 'seconds' witness anywhere in the recordings because it is never waited on directly \u2014 it is only realized through repeated 'l' presses. Per the derived-parameter convention, it is witnessed instead via the recorded seek+10s deltas on press steps (media_jump field), which also anchors the derived fast_forward_presses parameter (divide_by=10, ceil).",
+      "Actual press counts per run only loosely track ceil(fast_forward_time/10): runs 4, 6, 7, 11 match exactly, runs 1 and 10 pressed one extra time, and run 2 pressed one fewer time than the ceiling \u2014 attributed to agents miscounting mid-task. The Repeat's `covers` list includes every press step actually recorded in each kept run (not just a fixed 3), so code can validate the derived count against the full recorded evidence."
+    ]
+  },
+  "outcomes": [
+    {
+      "item": "runs",
+      "ref": null,
+      "status": "applied",
+      "reason": "spine 4, kept [1, 2, 4, 6, 7, 10, 11], excluded [12]",
+      "transition": null
+    },
+    {
+      "item": "params[0]",
+      "ref": "r4.s1.0",
+      "status": "applied",
+      "reason": "param 'video_query': 7/7 witness(es) verified",
+      "transition": null
+    },
+    {
+      "item": "params[1]",
+      "ref": "r4.s8.0",
+      "status": "applied",
+      "reason": "param 'initial_watch_time': 7/7 witness(es) verified",
+      "transition": null
+    },
+    {
+      "item": "params[2]",
+      "ref": "r4.s10.0",
+      "status": "applied",
+      "reason": "param 'fast_forward_time': 6/6 witness(es) verified",
+      "transition": null
+    },
+    {
+      "item": "params[3]",
+      "ref": "r4.s12.0",
+      "status": "applied",
+      "reason": "param 'second_watch_time': 7/7 witness(es) verified",
+      "transition": null
+    },
+    {
+      "item": "main[0]",
+      "ref": "r4.s0.0",
+      "status": "applied",
+      "reason": "goto, corroborated by 6 run(s); recorded chain",
+      "transition": "t1"
+    },
+    {
+      "item": "main[1].value_param",
+      "ref": "r4.s1.0",
+      "status": "applied",
+      "reason": "text bound to ${video_query}",
+      "transition": "t2"
+    },
+    {
+      "item": "main[1]",
+      "ref": "r4.s1.0",
+      "status": "applied",
+      "reason": "fill, corroborated by 6 run(s); recorded chain; text bound to ${video_query}",
+      "transition": "t2"
+    },
+    {
+      "item": "main[2]",
+      "ref": "r4.s2.0",
+      "status": "applied",
+      "reason": "click, corroborated by 6 run(s); recorded chain",
+      "transition": "t3"
+    },
+    {
+      "item": "main[3].corroborated_by",
+      "ref": "r10.s4.0",
+      "status": "degraded",
+      "reason": "a click on ('get_by_title', None) is not the spine step's shape",
+      "transition": "t4"
+    },
+    {
+      "item": "main[3].target",
+      "ref": "r4.s4.0",
+      "status": "applied",
+      "reason": "structural rung '#dismissible > div > div a#video-title' + nth(0), the same position in 6 run(s)",
+      "transition": "t4"
+    },
+    {
+      "item": "main[3]",
+      "ref": "r4.s4.0",
+      "status": "applied",
+      "reason": "click, corroborated by 5 run(s); structural rung '#dismissible > div > div a#video-title' + nth(0), the same position in 6 run(s)",
+      "transition": "t4"
+    },
+    {
+      "item": "main[4].corroborated_by",
+      "ref": "r1.s7.0",
+      "status": "degraded",
+      "reason": "a click on ('get_by_role', 'button') is not the spine step's shape",
+      "transition": "t5"
+    },
+    {
+      "item": "main[4].corroborated_by",
+      "ref": "r2.s6.0",
+      "status": "degraded",
+      "reason": "a click on ('get_by_role', 'button') is not the spine step's shape",
+      "transition": "t5"
+    },
+    {
+      "item": "main[4].corroborated_by",
+      "ref": "r10.s6.0",
+      "status": "degraded",
+      "reason": "a click on ('get_by_role', 'button') is not the spine step's shape",
+      "transition": "t5"
+    },
+    {
+      "item": "main[4]",
+      "ref": "r4.s6.0",
+      "status": "applied",
+      "reason": "click, corroborated by 2 run(s); recorded chain",
+      "transition": "t5"
+    },
+    {
+      "item": "main[5].value_param",
+      "ref": "r4.s8.0",
+      "status": "applied",
+      "reason": "dwell bound to ${initial_watch_time} (1 s slices)",
+      "transition": "t6"
+    },
+    {
+      "item": "main[5]",
+      "ref": "r4.s8.0",
+      "status": "applied",
+      "reason": "wait, corroborated by 6 run(s); recorded chain; dwell bound to ${initial_watch_time} (1 s slices)",
+      "transition": "t6"
+    },
+    {
+      "item": "main[6]",
+      "ref": "r4.s9.0",
+      "status": "applied",
+      "reason": "Repeat(count=${fast_forward_presses}) = fast_forward_time / 10 (ceil); counts {1: 4, 2: 4, 4: 3, 6: 3, 7: 5, 10: 4, 11: 4}",
+      "transition": "t7"
+    },
+    {
+      "item": "main[7].value_param",
+      "ref": "r4.s12.0",
+      "status": "applied",
+      "reason": "dwell bound to ${second_watch_time} (1 s slices)",
+      "transition": "t8"
+    },
+    {
+      "item": "main[7]",
+      "ref": "r4.s12.0",
+      "status": "applied",
+      "reason": "wait, corroborated by 6 run(s); recorded chain; dwell bound to ${second_watch_time} (1 s slices)",
+      "transition": "t8"
+    },
+    {
+      "item": "interrupts[0]",
+      "ref": "r4.s7.0",
+      "status": "applied",
+      "reason": "dismissal 'role=button[name=\"No thanks\" i]', support 7",
+      "transition": null
+    },
+    {
+      "item": "params[fast_forward_time]",
+      "ref": null,
+      "status": "degraded",
+      "reason": "declared but referenced by no edge, target or count \u2014 dropped",
+      "transition": null
+    },
+    {
+      "item": "accept[0]",
+      "ref": "r4.s12.0",
+      "status": "applied",
+      "reason": "media_playing(min_duration_s=120) \u2014 half the observed content, capped",
+      "transition": null
+    },
+    {
+      "item": "accept[1]",
+      "ref": "r4.s4.0",
+      "status": "applied",
+      "reason": "url_matches ^https://www.youtube.com/watch",
+      "transition": null
+    }
+  ],
+  "warnings": [],
+  "validated": true,
+  "used_fallback": false,
+  "repairs_used": 0
+}

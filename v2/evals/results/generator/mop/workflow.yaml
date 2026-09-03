@@ -1,0 +1,331 @@
+name: mop
+version: '1'
+start_state: init
+states:
+- id: init
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s1
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/
+  - frame_path: []
+    locator:
+    - fn: get_by_role
+      args:
+      - combobox
+      kwargs:
+        name: Search
+    type: selector_visible
+  timeout_ms: 10000
+- id: s2
+  description: ''
+  conditions:
+  - frame_path: []
+    locator:
+    - fn: locator
+      args:
+      - '#center > yt-searchbox > div:nth-of-type(1) > div > button'
+      kwargs: {}
+    type: selector_visible
+  timeout_ms: 10000
+- id: s3
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/results
+  - frame_path: []
+    locator:
+    - fn: locator
+      args:
+      - '#dismissible > div > div a#video-title'
+      kwargs: {}
+    - fn: nth
+      args:
+      - 0
+      kwargs: {}
+    type: selector_visible
+  timeout_ms: 10000
+- id: s4
+  description: ''
+  conditions:
+  - type: url_matches
+    pattern: https://www\.youtube\.com/watch
+  - frame_path: []
+    locator:
+    - fn: locator
+      args:
+      - '#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button'
+      kwargs: {}
+    type: selector_visible
+  timeout_ms: 10000
+- id: s5
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s6
+  description: ''
+  conditions:
+  - frame_path: []
+    locator:
+    - fn: locator
+      args:
+      - '#movie_player > div:nth-of-type(1) > video'
+      kwargs: {}
+    type: selector_visible
+  timeout_ms: 10000
+- id: s7
+  description: ''
+  conditions: []
+  timeout_ms: 10000
+- id: s8
+  description: ''
+  conditions:
+  - type: media_playing
+    playing: true
+    min_duration_s: 120.0
+    frame_path: []
+  - type: url_matches
+    pattern: ^https://www\.youtube\.com/watch
+  timeout_ms: 130000
+- id: i1
+  description: ''
+  conditions:
+  - frame_path: []
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: No thanks
+    type: selector_visible
+  timeout_ms: 10000
+- id: i1_done
+  description: ''
+  conditions:
+  - frame_path: []
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: No thanks
+    type: selector_hidden
+  timeout_ms: 10000
+transitions:
+- id: t1
+  source: init
+  target: s1
+  action:
+    timeout_ms: 30000
+    requires_closed_shadow: false
+    type: goto
+    url: https://www.youtube.com
+- id: t2
+  source: s1
+  target: s2
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: fill
+    locator:
+    - fn: get_by_role
+      args:
+      - combobox
+      kwargs:
+        name: Search
+    text: ${video_query}
+- id: t3
+  source: s2
+  target: s3
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: click
+    locator:
+    - fn: locator
+      args:
+      - '#center > yt-searchbox > div:nth-of-type(1) > div > button'
+      kwargs: {}
+- id: t4
+  source: s3
+  target: s4
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: click
+    locator:
+    - fn: locator
+      args:
+      - '#dismissible > div > div a#video-title'
+      kwargs: {}
+    - fn: nth
+      args:
+      - 0
+      kwargs: {}
+- id: t5
+  source: s4
+  target: s5
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: click
+    locator:
+    - fn: locator
+      args:
+      - '#movie_player > div:nth-of-type(18) > div > div:nth-of-type(3) > div > button'
+      kwargs: {}
+- id: t6
+  source: s5
+  target: s6
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: noop
+- id: t6_dwell
+  source: s6
+  target: s6
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: wait
+    seconds: 1.0
+- id: t7
+  source: s6
+  target: s7
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: noop
+- id: t7_rep
+  source: s7
+  target: s7
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: press
+    keys: l
+    locator:
+    - fn: locator
+      args:
+      - '#movie_player > div:nth-of-type(1) > video'
+      kwargs: {}
+- id: t8
+  source: s7
+  target: s8
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: noop
+- id: t8_dwell
+  source: s8
+  target: s8
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: wait
+    seconds: 1.0
+- id: ti1
+  source: i1
+  target: i1_done
+  action:
+    timeout_ms: 5000
+    requires_closed_shadow: false
+    type: click
+    locator:
+    - fn: get_by_role
+      args:
+      - button
+      kwargs:
+        name: No thanks
+params:
+- name: fast_forward_presses
+  description: 'derived: fast_forward_time / 10 (ceil), min 1; the recordings'' per-run
+    counts: run 1: 4, run 2: 4, run 4: 3, run 6: 3, run 7: 5, run 10: 4, run 11: 4'
+  required: false
+  secret: false
+  derive:
+    from_param: fast_forward_time
+    divide_by: 10.0
+    rounding: ceil
+    min: 1
+- name: fast_forward_time
+  description: 'inferred from 7 runs; observed: run 1: ''30s'', run 2: ''45s'', run
+    4: ''25s'', run 6: ''30s'', run 7: ''50s'', run 10: ''30s'', run 11: ''40s'''
+  required: true
+  default: 25s
+  secret: false
+- name: initial_watch_time
+  description: 'inferred from 7 runs; observed: run 1: ''15'', run 2: ''10'', run
+    4: ''12'', run 6: ''15'', run 7: ''10'', run 10: ''15'', run 11: ''10'''
+  required: true
+  default: '12'
+  secret: false
+- name: second_watch_time
+  description: 'inferred from 7 runs; observed: run 1: ''20'', run 2: ''15'', run
+    4: ''18'', run 6: ''20'', run 7: ''15'', run 10: ''20'', run 11: ''15'''
+  required: true
+  default: '18'
+  secret: false
+- name: video_query
+  description: 'inferred from 7 runs; observed: run 1: ''Metallica - Master of Puppets'',
+    run 2: ''Queen - Bohemian Rhapsody'', run 4: ''AC/DC - Thunderstruck'', run 6:
+    ''Ed Sheeran - Shape of You'', run 7: ''Linkin Park - In the End'', run 10: ''Billie
+    Eilish - Bad Guy'', run 11: ''Imagine Dragons - Believer'''
+  required: true
+  default: AC/DC - Thunderstruck
+  secret: false
+control:
+- kind: edge
+  edge: t1
+- kind: edge
+  edge: t2
+- kind: edge
+  edge: t3
+- kind: edge
+  edge: t4
+- kind: edge
+  edge: t5
+- kind: edge
+  edge: t6
+- kind: repeat
+  body:
+  - kind: edge
+    edge: t6_dwell
+  max_iterations: 60
+  count: ${initial_watch_time}
+- kind: edge
+  edge: t7
+- kind: repeat
+  body:
+  - kind: edge
+    edge: t7_rep
+  max_iterations: 15
+  count: ${fast_forward_presses}
+- kind: edge
+  edge: t8
+- kind: repeat
+  body:
+  - kind: edge
+    edge: t8_dwell
+  max_iterations: 60
+  count: ${second_watch_time}
+accept_states:
+- s8
+milestones: []
+interrupts:
+- id: int1
+  description: ''
+  state: i1
+  resolve:
+  - ti1
+  scope:
+  - s4
+  - s5
+  - s6
+  - s7
+  - s8
+  max_fires: 3
+  resolve_timeout_ms: 2000
