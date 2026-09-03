@@ -63,6 +63,40 @@ def test_parameter_name_value_pair_is_unwrapped():
     assert unwrap_envelope(other, Plan) == other
 
 
+def test_parameter_name_with_value_key_is_unwrapped():
+    """Measured (Claude Code 2.1.x, a VariationPlan schema): the wrapper spelled with `value`
+    instead of `$PARAMETER_VALUE` — {"$PARAMETER_NAME": "response", "value": "<json>"}. It
+    crashed a live planner call after three identical retries:
+    `got keys ['$PARAMETER_NAME', 'value']`."""
+    pair = {"$PARAMETER_NAME": "response", "value": json.dumps(PLAN)}
+    assert unwrap_envelope(pair, Plan) == PLAN
+    assert parse_structured_message(_msg(pair), Plan).variations[0].values == {"query": "cat"}
+
+
+def test_parameter_value_alone_is_unwrapped():
+    assert unwrap_envelope({"$PARAMETER_VALUE": json.dumps(PLAN)}, Plan) == PLAN
+
+
+def test_value_key_alone_is_unwrapped_as_a_string_or_an_object():
+    assert unwrap_envelope({"value": json.dumps(PLAN)}, Plan) == PLAN
+    assert unwrap_envelope({"value": PLAN}, Plan) == PLAN  # the answer as a plain object
+
+
+def test_nested_json_as_string_inside_the_named_wrapper_is_unwrapped():
+    """The answer serialized as a string, inside a string, inside the wrapper."""
+    nested = {"$PARAMETER_NAME": "response", "value": json.dumps({"response": json.dumps(PLAN)})}
+    assert unwrap_envelope(nested, Plan) == PLAN
+    doubled = {"$PARAMETER_VALUE": json.dumps({"$PARAMETER_NAME": "r", "value": json.dumps(PLAN)})}
+    assert unwrap_envelope(doubled, Plan) == PLAN
+
+
+def test_a_declared_dict_field_holding_its_own_value_is_left_alone():
+    """{"values": {"query": "cat"}} for a schema whose `values` IS a dict field: the field's own
+    value, not an envelope (the object carries none of the schema's properties)."""
+    own = {"values": {"query": "cat"}}
+    assert unwrap_envelope(own, Variation) == own
+
+
 def test_a_genuine_single_string_field_is_left_alone():
     """{"answer": "{...}"} where `answer` IS the schema's string field and the inner object
     carries none of the schema's properties: not an envelope."""

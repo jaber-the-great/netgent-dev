@@ -1,11 +1,15 @@
 """Unit tests for ChatClaudeCode against a fake query() — the safe defaults are the contract."""
 
+import json
+from typing import ClassVar
+
 import pytest
 from claude_agent_sdk.types import StreamEvent
+from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel
 
-from langchain_claude_code import ChatClaudeCode, ClaudeCodeError
+from langchain_claude_code import ChatClaudeCode, ClaudeCodeError, chat_models
 from tests.unit_tests.conftest import make_assistant, make_result
 
 MODEL = "claude-haiku-4-5-20251001"
@@ -233,3 +237,66 @@ class TestStructuredOutput:
         ]
         result = llm().with_structured_output(self.City).invoke("?")
         assert result.city == "Paris"
+
+
+class TestStructuredOutputReask:
+    """A first answer that does not parse is re-asked ONCE, naming the shape; the second answer
+    is what the caller sees (parsed, or the parser's own error)."""
+
+    class Plan(BaseModel):
+        variations: list[dict] = []
+        notes: list[str] = []
+
+    PLAN: ClassVar[dict] = {
+        "variations": [{"task_text": "t", "values": {"q": "cat"}}],
+        "notes": ["n"],
+    }
+
+    @staticmethod
+    def _scripted(fake_query, monkeypatch, *answers):
+        """One CLI answer per call, in order (fake_query replays one script for every call)."""
+        scripts = [[make_assistant(), make_result(structured_output=a)] for a in answers]
+
+        async def per_call(*, prompt, options):
+            fake_query.calls.append({"prompt": prompt, "options": options})
+            for message in scripts.pop(0):
+                yield message
+
+        monkeypatch.setattr(chat_models, "query", per_call)
+
+    def test_a_foreign_object_is_reasked_once(self, fake_query, monkeypatch):
+        self._scripted(fake_query, monkeypatch, {"something_else": 1}, self.PLAN)
+        out = llm().with_structured_output(self.Plan, include_raw=True).invoke("plan?")
+        assert out["parsing_error"] is None
+        assert out["parsed"].notes == ["n"]
+        assert len(fake_query.calls) == 2
+        second = fake_query.calls[1]["prompt"]
+        assert "Return ONLY the JSON object" in second
+        assert "something_else" in second  # the first answer's failure, named
+        assert out["raw"].additional_kwargs["structured_output_reasked"] is True
+
+    def test_a_second_bad_answer_is_the_parsers_error(self, fake_query, monkeypatch):
+        self._scripted(fake_query, monkeypatch, {"something_else": 1}, {"still": "wrong"})
+        out = llm().with_structured_output(self.Plan, include_raw=True).invoke("plan?")
+        assert out["parsed"] is None
+        assert "none of" in str(out["parsing_error"])
+        assert len(fake_query.calls) == 2  # never a third call
+
+    def test_without_include_raw_the_second_failure_raises(self, fake_query, monkeypatch):
+        self._scripted(fake_query, monkeypatch, {"something_else": 1}, {"still": "wrong"})
+        model = llm().with_structured_output(self.Plan)
+        with pytest.raises(OutputParserException):
+            model.invoke("plan?")
+
+    def test_an_envelope_the_parser_undoes_is_not_reasked(self, fake_query, monkeypatch):
+        wrapped = {"$PARAMETER_NAME": "response", "value": json.dumps(self.PLAN)}
+        self._scripted(fake_query, monkeypatch, wrapped)
+        out = llm().with_structured_output(self.Plan).invoke("plan?")
+        assert out.notes == ["n"]
+        assert len(fake_query.calls) == 1
+
+    async def test_async_reask(self, fake_query, monkeypatch):
+        self._scripted(fake_query, monkeypatch, {"something_else": 1}, self.PLAN)
+        out = await llm().with_structured_output(self.Plan).ainvoke("plan?")
+        assert out.notes == ["n"]
+        assert len(fake_query.calls) == 2

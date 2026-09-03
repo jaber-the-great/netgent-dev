@@ -33,11 +33,12 @@ from langchain_core.callbacks import (
     AsyncCallbackManagerForLLMRun,
     CallbackManagerForLLMRun,
 )
+from langchain_core.exceptions import OutputParserException
 from langchain_core.language_models import LangSmithParams
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
-from langchain_core.runnables import Runnable, RunnableMap, RunnablePassthrough
+from langchain_core.runnables import Runnable, RunnableLambda, RunnableMap, RunnablePassthrough
 from pydantic import BaseModel, ConfigDict, Field
 
 from langchain_claude_code._client_utils import AuthMode, build_options
@@ -48,7 +49,7 @@ from langchain_claude_code._compat import (
     result_to_ai_message,
 )
 from langchain_claude_code.output_parsers import (
-    make_structured_output_parser,
+    parse_structured_message,
     schema_to_json_schema,
 )
 
@@ -73,6 +74,14 @@ def _run_coroutine_sync(coro: Any) -> Any:
     # coroutine on a private loop in a worker thread.
     with ThreadPoolExecutor(max_workers=1) as executor:
         return executor.submit(asyncio.run, coro).result()
+
+
+REASK_PROMPT = (
+    "Your previous response did not parse: {error}\n"
+    "Return ONLY the JSON object that matches the requested schema — its top-level keys are "
+    "the schema's own fields. No wrapper key, no $PARAMETER_NAME / $PARAMETER_VALUE / value "
+    "envelope, and never the object serialized as a string."
+)
 
 
 class ChatClaudeCode(BaseChatModel):
@@ -451,9 +460,10 @@ class ChatClaudeCode(BaseChatModel):
             raise ValueError(f"Received unsupported arguments {kwargs}")
         json_schema = schema_to_json_schema(schema)
         bound = self.bind(output_format={"type": "json_schema", "schema": json_schema})
-        parser = make_structured_output_parser(schema)
+        raw = self._structured_call(bound, schema)  # the message, re-asked once on a parse failure
+        parser = RunnableLambda(lambda message: parse_structured_message(message, schema))
         if not include_raw:
-            return bound | parser
+            return raw | parser
 
         parser_assign = RunnablePassthrough.assign(
             parsed=itemgetter("raw") | parser,
@@ -463,7 +473,51 @@ class ChatClaudeCode(BaseChatModel):
         parser_with_fallback = parser_assign.with_fallbacks(
             [parser_none], exception_key="parsing_error"
         )
-        return RunnableMap(raw=bound) | parser_with_fallback
+        return RunnableMap(raw=raw) | parser_with_fallback
+
+    def _structured_call(
+        self, bound: Runnable[LanguageModelInput, AIMessage], schema: dict[str, Any] | type
+    ) -> Runnable[LanguageModelInput, AIMessage]:
+        """One structured call, re-asked ONCE when the answer does not parse.
+
+        Measured (Claude Code 2.1.x): the CLI sometimes returns the answer inside a wrapper
+        the schema validator let through — ``{"$PARAMETER_NAME": ..., "value": "<json>"}``
+        — and, asked again with only the validation error, returns the same wrapper. The
+        re-ask names the shape ("return only the JSON object") and appends the first answer
+        so the model sees what it did. The second message is returned whether or not it
+        parses; the caller's parser raises on it as usual, so the failure mode is one extra
+        call, not a crash on the first envelope.
+        """
+
+        def re_ask(
+            model_input: LanguageModelInput, message: AIMessage, error: str
+        ) -> list[BaseMessage]:
+            history = self._convert_input(model_input).to_messages()
+            return [
+                *history,
+                message,
+                HumanMessage(content=REASK_PROMPT.format(error=error[:600])),
+            ]
+
+        def call(model_input: LanguageModelInput, config: Any = None) -> AIMessage:
+            message = bound.invoke(model_input, config)
+            try:
+                parse_structured_message(message, schema)
+            except OutputParserException as exc:
+                message = bound.invoke(re_ask(model_input, message, str(exc)), config)
+                message.additional_kwargs["structured_output_reasked"] = True
+            return message
+
+        async def acall(model_input: LanguageModelInput, config: Any = None) -> AIMessage:
+            message = await bound.ainvoke(model_input, config)
+            try:
+                parse_structured_message(message, schema)
+            except OutputParserException as exc:
+                message = await bound.ainvoke(re_ask(model_input, message, str(exc)), config)
+                message.additional_kwargs["structured_output_reasked"] = True
+            return message
+
+        return RunnableLambda(call, afunc=acall)
 
 
 __all__ = ["ChatClaudeCode", "ClaudeCodeError"]
