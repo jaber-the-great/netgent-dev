@@ -1605,3 +1605,36 @@ and rendering the action vocabulary from the pydantic union (§K.1).
     `excluded_run_rate` in §J.
 18. **§1's numbers are one run**, one site, one model (`claude-code:sonnet`), 13 explorations. Everything here
     is designed against it and against the Dream Theater contrast; nothing here establishes a rate.
+
+---
+
+# M. What shipped (2026-09-02, branch `v2/generator-agent`)
+
+G0–G6 of the build order, in five commits, measured against the stored MOP bundle
+(`tests/fixtures/mop`, the trimmed real run) and one live compile of that bundle with `claude-code:sonnet`
+(`evals/results/generator/mop/`). Where this doc left a choice open, the simpler one was taken; the
+deviations from the text above are listed so the doc stays honest.
+
+| item | as specified | as shipped |
+|---|---|---|
+| `LocatorRef.rung` | "0 = the chain the explorer used" | indexes `locator_candidates` verbatim; the explorer's own chain is marked `*` in the evidence (the ladder is durability-ordered, so the used chain is rung 1 on MOP's video click) |
+| `DraftNode` | a pydantic discriminated union | a plain `Union`: the claude-code route's `--json-schema` validator (ajv strict) rejects the OpenAPI `discriminator` keyword; each node's `kind` Literal disambiguates |
+| a user param's witness | `text`/`value`/`url`/`seconds` | plus `press_count` and `media_jump` — `fast_forward_time` is never waited on directly, so its witness is the measured per-press seek (the model chose exactly this, unprompted) |
+| `DraftRepeat.body` | any nodes | one edge; dwells bind with `value_param` on the wait edge, never a fold |
+| `kind="page"` params | dynamic `ParamSource` | rejected with a reason (§L.3: never emitted by any generator yet) |
+| M4 corroboration | same `_sig` shape | plus a guard: a dismissal-shaped click that some kept run never performed is refused on the main path and promoted to an interrupt candidate (the first live draft put the ad-skip on the main path, corroborated by 6/7 runs) |
+| `Interrupt.resolve_timeout_ms` | executor applies it to the done state | the executor overrides the target state's `timeout_ms` for resolve edges only |
+| §I.3 exit | ≥ 2 unseen + non-empty accept + no regression | ≥ 2 unseen + no regression; a missing postcondition is reported (`not-validated`) but does not fail the gate — the replay stays the only gate |
+| §I.4 single-run replay gate | ship in the same change | **not done**: `--parallel 1` is unchanged (`compile_trajectory`, no replay) |
+| §E.2 milestones, §E.3 coverage / `suspicious_success`, §H prompt caching / per-node effort | follow-ups | not done |
+
+**Measured on the bundle** (`tests/unit/test_materialize.py`, `tests/unit/test_step_key.py`): the video-click
+column's key is `click:get_by_role|link#0` at 3, 5 and 8 runs while its index goes 4/5 → 6 → 7; the hand-written
+draft yields `t4` = `#dismissible > div > div a#video-title` + `nth(0)`, one `Repeat(count="${fast_forward_presses}")`
+with `derive = fast_forward_time / 10 (ceil)` (the median measured seek over ≥ 20 press pairs is ≈ 10 s;
+`fast_forward_time=35` resolves to 4 presses), the three run-12 false positives refused by I3, `No thanks` (7) and
+`Skip ad` (2) the only interrupts, `accept = [url_matches ^/watch, media_playing(min 120 s)]`; an empty `main`
+returns the merge's artifact byte-for-byte. **Measured with the model** (`netgent eval generator tests/fixtures/mop
+--model claude-code:sonnet`): 25 items, 20 applied / 0 rejected / 5 degraded, 0 repairs, spine run 4, run 12 excluded
+at `r12.s17.0`, `param_recall` 4/4, positional `t4`, one interrupt, validated — ~31 k input tokens, one call
+(§G.3's estimate was ~16 k; the ladder lines and the eight runs' reasoning clauses are the difference).
