@@ -45,7 +45,6 @@ from netgent.agent.generator.compiler import (
     compile_trajectory,
     is_interruption_step,
 )
-from netgent.agent.generator.hints import GeneralizationHint, HintOutcome
 from netgent.schema.actions import Action, GotoAction, LocatorStep, NoopAction, WaitAction
 from netgent.schema.control import Branch, BranchArm, ControlNode, EdgeStep, Interrupt, Param, Repeat
 from netgent.schema.workflow import State, Transition, Workflow
@@ -141,9 +140,6 @@ class GeneralizedTrajectory(BaseModel):
     interrupts: list[dict] = Field(default_factory=list)  # {selector, support, runs}
     branches: list[dict] = Field(default_factory=list)  # {guards, runs_by_arm}
     warnings: list[str] = Field(default_factory=list)
-    # What became of each generalization hint the planner proposed for this merge
-    # (applied | rejected + reason): the per-round hint_acceptance_rate evidence.
-    hints: list[HintOutcome] = Field(default_factory=list)
 
 
 class MergeOutcome(BaseModel):
@@ -457,7 +453,8 @@ def _positional_target(col: _Column, spine_rid: int) -> tuple[Action, int] | str
     recordings prove it (generator-agent.md §C.4 V5, offline, no browser): every run's step
     recorded a structural rung (M0), the rung is the same chain in every run, it resolved to
     ≥ i+1 elements, and the acted element sat at the SAME index i in every run. Returns the
-    canonical action and the index, or the reason it cannot."""
+    canonical action and the index, or the reason it cannot. The generator agent's M6
+    (materialize.py::_apply_target) is this rule off the column, driven by a LocatorRef."""
     chains: dict[int, list[LocatorStep]] = {}
     indices: dict[int, int] = {}
     for rid, step in sorted(col.steps.items()):
@@ -531,23 +528,17 @@ def merge_trajectories(
     name: str,
     version: str = "1",
     warnings: list[str] | None = None,
-    hints: list[GeneralizationHint] | None = None,
 ) -> MergeOutcome:
     """The merge: achieved runs in, one generalized Workflow + its evidence trail out.
 
-    `hints` are the planner's typed generalization requests (generator/hints.py). Each is
-    applied ONLY if re-derivable from the recordings — positional: the structural rung and
-    the same index in every run's ladder; text_contains_param: every run's target name
-    contains that run's value; repeat_fold: contiguous identical presses in every run, the
-    counts explained by the planned values — else it is rejected with a reason, the draft
-    is unchanged, and the outcome is recorded in `generalized.hints` either way.
+    The workflow is the FALLBACK artifact of the generator agent (generator/materialize.py):
+    what a draft that cannot be re-derived from the recordings degrades to. The evidence trail
+    (columns with dispositions, per-run targets/values and StepKeys) is what the agent reads.
 
     With one achieved run this degrades to `compile_trajectory` with the planner's values as
     the literal-sweep params (today's single-run behaviour); with none it raises.
     """
     warnings = warnings if warnings is not None else []
-    hints = list(hints or [])
-    outcomes: list[HintOutcome] = []
     if any(r.scoped for r in runs):
         warnings.append(
             f"{sum(1 for r in runs if r.scoped)} scoped sub-task run(s) kept as evidence, not merged"
@@ -567,8 +558,6 @@ def merge_trajectories(
             params=[ParamReport(name=p.name, default=p.default or "", values_by_run={achieved[0].run: p.default or ""})
                     for p in wf.params],
             warnings=list(warnings),
-            hints=[HintOutcome(hint=h, status="rejected", reason="only one achieved run: no cross-run evidence")
-                   for h in hints],
         )
         return MergeOutcome(workflow=wf, generalized=generalized)
 
@@ -577,7 +566,7 @@ def merge_trajectories(
     n_runs = len(achieved)
 
     mains: dict[int, list[AgentStep]] = {}
-    interrupt_cands: list[tuple[int, AgentStep]] = []  # (support hint, step) — support filled later
+    interrupt_cands: list[tuple[int, AgentStep]] = []  # (run, step) — support counted later
     for r in achieved:
         steps = [s for s in r.trajectory.steps if s.action is not None and s.error is None]
         for s in steps:
@@ -589,43 +578,7 @@ def merge_trajectories(
     reports: list[ColumnReport] = []
     confirmed: dict[str, ParamReport] = {}
     branches_report: list[dict] = []
-    hint_by_col: dict[int, GeneralizationHint] = {}
-    for h in hints:
-        hint_by_col.setdefault(h.column, h)
     shapes: dict[int, str] = {}  # column index -> the spine action's shape (for the StepKey)
-    # Fold blocks first: a repeat_fold hint names ONE column of a run of identical presses;
-    # the block extends both ways over columns whose every step shares that signature.
-    # (a scroll-only gap column between two press columns does not break the block: a run
-    # scrolled to the player mid-gesture, and scrolls are dropped whatever their support).
-    folds: dict[int, tuple[int, GeneralizationHint, list[int]]] = {}  # start -> (end, hint, member columns)
-
-    def _skippable(col: _Column) -> bool:
-        return all(st.action.type == "scroll" for st in col.steps.values())
-
-    for c, h in sorted(hint_by_col.items()):
-        if h.repeat_fold is None or not (0 <= c < len(columns)):
-            continue
-        sig = next(iter(columns[c].sigs())) if len(columns[c].sigs()) == 1 else None
-        if sig is None or sig[0] != h.repeat_fold.kind:
-            outcomes.append(HintOutcome(hint=h, status="rejected",
-                                        reason=f"column {c} is not a single-signature {h.repeat_fold.kind} column"))
-            del hint_by_col[c]
-            continue
-        members = [c]
-        a = c
-        while a > 0 and (columns[a - 1].sigs() == {sig} or _skippable(columns[a - 1])):
-            a -= 1
-            if columns[a].sigs() == {sig}:
-                members.append(a)
-        while members[-1] != a:  # trailing skippable columns on the left are not part of the block
-            a += 1
-        b = c + 1
-        while b < len(columns) and (columns[b].sigs() == {sig} or _skippable(columns[b])):
-            if columns[b].sigs() == {sig}:
-                members.append(b)
-            b += 1
-        b = max(members) + 1
-        folds[a] = (b, h, sorted(members))
 
     def report(i: int, col: _Column, disposition: str, param: str | None = None, note: str = "",
                field: str | None = None) -> None:
@@ -654,28 +607,8 @@ def merge_trajectories(
     i = 0
     while i < len(columns):
         col = columns[i]
-        if i in folds:
-            end, h, members = folds[i]
-            folded = _make_fold([columns[m] for m in members], members, h, spine_rid, values_by_run, confirmed,
-                                confirm, report, warnings)
-            if isinstance(folded, _EmitStep):
-                emits.append(folded)
-                for k in range(i, end):
-                    if k not in members:
-                        report(k, columns[k], "dropped", note="scroll inside a folded gesture; removable")
-                outcomes.append(HintOutcome(
-                    hint=h, status="applied",
-                    reason=f"folded columns {', '.join(map(str, members))} into Repeat(count="
-                           f"{'${' + folded.repeat_param + '}' if folded.repeat_param else folded.repeat_count})",
-                ))
-                i = end
-                continue
-            outcomes.append(HintOutcome(hint=h, status="rejected", reason=folded))
-            warnings.append(f"hint repeat_fold at column {i} rejected: {folded}")
-            del hint_by_col[h.column]  # fall through: the block compiles column by column
         if _solid(col, n_runs):
-            emits.append(_make_emit(col, spine_rid, values_by_run, confirmed, confirm, report, warnings, i,
-                                    hint=hint_by_col.get(i), outcomes=outcomes))
+            emits.append(_make_emit(col, spine_rid, values_by_run, confirmed, confirm, report, warnings, i))
             i += 1
             continue
         # a non-solid region: [i, j)
@@ -703,8 +636,7 @@ def merge_trajectories(
         for k, c in enumerate(region):
             idx = i + k
             if len(c.steps) == n_runs:  # full support, targets differ (substitution column)
-                emits.append(_make_emit(c, spine_rid, values_by_run, confirmed, confirm, report, warnings, idx,
-                                        hint=hint_by_col.get(idx), outcomes=outcomes))
+                emits.append(_make_emit(c, spine_rid, values_by_run, confirmed, confirm, report, warnings, idx))
                 continue
             # a gap column: present in k < N runs
             some = c.steps[min(c.steps)]
@@ -736,15 +668,6 @@ def merge_trajectories(
     for rep in reports:
         rep.transition = edge_by_col.get(rep.index)
     assign_keys(reports, shapes)
-    judged = {id(o.hint) for o in outcomes}
-    for h in hints:
-        if id(h) not in judged:
-            outcomes.append(HintOutcome(hint=h, status="rejected",
-                                        reason=f"column {h.column} is not a main-path column of this merge"))
-    fold_start = {id(h): start for start, (_end, h, _members) in folds.items()}
-    for o in outcomes:
-        if o.status == "applied":
-            o.transition = edge_by_col.get(fold_start.get(id(o.hint), o.hint.column))
     generalized = GeneralizedTrajectory(
         task=task, runs=len(runs), achieved_runs=[r.run for r in achieved],
         params=sorted(confirmed.values(), key=lambda p: p.name),
@@ -755,7 +678,6 @@ def merge_trajectories(
         ],
         branches=branches_report,
         warnings=list(warnings),
-        hints=outcomes,
     )
     return MergeOutcome(workflow=wf, generalized=generalized)
 
@@ -773,106 +695,11 @@ def assign_keys(reports: list[ColumnReport], shapes: dict[int, str]) -> None:
         rep.key = StepKey(action=base[0], shape=base[1], occurrence=occ, main_path=on_path).render()
 
 
-def _make_fold(block, members, hint, spine_rid, values_by_run, confirmed, confirm, report, warnings) -> _EmitStep | str:
-    """Fold a block of identical-press columns into ONE emit (generator-agent.md §C.4 V7):
-    every achieved run must press in the block; the per-run press counts bind to
-    `count_param` when they equal the planned numbers, or the planned numbers divided by one
-    constant integer factor (10 s per press) — the artifact's Param is then the COUNT. With
-    no `count_param`, the counts must agree (a constant Repeat). Returns the emit, or why not."""
-    rids = sorted(values_by_run)
-    counts = {rid: sum(1 for col in block for r in col.steps if r == rid) for rid in rids}
-    if any(n == 0 for n in counts.values()):
-        return "not every run has the press in the block: counts " + str(counts)
-    spine_col = next((c for c in block if spine_rid in c.steps), block[0])
-    action = spine_col.steps[spine_rid].action
-    fold = hint.repeat_fold
-    pname: str | None = None
-    factor: float | None = None
-    if fold.count_param is not None:
-        planned = {rid: _number_in(values_by_run[rid].get(fold.count_param, "")) for rid in rids}
-        if any(v is None for v in planned.values()):
-            return f"{fold.count_param} has no numeric value in every run"
-        if all(planned[rid] == counts[rid] for rid in rids):
-            pname, factor = fold.count_param, 1.0
-        else:
-            ratios = {planned[rid] / counts[rid] for rid in rids}
-            if len(ratios) == 1 and (ratio := ratios.pop()) == int(ratio) and ratio >= 1:
-                pname, factor = f"{fold.count_param}_count", ratio
-            else:
-                return (f"per-run press counts {counts} do not match the planned {fold.count_param} values "
-                        f"{planned} exactly or by one constant factor")
-        if len({counts[rid] for rid in rids}) < 2:
-            return f"press counts are constant across runs ({counts}): not a parameter, just a count"
-    elif len({counts[rid] for rid in rids}) != 1:
-        return f"press counts differ across runs ({counts}) and no count_param was named"
-    for k, col in zip(members, block, strict=True):
-        report(k, col, "folded", param=pname,
-               note=f"press folded into one Repeat ({len(block)} columns; counts {counts})")
-    emit = _EmitStep(action, spine_col, anchor_ok=True, param=pname, col_index=members[0])
-    emit.repeat_bound = max(10, 3 * max(counts.values()))
-    if pname is None:
-        emit.repeat_count = counts[spine_rid]
-        return emit
-    if pname not in confirmed:
-        confirmed[pname] = ParamReport(name=pname, default=str(counts[spine_rid]),
-                                       values_by_run={rid: str(counts[rid]) for rid in rids})
-    if factor != 1.0:
-        confirmed[pname].description = (
-            f"iteration count of the folded {action.keys!r} presses; each press ≈ {int(factor)} of "
-            f"{fold.count_param} (planned {fold.count_param}: "
-            + ", ".join(f"run {rid}: {values_by_run[rid].get(fold.count_param, '')!r}" for rid in rids) + ")"
-        )
-    emit.repeat_param = pname
-    return emit
-
-
-def _make_emit(col, spine_rid, values_by_run, confirmed, confirm, report, warnings, idx,
-               hint: GeneralizationHint | None = None, outcomes: list[HintOutcome] | None = None) -> _EmitStep:
+def _make_emit(col, spine_rid, values_by_run, confirmed, confirm, report, warnings, idx) -> _EmitStep:
     """Classify one full-support column: aligned / param / param-target / value-diverges /
-    target-varies — and build its canonical action (spine's, with ${param} substituted).
-    A hint for this column is tried first and applied only when the recordings prove it."""
+    target-varies — and build its canonical action (spine's, with ${param} substituted)."""
     spine_step = col.steps.get(spine_rid) or col.steps[min(col.steps)]
     action = spine_step.action
-    outcomes = outcomes if outcomes is not None else []
-    if hint is not None and hint.repeat_fold is None:
-        if hint.intent == "positional":
-            if action.type != "click":
-                outcomes.append(HintOutcome(hint=hint, status="rejected", reason=f"column {idx} is a {action.type}"))
-            else:
-                got = _positional_target(col, spine_rid)
-                if isinstance(got, str):
-                    outcomes.append(HintOutcome(hint=hint, status="rejected", reason=got))
-                    warnings.append(f"hint positional at column {idx} rejected: {got}")
-                else:
-                    action, index = got
-                    rung = action.locator[-2].args[0]
-                    outcomes.append(HintOutcome(hint=hint, status="applied",
-                                                reason=f"structural rung {rung!r} + nth({index})"))
-                    report(idx, col, "positional",
-                           note=f"switched to the structural rung + nth({index}): the same position in every run")
-                    return _EmitStep(action, col, anchor_ok=True, col_index=idx)
-        elif hint.intent == "text_contains_param":
-            if hint.param_name is None:
-                outcomes.append(HintOutcome(hint=hint, status="rejected",
-                                            reason="text_contains_param needs param_name"))
-            else:
-                generalized = _generalize_target(col, values_by_run, only=hint.param_name)
-                if generalized is None:
-                    reason = (f"not every run's target name contains that run's {hint.param_name} value "
-                              f"(or the targets are not same-role name locators)")
-                    outcomes.append(HintOutcome(hint=hint, status="rejected", reason=reason))
-                    warnings.append(f"hint text_contains_param at column {idx} rejected: {reason}")
-                else:
-                    action, pname = generalized
-                    confirm(pname, col)
-                    outcomes.append(HintOutcome(hint=hint, status="applied",
-                                                reason=f"get_by_role(name=${{{pname}}}) + nth(0)"))
-                    report(idx, col, "param-target", param=pname,
-                           note="role-name targets each contain that run's value; rewrote to name=${%s} + nth(0)"
-                           % pname)
-                    return _EmitStep(action, col, anchor_ok=True, param=pname, col_index=idx)
-        else:  # instance: keep the recorded target — nothing to re-derive
-            outcomes.append(HintOutcome(hint=hint, status="applied", reason="kept the recorded target"))
     if len(col.sigs()) > 1:
         generalized = _generalize_target(col, values_by_run)
         if generalized is not None:

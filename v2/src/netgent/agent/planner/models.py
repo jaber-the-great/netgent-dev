@@ -1,12 +1,6 @@
 """The planner's values: the plan it emits. Pydantic, like the other agents' models."""
 
-import re
-
 from pydantic import BaseModel, Field, field_validator
-
-from netgent.agent.generator.hints import GeneralizationHint
-
-_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 class PlanStep(BaseModel):
@@ -117,17 +111,15 @@ class ScopedSubtask(BaseModel):
 
 
 class NextRoundPlan(BaseModel):
-    """The next-round planner's structured answer: what to explore next, and typed hints the
-    generator may act on (a closed vocabulary; code re-derives every hint from the recordings)."""
+    """The next-round planner's structured answer: what to explore next. Generalization is the
+    generator agent's job (it reads the same evidence and drafts the artifact itself); the
+    planner's remaining job is choosing values that exercise the episodes."""
 
     next_variations: list[TaskVariation] = Field(
         default_factory=list, description="Full-task variations to explore next (same family; values verbatim)."
     )
     scoped_subtasks: list[ScopedSubtask] = Field(
         default_factory=list, description="Optional segments to explore on their own (evidence only)."
-    )
-    generalization_hints: list[GeneralizationHint] = Field(
-        default_factory=list, description="Per-episode typed hints for the generator, keyed by column."
     )
     notes: list[str] = Field(default_factory=list, description="What was considered and why.")
 
@@ -138,16 +130,13 @@ def normalize_next_round_plan(
     n: int,
     canonical_names: list[str],
     base_values: dict[str, str],
-    columns: list[int],
 ) -> NextRoundPlan:
     """Make an LLM-drafted next-round plan safe to run (pure; tests pin the rules):
 
     - at most `n` runs in total (full variations first, scoped sub-tasks fill the remainder);
     - every variation carries exactly the canonical value names (unknown names dropped, gaps
       filled from the base values) and every value appears VERBATIM in its task_text (else the
-      sentence "Use name = 'value'." is appended, as `normalize_variation_plan` does);
-    - hints name an existing column, at most one per column; a param name must be canonical
-      and snake_case, else it is cleared (the hint stays: a fold can still be constant).
+      sentence "Use name = 'value'." is appended, as `normalize_variation_plan` does).
     """
     notes = list(plan.notes)
     canonical = list(canonical_names)
@@ -175,26 +164,4 @@ def normalize_next_round_plan(
             notes.append("scoped sub-task dropped: the round's run budget is spent")
             break
         scoped.append(st.model_copy(update={"values": {k: val for k, val in st.values.items() if k in canonical}}))
-    hints: list[GeneralizationHint] = []
-    seen: set[int] = set()
-    for h in plan.generalization_hints:
-        if h.column not in columns:
-            notes.append(f"dropped a hint for unknown column {h.column}")
-            continue
-        if h.column in seen:
-            notes.append(f"dropped a second hint for column {h.column}")
-            continue
-        seen.add(h.column)
-        h = h.model_copy(deep=True)
-        if h.param_name is not None and (not _NAME_RE.match(h.param_name) or h.param_name not in canonical):
-            notes.append(f"hint for column {h.column}: param_name {h.param_name!r} is not a canonical name; cleared")
-            h.param_name = None
-        if h.repeat_fold is not None and h.repeat_fold.count_param is not None and (
-            not _NAME_RE.match(h.repeat_fold.count_param) or h.repeat_fold.count_param not in canonical
-        ):
-            notes.append(
-                f"hint for column {h.column}: count_param {h.repeat_fold.count_param!r} is not canonical; cleared"
-            )
-            h.repeat_fold.count_param = None
-        hints.append(h)
-    return NextRoundPlan(next_variations=variations, scoped_subtasks=scoped, generalization_hints=hints, notes=notes)
+    return NextRoundPlan(next_variations=variations, scoped_subtasks=scoped, notes=notes)

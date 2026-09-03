@@ -221,7 +221,9 @@ def gather_evidence(ctx: GeneratorContext) -> Evidence:
             where = f" ({o.ref})" if o.ref else ""
             previous.append(f"  round {rd.round} draft {o.item}{where} — {o.status.upper()}: {o.reason[:160]}")
         if getattr(rd, "used_fallback", False):
-            previous.append(f"  round {rd.round}: the draft was discarded (fewer than half its steps materialized)")
+            previous.append(f"  round {rd.round}: " + (
+                "the draft was discarded (fewer than half its steps materialized); the merge's artifact was replayed"
+                if getattr(rd, "draft_outcomes", []) else "no draft arrived; the merge's artifact was replayed"))
     return Evidence(task=ctx.task, url=ctx.url or "", declared=list(next(iter(ctx.values_by_run.values()), {})),
                     runs=runs_lines, steps=steps_lines, alignment=align, episodes=episodes, replay=replay,
                     previous=previous, steps_shown=shown, steps_total=total)

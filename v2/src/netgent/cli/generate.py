@@ -1,5 +1,6 @@
-"""`netgent generate` — the compile step, run by the orchestrator:
-explore (LLM agent) → verify (LLM judge, advisory) → generate (trajectory → NFA)."""
+"""`netgent generate` — the compile step, run by the orchestrator: plan → explore ×N (LLM agent) →
+verify (LLM judge, advisory) → merge (pure code) → generate (the generator agent drafts the NFA from
+the recordings; the merge's artifact is the fallback) → replay (zero LLM, the gate) → triage."""
 
 import asyncio
 from pathlib import Path
@@ -22,6 +23,11 @@ def generate(
         ),
     ] = None,
     model: Annotated[str | None, typer.Option(help="LLM as provider:model (default: NETGENT_GENERATOR_MODEL).")] = None,
+    generator_model: Annotated[
+        str | None,
+        typer.Option("--generator-model", help="The generator agent's model, provider:model (default: "
+                     "NETGENT_GENERATOR_AGENT_MODEL, else --model)."),
+    ] = None,
     max_steps: Annotated[int, typer.Option(help="Exploration step budget.")] = 25,
     trajectory_dir: Annotated[
         Path | None, typer.Option("--trajectory", help="Also write the exploration trajectory here.")
@@ -82,6 +88,8 @@ def generate(
         max_rounds=rounds,
     )
     llm = make_llm(model or get_settings().generator_model)
+    agent_model = generator_model or get_settings().generator_agent_model
+    generator_llm = make_llm(agent_model) if agent_model else None
 
     colors = {"plan": "magenta", "explore": None, "verify": "yellow", "merge": "blue",
               "generate": "cyan", "replay": "green", "triage": "yellow", "round": "magenta"}
@@ -90,7 +98,7 @@ def generate(
         fg = "red" if "FAILED" in text or "failed" in text else colors.get(stage)
         typer.secho(f"[{stage}] {text}", fg=fg)
 
-    result = asyncio.run(orchestrate(req, llm, listen))
+    result = asyncio.run(orchestrate(req, llm, listen, generator_llm=generator_llm))
 
     if result.workflow is not None:
         typer.echo(f"\nworkflow written to {out}")

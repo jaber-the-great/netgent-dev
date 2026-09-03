@@ -122,3 +122,40 @@ def test_no_achieved_runs_stops_before_generate(tmp_path):
         assert json.loads(
             (tmp_path / "never.trajectories" / f"run-{k}" / "verdict.json").read_text()
         )["achieved"] is False
+
+
+def test_a_scripted_draft_flows_through_materialize_and_the_zero_llm_replay(tmp_path):
+    """G4/G5: the generator agent's draft — pointers into the two recordings — is materialized
+    (every pointer re-derived), replaces the merge's artifact, carries a witnessed accept state,
+    and replays for both value sets with zero LLM."""
+    from netgent.agent.generator.draft import DraftCondition, DraftEdge, DraftParam, ParamWitness, WorkflowDraft
+
+    page = tmp_path / "p.html"
+    page.write_text(FIXTURE)
+    draft = WorkflowDraft(
+        spine=1, kept_runs=[1, 2],
+        params=[DraftParam(name="who", witnesses=[ParamWitness(step="r1.s1.0", field="text", literal="Ada"),
+                                                  ParamWitness(step="r2.s1.0", field="text", literal="Bob")])],
+        main=[DraftEdge(step="r1.s0.0", corroborated_by=["r2.s0.0"]),
+              DraftEdge(step="r1.s1.0", value_param="who", corroborated_by=["r2.s1.0"]),
+              DraftEdge(step="r1.s2.0", corroborated_by=["r2.s2.0"], why="the button shows the welcome")],
+        accept=[DraftCondition(type="url_matches", witness="r1.s2.0", why="the task ends on the page")],
+    )
+    ok = Verdict(achieved=True, confidence="high")
+    llm = FakeLLM(_run_script("Ada") + _run_script("Bob"), verdicts=[_plan(), ok, ok], drafts=[draft])
+    req = GenerateRequest(task="fill the name Ada and press go", url=page.as_uri(), name="hello",
+                          out=tmp_path / "hello.yaml", runs=2)
+    result = asyncio.run(orchestrate(req, llm))
+
+    assert result.error is None, result.error
+    rd = result.context.rounds[0]
+    assert not rd.used_fallback and rd.validated and rd.draft_acceptance_rate == 1.0 and rd.repairs_used == 0
+    assert {o.item for o in rd.draft_outcomes} >= {"runs", "params[0]", "main[0]", "main[1]", "main[2]", "accept[0]"}
+    wf = result.workflow
+    (fill,) = [t for t in wf.transitions if t.action.type == "fill"]
+    assert fill.action.text == "${who}" and [p.name for p in wf.params] == ["who"]
+    assert wf.accept_states == ["s3"] and wf.state("s3").conditions[-1].type == "url_matches"
+    assert result.replay.passed and [r.values for r in result.replay.runs] == [{"who": "Ada"}, {"who": "Bob"}]
+    assert len(llm.drafted) == 1 and llm.drafted[0][0]["text"].startswith("TASK: fill the name Ada")
+    stored = json.loads((tmp_path / "hello.trajectories" / "round-1" / "draft.json").read_text())
+    assert stored["used_fallback"] is False and stored["draft"]["spine"] == 1

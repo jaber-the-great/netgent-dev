@@ -148,21 +148,19 @@ class NextRoundState(TypedDict, total=False):
 
 async def draft_next_round(state: NextRoundState, runtime: Runtime[PlannerContext]) -> dict:
     """RoundContext → NextRoundPlan: the ONE LLM call of the closed loop's planner, normalized
-    in code (≤ N runs, canonical names, values verbatim, hints on existing columns)."""
+    in code (≤ N runs, canonical names, values verbatim)."""
     ctx = runtime.context
     rc = state["context"]
     content = build_next_round_content(rc)
     plan: NextRoundPlan = await ctx.llm.judge(NEXT_ROUND_SYSTEM, content, NextRoundPlan)
-    if not (plan.next_variations or plan.scoped_subtasks or plan.generalization_hints):
+    if not (plan.next_variations or plan.scoped_subtasks):
         # An empty plan ends the loop: ask once more, naming the shape (the same defense as
         # draft_variations — an enveloped answer validates as an empty plan).
         retry = [*content, {"type": "text", "text": "\nYour previous answer proposed nothing. Return at least one "
-                                                     "next_variation (task_text + values) and, per episode column, a "
-                                                     "generalization_hint from the closed vocabulary."}]
+                                                     "next_variation (task_text + values)."}]
         plan = await ctx.llm.judge(NEXT_ROUND_SYSTEM, retry, NextRoundPlan)
     return {"plan": normalize_next_round_plan(
         plan, n=rc.runs_per_round, canonical_names=rc.canonical_names, base_values=rc.base_values,
-        columns=[c.index for c in rc.latest_columns()],
     )}
 
 
@@ -182,7 +180,7 @@ NEXT_ROUND_PLANNER = create_next_round_planner()  # compiled ONCE
 
 async def plan_next(context, *, llm: "LLM", graph: CompiledStateGraph | None = None) -> NextRoundPlan:
     """The ONE run API for round ≥ 2: the accumulated RoundContext in, the next round's
-    variations / scoped sub-tasks / generalization hints out. `graph` defaults to NEXT_ROUND_PLANNER."""
+    variations / scoped sub-tasks out. `graph` defaults to NEXT_ROUND_PLANNER."""
     graph = NEXT_ROUND_PLANNER if graph is None else graph
     final = await graph.ainvoke({"context": context}, context=PlannerContext(llm=llm))
     return final["plan"]

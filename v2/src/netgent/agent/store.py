@@ -13,7 +13,8 @@ Layout, under the workflow's memory folder `<out-dir>/<name>.trajectories/`:
     run-2/ ...
     generalized.json                   # the LATEST merge's induced artifact (the cross-run memory)
     round-1/
-      generalized.json                 # that round's merge (all achieved runs so far, hints applied)
+      generalized.json                 # that round's merge (all achieved runs so far): the evidence + fallback
+      draft.json                       # the generator agent's draft, per-item outcomes, warnings, flags
       episodes.json                    # the triage's typed episodes
       next_plan.json                   # what plan_next proposed for the next round (if any)
       replay-1/record.json …           # that round's zero-LLM replays
@@ -90,6 +91,11 @@ class TrajectoryStore:
     def save_episodes(self, round_: int, episodes: list) -> None:
         data = [json.loads(e.model_dump_json()) if isinstance(e, BaseModel) else e for e in episodes]
         (self.round_dir(round_) / "episodes.json").write_text(_dump(data))
+
+    def save_draft(self, round_: int, outcome: BaseModel) -> None:
+        """The generator agent's GenerateOutcome, minus the workflow (that is the artifact itself)."""
+        data = outcome.model_dump(mode="json", exclude={"workflow"})
+        (self.round_dir(round_) / "draft.json").write_text(_dump(data))
 
     def save_next_plan(self, round_: int, plan: BaseModel | dict | None) -> None:
         if plan is not None:

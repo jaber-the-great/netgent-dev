@@ -43,27 +43,21 @@ def build_variations_content(
 
 
 NEXT_ROUND_SYSTEM = """You plan the NEXT ROUND of a closed-loop compile: several exploration runs of one
-web-automation task family were merged (pure code) into ONE replayable workflow, replayed with
-zero LLM for other value sets, and triaged. The replay is the only judge of the artifact; the
-merge only generalizes what it can re-derive from the recordings. You read the round's evidence
-(variations, verdicts, the merge's column dispositions, replay results, typed episodes) and answer:
+web-automation task family were merged (pure code) into an alignment, a generator agent drafted
+ONE replayable workflow from the recordings (every choice re-derived by code, rejected choices
+listed), the artifact was replayed with zero LLM for other value sets, and triaged. The replay is
+the only judge of the artifact. You read the round's evidence (variations, verdicts, the merge's
+column dispositions, the generator's rejected choices, replay results, typed episodes) and answer:
 
 1. `next_variations` — full-task variations to explore next, SAME family (same site, same goal
    shape), only concrete values change, every value VERBATIM in its task_text, the same value
    names as before. Choose values that exercise the episodes: a different search so the first
    result differs; durations that are exact multiples of the site's seek step for press folds.
-   Usually 1-2 variations; never more than N.
+   Usually 1-2 variations; never more than N. Choose values whose recordings would give the
+   generator the evidence it lacked (a rejected choice names it).
 2. `scoped_subtasks` — optional: a short segment to explore on its own from a start URL
    ("search for X and open the first result"), when one column needs evidence.
-3. `generalization_hints` — one per episode column at most, from a CLOSED vocabulary:
-   intent `positional` when the task text asks for a position ("the first result") and the
-   targets differ per run; `text_contains_param` (with param_name) when each run's target name
-   contains that run's param value; `instance` to keep the recorded target; `repeat_fold`
-   {kind, count_param} to fold consecutive identical presses into one counted gesture, naming
-   the param whose values explain the per-run counts. Code re-derives every hint from the
-   recordings and REJECTS what it cannot; a wrong hint costs nothing, so state the intent
-   the task text supports. Never write selectors, actions, regexes or artifact content.
-Put uncertainties in `notes`."""
+Never write selectors, actions, regexes or artifact content. Put uncertainties in `notes`."""
 
 
 def build_next_round_content(ctx) -> list[dict]:
@@ -94,9 +88,11 @@ def build_next_round_content(ctx) -> list[dict]:
                              f" [runs {','.join(map(str, c.runs))}{', ' + c.transition if c.transition else ''}]")
             for w in g.warnings[:8]:
                 lines.append(f"  warning: {w[:160]}")
-            for h in g.hints:
-                lines.append(f"  hint column {h.hint.column} {h.hint.intent}"
-                             f"{' fold' if h.hint.repeat_fold else ''}: {h.status} — {h.reason[:120]}")
+        if rd.used_fallback:
+            lines.append("generator: the draft was discarded; the merge's artifact was replayed")
+        for o in rd.draft_outcomes:
+            if o.status == "rejected":
+                lines.append(f"  draft {o.item}{f' ({o.ref})' if o.ref else ''}: rejected — {o.reason[:120]}")
         for rr in rd.replay:
             lines.append(f"replay {rr.values}: {'ok' if rr.success else 'FAILED'}"
                          + (f" at {rr.failed_edge} ({rr.outcome}; unmet {rr.unmet})" if rr.failed_edge else "")

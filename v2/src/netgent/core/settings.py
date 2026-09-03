@@ -32,6 +32,10 @@ class Settings(BaseSettings):
 
     # ── Model selection (`provider:model`, init_chat_model's syntax; `/` also accepted) ─────
     generator_model: str = Field(default="google_genai:gemini-2.5-flash", validation_alias="NETGENT_GENERATOR_MODEL")
+    # The generator AGENT's model (the one draft + ≤2 repairs per compile): a long-horizon structural
+    # judgement that repays reasoning depth (generator-agent-v2.md §H recommends anthropic:claude-opus-5).
+    # None: the pipeline's model.
+    generator_agent_model: str | None = Field(default=None, validation_alias="NETGENT_GENERATOR_AGENT_MODEL")
     secondary_model: str | None = Field(default=None, validation_alias="NETGENT_SECONDARY_MODEL")
 
     # ── Browser ──────────────────────────────────────────────────────────────────────────

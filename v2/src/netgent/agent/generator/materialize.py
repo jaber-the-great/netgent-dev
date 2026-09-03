@@ -849,8 +849,16 @@ def materialize(draft: WorkflowDraft, ctx: GeneratorContext) -> GenerateOutcome:
         main_states = [s for s in wf.states if s.id.startswith("s")]
         final = main_states[-1] if main_states else wf.states[-1]
         existing = [c.model_dump(mode="json") for c in final.conditions]
-        fresh = [c for c in State(id="_accept", conditions=conditions).conditions  # validated Trigger models
-                 if c.model_dump(mode="json") not in existing]
+        fresh = []
+        for c in State(id="_accept", conditions=conditions).conditions:  # validated Trigger models
+            if c.model_dump(mode="json") in existing:
+                continue
+            if c.type == "url_matches" and any(
+                e.type == "url_matches" and re.search(e.pattern, c.pattern.removeprefix("^").replace("\\", ""))
+                for e in final.conditions
+            ):
+                continue  # the state already recognizes this page (the compile's own base-URL condition)
+            fresh.append(c)
         final.conditions = [*final.conditions, *fresh]
         if any(isinstance(c, MediaPlaying) for c in conditions):
             final.timeout_ms = max(final.timeout_ms, MEDIA_GATE_TIMEOUT_MS)

@@ -67,7 +67,6 @@ def test_merge_records_the_evidence_triage_needs():
     off_path = [c for c in gen.columns if c.disposition in ("dropped", "interrupt")]
     assert all(c.transition is None for c in off_path)
     assert not [c for c in gen.columns if c.disposition == "value-diverges"]
-    assert gen.hints == []  # no hints were proposed for this merge
 
 
 def _perturbed(runs: list[RunInput]) -> list[RunInput]:
@@ -89,26 +88,16 @@ def test_unbound_value_episode_when_a_dwell_matches_no_planned_value():
     assert unbound.planned["initial_watch_seconds"] == {1: "20s", 2: "40s", 3: "15s"}
 
 
-def test_fold_hint_on_the_seek_presses_binds_the_count_by_a_factor_of_ten():
-    """Three / two / four `l` presses for planned 30s / 20s / 40s fast-forwards: the fold binds
-    the press COUNT (×10 s), spanning the stray scroll column a run made mid-gesture."""
-    from netgent.agent.generator.hints import GeneralizationHint, RepeatFold
-
-    runs, _ = _runs()
-    gen0 = merge_trajectories(runs, name="dt").generalized
-    seek = [c.index for c in gen0.columns if c.action_type == "press" and c.support == 3
-            and c.target and "video" in c.target]
-    hint = GeneralizationHint(column=seek[0], repeat_fold=RepeatFold(kind="press", count_param="fast_forward_seconds"))
-    out = merge_trajectories(runs, name="dt", hints=[hint])
-    (o,) = out.generalized.hints
-    assert o.status == "applied", o.reason
-    (p,) = [p for p in out.workflow.params if p.name == "fast_forward_seconds_count"]
-    assert p.default == "3" and "each press ≈ 10 of fast_forward_seconds" in p.description
-    assert next(p for p in out.generalized.params if p.name == "fast_forward_seconds_count").values_by_run == {
-        1: "3", 2: "2", 3: "4"}
-    (rep,) = [n for n in out.workflow.control if n.kind == "repeat" and n.body[0].edge.endswith("_rep")]
-    assert rep.count == "${fast_forward_seconds_count}" and rep.max_iterations >= 12
-    assert len([c for c in out.generalized.columns if c.disposition == "folded"]) == 4
+def test_varying_gesture_names_the_seek_block_whose_counts_differ():
+    """Three / two / four `l` presses for planned 30s / 20s / 40s fast-forwards: one episode over
+    the press block (spanning the stray scroll column), an observation for the generator's prompt."""
+    runs, verdicts = _runs()
+    gen = merge_trajectories(runs, name="dt").generalized
+    episodes = triage(generalized=gen, replay=None, runs=runs, verdicts=verdicts)
+    (vg,) = [e for e in episodes if e.kind == "varying_gesture"]
+    assert vg.action_type == "press" and vg.observed == {1: "3", 2: "2", 3: "4"}
+    assert vg.planned["fast_forward_seconds"] == {1: "30s", 2: "20s", 3: "40s"}
+    assert vg.key.startswith("press:") and "differing counts" in vg.detail
 
 
 def test_triage_on_the_dream_theater_round():

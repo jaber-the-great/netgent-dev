@@ -9,6 +9,9 @@ Output: `Episode`s in a closed vocabulary (docs/research/agent-verification.md �
                        planned value, and sit on a list-like container ("the first result")
     unbound_value      a value field that differs across runs and matches no planned value
     conditional_step   a step present in k < N runs, dismissal-shaped (an interrupt candidate)
+    varying_gesture    a block of adjacent same-target press columns present in EVERY achieved
+                       run whose per-run counts differ (a fast-forward: one gesture, a count
+                       that is a control loop, not a constant — generator-agent-v2.md §D)
     flow_drift         the replay stopped at an edge (FAILED@tN) whose column has no more
                        specific episode; carries the unmet conjuncts
     unpassable         no run achieved the task (every run failed the same way)
@@ -29,7 +32,8 @@ from netgent.agent.generator.merge import ColumnReport, GeneralizedTrajectory, R
 from netgent.agent.replay import ReplayReport
 
 EpisodeKind = Literal[
-    "positional_target", "unbound_value", "conditional_step", "flow_drift", "unpassable", "judge_unmet",
+    "positional_target", "unbound_value", "conditional_step", "varying_gesture", "flow_drift", "unpassable",
+    "judge_unmet",
 ]
 Source = Literal["replay", "merge", "judge"]
 
@@ -179,6 +183,8 @@ def triage(
             episodes.append(ep)
             by_column[col.index] = ep
 
+    episodes.extend(_varying_gestures(generalized, runs, achieved))
+
     # Replay: authoritative. A failed edge confirms the episode already on its column, or is
     # flow drift of its own.
     col_of_edge = {c.transition: c.index for c in generalized.columns if c.transition}
@@ -220,3 +226,41 @@ def triage(
         ))
     return episodes
 
+
+
+def _varying_gestures(generalized: GeneralizedTrajectory, runs: list[RunInput], achieved: list[RunInput],
+                      ) -> list[Episode]:
+    """Maximal blocks of adjacent press columns on one target (scroll columns may sit between),
+    present in every achieved run, whose per-run press counts differ. Observations for the
+    generator's prompt, never instructions: the agent decides the fold itself."""
+    cols = sorted(generalized.columns, key=lambda c: c.index)
+    every = {r.run for r in achieved}
+    out: list[Episode] = []
+    i = 0
+    while i < len(cols):
+        c = cols[i]
+        if c.action_type != "press" or c.disposition in ("interrupt", "branch"):
+            i += 1
+            continue
+        block = [c]
+        j = i + 1
+        while j < len(cols) and ((cols[j].action_type == "press" and cols[j].target == c.target)
+                                 or cols[j].action_type == "scroll"):
+            if cols[j].action_type == "press":
+                block.append(cols[j])
+            j += 1
+        counts: dict[int, int] = {}
+        for col in block:
+            for rid in col.runs:
+                counts[rid] = counts.get(rid, 0) + 1
+        if len(block) >= 2 and set(counts) == every and len(set(counts.values())) > 1:
+            out.append(Episode(
+                kind="varying_gesture", source="merge", column=block[0].index, key=block[0].key,
+                transition=next((col.transition for col in block if col.transition), None), action_type="press",
+                runs=sorted(counts), observed={rid: str(n) for rid, n in sorted(counts.items())},
+                planned=_planned_values(runs, sorted(counts)),
+                detail=f"{len(block)} adjacent press columns ({c.target}) in every run with differing counts: "
+                       "one gesture whose count is not a constant",
+            ))
+        i = j
+    return out

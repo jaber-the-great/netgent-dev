@@ -52,10 +52,11 @@ def test_generate_parses_parallel_and_variation(monkeypatch, tmp_path):
     """--parallel / --variation reach the GenerateRequest (--parallel sets runs AND concurrency)."""
     captured = {}
 
-    async def fake_orchestrate(req, llm, listen=None):
+    async def fake_orchestrate(req, llm, listen=None, *, generator_llm=None):
         from netgent.agent.orchestrator import GenerateResult
 
         captured["req"] = req
+        captured["generator_llm"] = generator_llm
         return GenerateResult(error="stubbed")
 
     import netgent.agent.orchestrator as orch

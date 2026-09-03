@@ -9,13 +9,17 @@ Single run (`--parallel 1` — unchanged):
 Multi-run (`--parallel N --rounds R`, the default — the closed loop with a typed merge):
 
     START → plan → explore_run ×N (Send, parallel; fresh memory each; verify per run, private retry)
-                 → merge (pure code: typed-key alignment of ALL runs so far → ONE generalized NFA,
-                          the previous round's typed hints applied only where the recordings prove them)
-                 → replay (zero-LLM metamorphic check: same state sequence per value set)
+                 → merge (pure code: typed-key alignment of ALL runs so far → the evidence trail with
+                          StepKeys, and the FALLBACK artifact)
+                 → generate (the generator agent: gather → draft → materialize ⇄ repair; every choice a
+                             pointer into the recordings, re-derived by code; the merge's artifact below
+                             the floor)
+                 → replay (zero-LLM metamorphic check: same state sequence per value set; a value set
+                           that passed in an earlier round may not fail now)
                  → triage (pure code: verdicts + merge trail + replay → typed Episodes)
                  → END if the replay passed on ≥ 2 unseen value sets (or the round budget is spent)
-                 → plan_next (ONE LLM call: next variations / scoped sub-tasks / generalization hints)
-                 → explore_run ×k (usually 1-2) → merge → … up to `--rounds` rounds.
+                 → plan_next (ONE LLM call: next variations / scoped sub-tasks)
+                 → explore_run ×k (usually 1-2) → merge → generate → … up to `--rounds` rounds.
 
 The exit is replay-decided; the judge never grades the artifact. The RoundContext (agent/rounds.py)
 accumulates across rounds and is persisted as <name>.trajectories/context.json.
@@ -242,7 +246,7 @@ class MultiRunState(TypedDict, total=False):
     generalized: Any
     replay: Any
     context: Any  # the RoundContext, replaced each node that advances it
-    hints: list  # the GeneralizationHints the NEXT merge consumes (from plan_next)
+    fallback: Any  # the merge's own Workflow — what the generator degrades to
     error: str
 
 
@@ -306,7 +310,9 @@ def select_replay_sets(wf, gen, achieved_runs: list[int], previous_failed: list[
     sets that failed last round come first (they must pass now), then the newest runs' values
     (the latest round's runs were planned to exercise the episodes). At most `max_sets`.
     With no unseen set, the defaults twice (the determinism check)."""
-    defaults = {p.name: p.default or "" for p in wf.params}
+    # Derived params are computed from their source at resolve time (never caller-supplied), so
+    # a value set names only the task's own knobs.
+    defaults = {p.name: p.default or "" for p in wf.params if p.derive is None}
     unseen: list[dict[str, str]] = []
     for values in [*previous_failed, *(_run_values(gen, rid) for rid in sorted(achieved_runs, reverse=True))]:
         values = {name: values.get(name, defaults[name]) for name in defaults}
@@ -318,21 +324,25 @@ def select_replay_sets(wf, gen, achieved_runs: list[int], previous_failed: list[
     return sets
 
 
-def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener | None = None):
-    """Compile plan → explore_run (×N) → merge → replay → triage → {END | plan_next → explore_run …}."""
+def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener | None = None,
+                                    generator_llm: LLM | None = None):
+    """Compile plan → explore_run (×N) → merge → generate → replay → triage → {END | plan_next → …}.
+    `generator_llm` is the generator agent's own model (settings.generator_agent_model); None: `llm`."""
     from langgraph.graph import END, START, StateGraph
     from langgraph.types import Command, Send
 
     from netgent.agent.explorer.decision import DEFAULT_KINDS
     from netgent.agent.explorer.graph import EXPLORER
     from netgent.agent.explorer.graph import explore as run_explorer
+    from netgent.agent.generator.graph import GENERATOR
+    from netgent.agent.generator.graph import generate as run_generator
     from netgent.agent.generator.merge import RunInput, merge_trajectories
     from netgent.agent.llm import scoped_llm, usage_of
     from netgent.agent.planner.graph import NEXT_ROUND_PLANNER, VARIATION_PLANNER
     from netgent.agent.planner.graph import plan_next as run_next_round_planner
     from netgent.agent.planner.graph import plan_variations as run_variation_planner
     from netgent.agent.planner.models import TaskVariation
-    from netgent.agent.replay import replay_check
+    from netgent.agent.replay import ReplayReport, ReplayRun, replay_check
     from netgent.agent.rounds import GeneralizedSummary, ReplaySummary, RoundContext, RoundRecord, RunSummary
     from netgent.agent.store import TrajectoryStore
     from netgent.agent.triage import triage as run_triage
@@ -385,7 +395,7 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
         # (top-level RunnableConfig `max_concurrency`, set in orchestrate()). The runs are
         # independent samples, so nothing is lost by not sequencing them — the read-only
         # HINTS block is the one thing sequencing gave, and it was context, never a step.
-        return Command(update={"plan": variation_plan, "context": context, "hints": []},
+        return Command(update={"plan": variation_plan, "context": context},
                        goto=sends(1, variation_plan.variations, 1))
 
     async def explore_run(state: MultiRunState) -> dict:
@@ -455,7 +465,7 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
     def _round_of(state: MultiRunState) -> int:
         return len(state["context"].rounds)
 
-    async def merge(state: MultiRunState) -> Command[Literal["replay", "__end__"]]:
+    async def merge(state: MultiRunState) -> Command[Literal["generate", "__end__"]]:
         context: RoundContext = state["context"]
         round_ = _round_of(state)
         record = context.rounds[-1]
@@ -473,12 +483,11 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
             store.save_context(context)
             return Command(update={"context": context, "error": "no run achieved the task — nothing to merge"},
                            goto=END)
-        hints = list(state.get("hints") or [])
         emit("merge", f"merging {len(achieved)}/{len([i for i in inputs if not i.scoped])} achieved runs "
-             f"(typed-key alignment, pure code{f', {len(hints)} hint(s)' if hints else ''})")
+             "(typed-key alignment, pure code)")
         warnings: list[str] = []
         try:
-            outcome = merge_trajectories(inputs, name=req.name, warnings=warnings, hints=hints)
+            outcome = merge_trajectories(inputs, name=req.name, warnings=warnings)
         except ValueError as exc:
             record.exit = "error"
             store.save_context(context)
@@ -486,11 +495,50 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
         store.save_generalized(outcome.generalized, round_=round_)
         for w in warnings:
             emit("merge", f"WARNING: {w}")
-        for h in outcome.generalized.hints:
-            emit("merge", f"hint column {h.hint.column} {h.hint.intent}{' fold' if h.hint.repeat_fold else ''}: "
-                 f"{h.status} — {h.reason}")
-        record.hints = list(outcome.generalized.hints)
         record.generalized = GeneralizedSummary.from_generalized(outcome.generalized)
+        emit("merge", f"fallback artifact: {len(outcome.workflow.transitions)} transitions, "
+             f"{len(outcome.workflow.interrupts)} interrupt(s), accept_states={outcome.workflow.accept_states}")
+        store.save_context(context)
+        return Command(update={"fallback": outcome.workflow, "generalized": outcome.generalized, "context": context},
+                       goto="generate")
+
+    async def generate(state: MultiRunState) -> Command[Literal["replay"]]:
+        """The generator agent, after the merge, on the merge's alignment: gather → draft →
+        materialize ⇄ repair. The merge's artifact is the fallback; the replay stays the gate."""
+        context: RoundContext = state["context"]
+        round_ = _round_of(state)
+        record = context.rounds[-1]
+        inputs = sorted(state["inputs"], key=lambda i: i.run)
+        prior = context.rounds[:-1]
+        last_replay = None
+        if prior and prior[-1].replay:
+            last_replay = ReplayReport(runs=[ReplayRun(**r.model_dump()) for r in prior[-1].replay],
+                                       passed=prior[-1].replay_passed)
+        gen_llm = scoped_llm(generator_llm or llm)
+        achieved = [i for i in inputs if i.achieved and not i.scoped]
+        emit("generate", f"drafting the artifact from {len(achieved)} recording(s) (the generator agent; "
+             "the merge's artifact is the fallback)")
+        outcome = await run_generator(
+            task=req.task, runs=inputs, generalized=state["generalized"], fallback=state["fallback"], llm=gen_llm,
+            url=req.url, name=req.name, episodes=list(prior[-1].episodes) if prior else None, replay=last_replay,
+            prior=list(prior), graph=GENERATOR,
+        )
+        record.draft_outcomes = list(outcome.outcomes)
+        record.used_fallback = outcome.used_fallback
+        record.repairs_used = outcome.repairs_used
+        record.validated = outcome.validated
+        record.usage["generate"] = usage_of(gen_llm)
+        store.save_draft(round_, outcome)
+        for o in outcome.outcomes:
+            if o.status != "applied":
+                emit("generate", f"draft {o.item}{f' ({o.ref})' if o.ref else ''}: {o.status} — {o.reason}")
+        for w in outcome.warnings:
+            emit("generate", f"WARNING: {w}")
+        rate = record.draft_acceptance_rate
+        emit("generate", f"draft: {record.draft_applied}/{len(outcome.outcomes)} items applied"
+             f"{f' ({rate:.0%})' if rate is not None else ''}, {outcome.repairs_used} repair(s)"
+             f"{', FALLBACK to the merge artifact' if outcome.used_fallback else ''}"
+             f"{'' if outcome.validated else ', not-validated (no postcondition)'}")
         wf = outcome.workflow
         if req.out is not None:
             dump_workflow(wf, req.out)
@@ -499,8 +547,7 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
         for p in wf.params:
             emit("generate", f"param {p.name} (default: {p.default!r}) — {p.description}")
         store.save_context(context)
-        return Command(update={"workflow": wf, "generalized": outcome.generalized, "context": context},
-                       goto="replay")
+        return Command(update={"workflow": wf, "context": context}, goto="replay")
 
     async def replay(state: MultiRunState) -> Command[Literal["triage"]]:
         context: RoundContext = state["context"]
@@ -517,6 +564,13 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
         unseen = [r for r in report.runs if r.values != defaults]
         unseen_passed = sum(1 for r in unseen if r.success)
         passed = report.passed and bool(unseen) and unseen_passed >= min(2, len(unseen))
+        # The regression clause (generator-agent-v2.md §I.3): a round that fixes the targeted value
+        # set by breaking one that passed before is not progress.
+        previously_passed = [r.values for rd in context.rounds[:-1] for r in rd.replay if r.success]
+        regressions = [r.values for r in report.runs if not r.success and r.values in previously_passed]
+        if regressions:
+            passed = False
+            emit("replay", f"REGRESSION: {regressions} passed in an earlier round and failed now")
         record = context.rounds[-1]
         record.replay = ReplaySummary.from_report(report)
         record.replay_passed = passed
@@ -577,10 +631,6 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
             emit("plan", f"next variation: {v.task_text} [{vals}]")
         for st in next_plan.scoped_subtasks:
             emit("plan", f"scoped sub-task: {st.task_text} @ {st.start_url}")
-        for h in next_plan.generalization_hints:
-            emit("plan", f"hint: column {h.column} {h.intent}"
-                 + (f" fold({h.repeat_fold.kind}, {h.repeat_fold.count_param})" if h.repeat_fold else "")
-                 + (f" param={h.param_name}" if h.param_name else "") + (f" — {h.why}" if h.why else ""))
         for note in next_plan.notes:
             emit("plan", f"note: {note}")
         if not next_plan.next_variations and not next_plan.scoped_subtasks:
@@ -595,9 +645,9 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
         context.rounds.append(RoundRecord(round=round_ + 1, variations=variations))
         store.save_context(context)
         emit("round", f"round {round_ + 1}/{req.max_rounds}: {len(next_plan.next_variations)} variation(s), "
-             f"{len(next_plan.scoped_subtasks)} scoped sub-task(s), {len(next_plan.generalization_hints)} hint(s)")
+             f"{len(next_plan.scoped_subtasks)} scoped sub-task(s)")
         return Command(
-            update={"context": context, "hints": list(next_plan.generalization_hints)},
+            update={"context": context},
             goto=sends(round_ + 1, next_plan.next_variations, first_k, next_plan.scoped_subtasks),
         )
 
@@ -606,6 +656,7 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
         .add_node("plan", plan)
         .add_node("explore_run", explore_run)
         .add_node("merge", merge)
+        .add_node("generate", generate)
         .add_node("replay", replay)
         .add_node("triage", triage)
         .add_node("plan_next", plan_next)
@@ -615,9 +666,11 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
     )
 
 
-async def orchestrate(req: GenerateRequest, llm: LLM, listen: Listener | None = None) -> GenerateResult:
+async def orchestrate(req: GenerateRequest, llm: LLM, listen: Listener | None = None, *,
+                      generator_llm: LLM | None = None) -> GenerateResult:
     """Run the pipeline. `runs=1`: explore → verify → generate (unchanged). `runs>1`:
-    plan variations → explore ×N (verify per run) → typed merge → zero-LLM replay check."""
+    plan variations → explore ×N (verify per run) → typed merge → the generator agent → zero-LLM
+    replay check. `generator_llm`: the generator agent's own model (None: `llm`)."""
     if req.runs == 1:
         graph = build_orchestration_graph(req, llm, listen)
         final = await graph.ainvoke({})
@@ -627,11 +680,11 @@ async def orchestrate(req: GenerateRequest, llm: LLM, listen: Listener | None = 
             verdict=final.get("verdict"),
             error=final.get("error"),
         )
-    graph = build_multi_orchestration_graph(req, llm, listen)
+    graph = build_multi_orchestration_graph(req, llm, listen, generator_llm=generator_llm)
     # `max_concurrency` is a TOP-LEVEL config key (pregel reads it there, not from
     # `configurable`); it bounds how many explore_run Send tasks — browsers — run at once.
     final = await graph.ainvoke({}, config={
-        "recursion_limit": (4 * req.runs + 16) * req.max_rounds, "max_concurrency": req.parallel,
+        "recursion_limit": (4 * req.runs + 20) * req.max_rounds, "max_concurrency": req.parallel,
     })
     inputs = final.get("inputs") or []
     spine = next((i.trajectory for i in inputs if i.achieved and not i.scoped), None)
