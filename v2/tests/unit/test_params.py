@@ -121,3 +121,43 @@ def test_derived_param_is_computed_from_its_source_and_never_taken_from_the_call
 
     with pytest.raises(ValueError, match="carries no number"):
         resolve_params(wf, {"fast_forward_time": "a while"})
+
+
+def test_numbers_with_units_coerce_everywhere_a_param_feeds_a_number():
+    """The live MOP re-run died at `repeat.count '30s'`: the planner writes durations with units, the
+    dwell Repeat wanted a bare number. One coercion (schema/units.py) serves the executor's count, the
+    derived param's source and the replay value sets — so `netgent run --param initial_watch_time=30s` works."""
+    import pytest
+
+    from netgent.core.errors import ExecutionError
+    from netgent.executor.engine import Executor
+    from netgent.schema.actions import NoopAction
+    from netgent.schema.control import EdgeStep, Param, ParamDerivation, Repeat
+    from netgent.schema.units import coerce_number, number_text
+    from netgent.schema.workflow import State, Transition, Workflow, resolve_params
+
+    assert [coerce_number(v) for v in ("30", "30.0", "30s", "30 s", "30sec", "30 seconds", "1m", "1 min", "1h", 7)] == [
+        30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 60.0, 60.0, 3600.0, 7.0]
+    assert coerce_number("abc") is None and coerce_number("s30") is None and coerce_number("30 parsecs") is None
+    assert number_text("30s") == "30" and number_text("2.5s") == "2.5" and number_text("x") is None
+    wf = Workflow(name="x", start_state="init", states=[State(id="init")], transitions=[])
+    ex = Executor(session=None, workflow=wf)
+    assert ex._resolve_count("30s") == 30 and ex._resolve_count("1m") == 60 and ex._resolve_count("10") == 10
+    with pytest.raises(ExecutionError, match="did not resolve to a number"):
+        ex._resolve_count("abc")
+    # a Repeat whose count resolves from '30s', end to end through resolve_params + the executor
+    timed = Workflow(
+        name="w", start_state="init", states=[State(id="init"), State(id="s1")],
+        transitions=[Transition(id="t1", source="init", target="s1", action=NoopAction()),
+                     Transition(id="t1_dwell", source="s1", target="s1", action=NoopAction())],
+        control=[EdgeStep(edge="t1"), Repeat(body=[EdgeStep(edge="t1_dwell")], count="${watch}", max_iterations=90)],
+        params=[Param(name="watch", default="15"),
+                Param(name="presses", required=False, derive=ParamDerivation(from_param="watch", divide_by=10))],
+    )
+    resolved = resolve_params(timed, {"watch": "30s"})
+    assert resolved.control[1].count == "30s" and Executor(session=None, workflow=resolved)._resolve_count("30s") == 30
+    assert resolve_params(timed, {"watch": "1m"}).params  # the derived source coerces '1m' → 60 → 6 presses
+    from netgent.schema.workflow import derive_value
+
+    assert derive_value("1m", ParamDerivation(from_param="watch", divide_by=10)) == "6"
+    assert derive_value("35 s", ParamDerivation(from_param="watch", divide_by=10)) == "4"

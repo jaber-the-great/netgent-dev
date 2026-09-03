@@ -17,6 +17,7 @@ from netgent.core.logger import get_logger
 from netgent.executor.params import ParamContext
 from netgent.schema.control import Branch, Call, ControlNode, EdgeStep, Repeat
 from netgent.schema.records import ConditionCheck, EdgeRecord, RunRecord, utcnow
+from netgent.schema.units import coerce_number
 from netgent.schema.workflow import Transition, Workflow
 
 logger = get_logger(__name__)
@@ -189,11 +190,12 @@ class Executor:
         if "${" in count:
             raise ExecutionError(f"repeat.count {count!r} is an unresolved param — run resolve_params() first")
         # A "${param}" count arrives here as the substituted string (resolve_params walks
-        # strings; Repeat.count keeps its declared str type) — e.g. "${watch_time}" -> "10".
-        try:
-            return int(float(count))
-        except ValueError as exc:
-            raise ExecutionError(f"repeat.count {count!r} did not resolve to a number") from exc
+        # strings; Repeat.count keeps its declared str type) — e.g. "${watch_time}" -> "10", or
+        # "30s" / "1m" as a user or the planner writes a duration (schema/units.py).
+        n = coerce_number(count)
+        if n is None:
+            raise ExecutionError(f"repeat.count {count!r} did not resolve to a number")
+        return int(n)
 
     async def _all_hold(self, triggers) -> bool:
         from netgent.schema.workflow import State

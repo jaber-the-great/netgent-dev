@@ -64,6 +64,7 @@ from netgent.browser.locators import is_volatile_selector
 from netgent.schema.actions import Action, LocatorStep
 from netgent.schema.control import Param, ParamDerivation
 from netgent.schema.triggers import MediaPlaying
+from netgent.schema.units import UNIT_NOTE
 from netgent.schema.workflow import State, Workflow
 
 MIN_VALUE_LEN = 3  # a shorter literal substitutes everywhere (§B.3 M8)
@@ -822,9 +823,11 @@ def materialize(draft: WorkflowDraft, ctx: GeneratorContext) -> GenerateOutcome:
 
     # 5. params → reports (M14: only referenced params reach the artifact; a derived param
     #    references its source)
+    unit_params: set[str] = set()
     for name in list(referenced):  # a derived param references its source
         if (p := params.get(name)) is not None and p.derive is not None:
             referenced.add(p.derive.from_param)
+            unit_params.add(p.derive.from_param)
     confirmed: dict[str, ParamReport] = {}
     for name, p in params.items():
         if name in referenced:
@@ -845,9 +848,12 @@ def materialize(draft: WorkflowDraft, ctx: GeneratorContext) -> GenerateOutcome:
             o.transition = edge_by_col.get(int(m.group(1)))
 
     # derived params carry `derive`, no caller-facing default
+    dwell_params = {e.dwell_param for e in emits if isinstance(e, _EmitStep) and e.dwell_param}
     new_params: list[Param] = []
     for p in wf.params:
         r = params.get(p.name)
+        if p.name in dwell_params :
+            p = p.model_copy(update={"description": f"{p.description}; {UNIT_NOTE}"})
         if r is not None and r.derive is not None:
             new_params.append(Param(name=p.name, required=False, derive=r.derive, description=(
                 f"derived: {r.derive.from_param} / {r.derive.divide_by:g} ({r.derive.rounding}), min 1; "

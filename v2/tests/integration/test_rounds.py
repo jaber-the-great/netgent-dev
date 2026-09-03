@@ -218,3 +218,12 @@ def test_select_replay_sets_never_asks_the_caller_for_a_derived_param():
         {"fast_forward_time": "30s"}, {"fast_forward_time": "45s"}]
     assert select_replay_sets(wf, unmerged, [1, 2], previous_failed=[]) == [
         {"fast_forward_time": "30s"}, {"fast_forward_time": "30s"}]  # the old behaviour: the knob never varied
+    # a dwell count param (bare-number default) takes the NUMBER out of the planner's '30s' (the live re-run
+    # died at repeat.count '30s'); fast_forward_time's default is '30s' itself, so its spelling is kept
+    timed = Workflow(name="w", start_state="init", states=[State(id="init")], transitions=[], params=[
+        Param(name="initial_watch_time", default="15"), Param(name="fast_forward_time", default="30s")])
+    assert select_replay_sets(timed, unmerged, [1, 2], previous_failed=[], run_values={
+        1: {"initial_watch_time": "15s", "fast_forward_time": "30s"},
+        2: {"initial_watch_time": "30s", "fast_forward_time": "45s"}}) == [
+        {"initial_watch_time": "15", "fast_forward_time": "30s"},
+        {"initial_watch_time": "30", "fast_forward_time": "45s"}]

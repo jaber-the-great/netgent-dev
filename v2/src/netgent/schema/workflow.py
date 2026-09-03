@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from netgent.schema.actions import Action
 from netgent.schema.control import Branch, ControlNode, EdgeStep, Interrupt, Milestone, Param, ParamDerivation, Repeat
 from netgent.schema.triggers import Trigger
+from netgent.schema.units import coerce_number
 
 DEFAULT_STATE_TIMEOUT_MS = 10_000
 
@@ -174,17 +175,10 @@ class Workflow(BaseModel):
         raise KeyError(transition_id)
 
 
-def _number_in(value: str) -> float | None:
-    """The number a natural-language value carries ("35s" → 35.0), or None."""
-    import re
-
-    m = re.search(r"\d+(?:\.\d+)?", value)
-    return float(m.group()) if m else None
-
-
 def derive_value(source: str, derive: "ParamDerivation") -> str | None:
-    """A derived param's value from its source param's resolved value (None: not a number)."""
-    n = _number_in(source)
+    """A derived param's value from its source param's resolved value (None: not a number).
+    '35', '35s' and '1m' all coerce (schema/units.py)."""
+    n = coerce_number(source)
     if n is None:
         return None
     q = n / derive.divide_by

@@ -46,6 +46,7 @@ from netgent.agent.generator.compiler import compile_trajectory
 from netgent.agent.llm import LLM
 from netgent.browser.session import BrowserSession
 from netgent.core.logger import get_logger
+from netgent.schema.units import coerce_number, number_text
 from netgent.schema.workflow import Workflow, dump_workflow
 
 logger = get_logger(__name__)
@@ -320,9 +321,18 @@ def select_replay_sets(wf, gen, achieved_runs: list[int], previous_failed: list[
     unseen: list[dict[str, str]] = []
     declared = run_values or {}
 
+    numeric = {p.name for p in wf.params
+               if p.derive is None and p.default and p.default.strip() == number_text(p.default)}
+
     def _values_of(rid: int) -> dict[str, str]:
         merged = _run_values(gen, rid)
-        return {name: merged.get(name) or declared.get(rid, {}).get(name) or defaults[name] for name in defaults}
+        out: dict[str, str] = {}
+        for name in defaults:
+            value = merged.get(name) or declared.get(rid, {}).get(name) or defaults[name]
+            # A declared value keeps the planner's spelling ('30s'); a param whose default is a bare
+            # number (a dwell count) needs the number, as the merge normalizes it.
+            out[name] = number_text(value) if name in numeric and coerce_number(value) is not None else value
+        return out
 
     for values in [*previous_failed, *(_values_of(rid) for rid in sorted(achieved_runs, reverse=True))]:
         values = {name: values.get(name, defaults[name]) for name in defaults}
