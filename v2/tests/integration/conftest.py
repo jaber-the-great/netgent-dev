@@ -17,6 +17,7 @@ import http.server
 import os
 import socketserver
 import threading
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -45,14 +46,18 @@ def pytest_collection_modifyitems(items):
 
 
 class LocalServer:
-    """A tiny threaded static server: `routes` maps a path ("/", "/child") to HTML (".js" paths → JS)."""
+    """A tiny threaded static server: `routes` maps a path ("/", "/child") to HTML (".js" paths → JS),
+    or to a zero-argument callable returning the HTML — called per request, so a page can drift
+    between visits (what a replay gate must catch)."""
 
-    def __init__(self, routes: dict[str, str]):
-        pages = {path: html.encode() for path, html in routes.items()}
+    def __init__(self, routes: dict[str, str | Callable[[], str]]):
+        pages = {path: (html if callable(html) else html.encode()) for path, html in routes.items()}
 
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
                 body = pages.get(self.path.split("?", 1)[0])
+                if callable(body):
+                    body = body().encode()
                 if body is None:
                     self.send_response(404)
                     self.end_headers()
@@ -92,7 +97,7 @@ def serve():
     """Factory fixture: `srv = serve({"/": html})` → a running LocalServer (auto-closed)."""
     servers: list[LocalServer] = []
 
-    def _start(routes: dict[str, str]) -> LocalServer:
+    def _start(routes: dict[str, str | Callable[[], str]]) -> LocalServer:
         srv = LocalServer(routes).__enter__()
         servers.append(srv)
         return srv

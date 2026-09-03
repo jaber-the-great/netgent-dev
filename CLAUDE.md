@@ -27,6 +27,8 @@ netgent generate "<task>" --url … -p name=sample [--parallel N --rounds R --va
      (zero-LLM metamorphic check per value set) → triage (pure code → typed Episodes) → END if the
      replay passed on ≥ 2 unseen value sets, else plan_next (ONE LLM call → next variations) → another
      round, up to --rounds (default 3)
+netgent generate "<task>" --url … --parallel 1     # one exploration → compile → the same zero-LLM replay
+                                                   # gate on the recorded value set (non-zero exit on failure)
 netgent run workflow.yaml --param name=value        # deterministic, zero LLM
 ```
 

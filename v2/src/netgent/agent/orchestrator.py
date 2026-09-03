@@ -1,10 +1,14 @@
 """The orchestrator: NetGent's entry point that chains the agents into the pipeline.
 
-Single run (`--parallel 1` — unchanged):
+Single run (`--parallel 1`):
 
-    START → explore → verify → generate → END
-               │          │
-               └─ failed ─┴─ not achieved (retries spent) ► END
+    START → explore → verify → generate → replay → END
+               │          │                  │
+               └─ failed ─┴─ not achieved ───┴─ replay FAILED (artifact still written) ► END, error set
+
+    The replay is the single-run gate (generator-agent-v2.md §I.4): the compiled artifact is
+    replayed with zero LLM on the recorded value set — twice when params are declared, the
+    determinism half of the metamorphic check (one exploration has no unseen value set to vary).
 
 Multi-run (`--parallel N --rounds R`, the default — the closed loop with a typed merge):
 
@@ -104,7 +108,7 @@ class GenerateResult(BaseModel):
     variations: Any = None  # the planner's VariationPlan
     run_reports: list[dict] = Field(default_factory=list)  # per-run {run, task, values, achieved, attempts}
     generalized: Any = None  # the merge's GeneralizedTrajectory (also at <store>/generalized.json)
-    replay: Any = None  # the zero-LLM ReplayReport (the metamorphic check) — the last round's
+    replay: Any = None  # the zero-LLM ReplayReport: the last round's (multi-run) or the single-run gate's
     context: Any = None  # the RoundContext (agent/rounds.py): every round's evidence, at <store>/context.json
     rounds: int = 0  # rounds run
     episodes: list = Field(default_factory=list)  # the last round's triage Episodes
@@ -116,6 +120,7 @@ class OrchestrationState(TypedDict, total=False):
     attempt: int  # exploration attempts so far (the verifier may ask for another)
     task_suffix: str  # what the verifier found unmet, appended to the task on re-exploration
     workflow: Any
+    replay: Any  # the single-run gate's ReplayReport
     error: str
 
 
@@ -210,7 +215,7 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
             goto=END,
         )
 
-    async def generate(state: OrchestrationState) -> Command[Literal["__end__"]]:
+    async def generate(state: OrchestrationState) -> Command[Literal["replay"]]:
         warnings: list[str] = []
         wf = compile_trajectory(state["trajectory"], name=req.name, params=req.params, warnings=warnings)
         if req.out is not None:
@@ -220,13 +225,42 @@ def build_orchestration_graph(req: GenerateRequest, llm: LLM, listen: Listener |
             emit("generate", f"WARNING: {w}")
         for p in wf.params:
             emit("generate", f"param {p.name} (default: {p.default!r})")
-        return Command(update={"workflow": wf}, goto=END)
+        return Command(update={"workflow": wf}, goto="replay")
+
+    async def replay(state: OrchestrationState) -> Command[Literal["__end__"]]:
+        """The single-run gate (generator-agent-v2.md §I.4): the artifact must replay with zero LLM
+        on the value set it was recorded with. With declared params the set is replayed twice —
+        one exploration has no unseen set to vary, so the metamorphic check degenerates to
+        determinism (same state sequence both times), exactly `select_replay_sets`' no-unseen rule.
+        A failure leaves the artifact on disk and sets the error; the CLI exits non-zero."""
+        from netgent.agent.replay import replay_check
+
+        wf: Workflow = state["workflow"]
+        values = {p.name: p.default or "" for p in wf.params if p.derive is None}
+        value_sets = [values, dict(values)] if values else [values]
+        emit("replay", f"zero-LLM replay × {len(value_sets)}: {value_sets}")
+        report = await replay_check(wf, value_sets, headless=req.headless, run_dir_base=_store_root(req))
+        for r in report.runs:
+            emit("replay", f"{'ok' if r.success else 'FAILED'} {r.values} -> states {r.signature}"
+                 + (f" ({r.error})" if r.error else ""))
+        if report.passed:
+            emit("replay", f"replay passed on the recorded value set ({len(report.runs)} run(s), "
+                 "same state sequence), zero LLM")
+            return Command(update={"replay": report}, goto=END)
+        emit("replay", f"replay check FAILED: {[r.signature for r in report.runs]}")
+        return Command(
+            update={"replay": report,
+                    "error": "replay check failed: the compiled workflow did not replay on the recorded value "
+                             f"set ({[r.signature for r in report.runs]}); the artifact is written for inspection"},
+            goto=END,
+        )
 
     return (
         StateGraph(OrchestrationState)
         .add_node("explore", explore)
         .add_node("verify", verify)
         .add_node("generate", generate)
+        .add_node("replay", replay)
         .add_edge(START, "explore")
         .compile()
     )
@@ -689,7 +723,7 @@ def build_multi_orchestration_graph(req: GenerateRequest, llm: LLM, listen: List
 
 async def orchestrate(req: GenerateRequest, llm: LLM, listen: Listener | None = None, *,
                       generator_llm: LLM | None = None) -> GenerateResult:
-    """Run the pipeline. `runs=1`: explore → verify → generate (unchanged). `runs>1`:
+    """Run the pipeline. `runs=1`: explore → verify → generate → replay (the single-run gate). `runs>1`:
     plan variations → explore ×N (verify per run) → typed merge → the generator agent → zero-LLM
     replay check. `generator_llm`: the generator agent's own model (None: `llm`)."""
     if req.runs == 1:
@@ -699,6 +733,7 @@ async def orchestrate(req: GenerateRequest, llm: LLM, listen: Listener | None = 
             trajectory=final.get("trajectory"),
             workflow=final.get("workflow"),
             verdict=final.get("verdict"),
+            replay=final.get("replay"),
             error=final.get("error"),
         )
     graph = build_multi_orchestration_graph(req, llm, listen, generator_llm=generator_llm)

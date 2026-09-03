@@ -46,7 +46,8 @@ def generate(
     parallel: Annotated[
         int, typer.Option("--parallel", min=1, help="Explore N planned task variations at once (one browser "
                           "each) and merge them into one generalized workflow (params inferred; zero-LLM "
-                          "replay check). --parallel 1 = a single exploration, compiled as-is.")
+                          "replay check). --parallel 1 = a single exploration, compiled and replay-gated on its "
+                          "recorded value set.")
     ] = 5,
     variation: Annotated[
         list[str] | None,
