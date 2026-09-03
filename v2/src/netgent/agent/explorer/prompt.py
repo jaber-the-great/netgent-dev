@@ -88,9 +88,8 @@ position proves nothing: a press landed only if the next MEDIA reading advanced 
 than the seconds that elapsed (a +10s seek key -> position up ~10s beyond normal playback). A
 reading consistent with playback alone means that press MISSED (focus was lost) — send it
 again; it does not count. Track the running total of VERIFIED jumps in your reasoning
-("jumps so far: 10+10 = 20 of 30") and keep pressing until it reaches N. Stop at the FIRST press
-whose verified total meets or exceeds N; never press again after that. Never stop because the
-position number looks close to a target, and never count presses you have not verified.
+("jumps so far: 10+10 = 20 of 30") and keep pressing until it reaches N. Never stop because
+the position number looks close to a target, and never count presses you have not verified.
 Pausing: one press/click on the pause control, then confirm the MEDIA line says PAUSED before
 starting the pause's wait; if it still says PLAYING, the toggle did not land.
 

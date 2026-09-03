@@ -1627,6 +1627,7 @@ deviations from the text above are listed so the doc stays honest.
 | §I.3 exit | ≥ 2 unseen + non-empty accept + no regression | ≥ 2 unseen + no regression; a missing postcondition is reported (`not-validated`) but does not fail the gate — the replay stays the only gate |
 | §I.4 single-run replay gate | ship in the same change | **not done**: `--parallel 1` is unchanged (`compile_trajectory`, no replay) |
 | §E.2 milestones, §E.3 coverage / `suspicious_success`, §H prompt caching / per-node effort | follow-ups | not done |
+| §D.5 (iii) the explorer's overshoot bound | two lines in the seek prompt | **reverted**: "stop at the FIRST press whose verified total meets N" read as "stop after the first press" — on the live run, runs 1–3 pressed once and were judged NOT achieved; the original wording (8/13 achieved on MOP) stays, and the materializer's overshoot band absorbs the count noise |
 
 **Measured on the bundle** (`tests/unit/test_materialize.py`, `tests/unit/test_step_key.py`): the video-click
 column's key is `click:get_by_role|link#0` at 3, 5 and 8 runs while its index goes 4/5 → 6 → 7; the hand-written
